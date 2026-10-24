@@ -1,0 +1,44 @@
+# Secrets / environment
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+web/dist/
+web/node_modules/
+
+# Go
+backend/bin/
+backend/vendor/
+
+# Java / Android
+mobile/.gradle/
+mobile/build/
+mobile/app/build/
+mobile/local.properties
+*.apk
+*.aab
+
+# Python
+__pycache__/
+*.pyc
+ml/.venv/
+ml/venv/
+ml/*.egg-info/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Superpowers (tooling, not project source)
+/superpowers/
+.superpowers/
+
+# Coverage / reports
+coverage/
+*.coverprofile
+ml/report.json
