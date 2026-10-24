@@ -105,7 +105,8 @@ lots(id BIGINT PK AI, code VARCHAR UNIQUE, item_type ENUM('material','product'),
      received_at DATETIME, expiry_date DATE NULL, status VARCHAR,
      created_at DATETIME, updated_at DATETIME)
 production_orders(id BIGINT PK AI, code VARCHAR UNIQUE, status VARCHAR,
-     started_at DATETIME, finished_at DATETIME NULL, notes TEXT)
+     started_at DATETIME, finished_at DATETIME NULL, notes TEXT,
+     service_name VARCHAR, service_unit_cost DECIMAL(12,2), service_qty DECIMAL(12,3))
 production_order_inputs(id BIGINT PK AI, production_order_id BIGINT,
      material_lot_id BIGINT, qty DECIMAL(12,3))
 production_order_outputs(id BIGINT PK AI, production_order_id BIGINT,
