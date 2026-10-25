@@ -12,11 +12,26 @@ services:
       - "${MYSQL_PORT:-3306}:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ../backend/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  backend:
+    build:
+      context: ../backend
+    container_name: avatar-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_DSN: avatar:avatar@tcp(mysql:3306)/avatar?charset=utf8mb4
+      HTTP_ADDR: ":8080"
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
 
   sonarqube:
     image: sonarqube:${SONARQUBE_VERSION:-lts-community}
