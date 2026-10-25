@@ -1,0 +1,27 @@
+---
+type: gorev-dagilimi
+---
+
+# Görev Dağılımı
+
+İki takım çalışıyor: **ilayda** (senior + junior) ve **Meryem** (senior + junior).
+ilayda'nın senior'ı her iki takımın işini inceler ve commit'leri atar.
+
+| Görev | Konu | Sahip | Yapan | Durum |
+|-------|------|-------|-------|-------|
+| 1 | İskelet + Docker + SonarQube | ilayda | senior | ✅ |
+| 2 | MySQL şema + seed | ilayda | senior | ✅ |
+| 3 | Go backend iskeleti + CRUD + stok | ilayda | senior | ✅ |
+| 4 | Maliyet motoru (EKP/VKP/marj) | Meryem | junior | ✅ (senior onayladı) |
+| 5 | Lot izlenebilirliği (ileri/geri) | ? | ? | ⏳ |
+| 6 | Parçalama + maliyet dağıtımı | ? | ? | ⏳ |
+| 7 | ML servisi (2 model) | ? | ? | ⏳ |
+| 8 | React web (yönetim + rapor) | ? | ? | ⏳ |
+| 9 | Kotlin Android + senkronizasyon | ? | ? | ⏳ |
+| 10 | (stretch) OCR + anomali | ? | ? | ⏳ |
+| 11 | Kapanış (test/SonarQube/demo) | ilayda | senior | ⏳ |
+
+## Kurallar
+- Meryem takımı günlüğünü `Meryem/`, ilayda takımı `ilayda/` klasörüne yazar.
+- Commit'leri ilayda senior atar; junior'lar commit/push yapmaz.
+- Junior'lar kendi adlarına (Meryem/ilayda) PR açar; senior inceler, doğrular, merge eder.
