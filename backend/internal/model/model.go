@@ -39,6 +39,31 @@ type Lot struct {
 	UpdatedAt     string  `json:"updated_at"`
 }
 
+// LotLink is a parent-to-child relationship between two lots.
+type LotLink struct {
+	ID          int64   `json:"id"`
+	ParentLotID int64   `json:"parent_lot_id"`
+	ChildLotID  int64   `json:"child_lot_id"`
+	Qty         float64 `json:"qty"`
+	LinkType    string  `json:"link_type"`
+}
+
+// Market is a sales market that receives shipped product lots.
+type Market struct {
+	ID      int64  `json:"id"`
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	Contact string `json:"contact"`
+}
+
+// Supplier is a vendor that supplies raw material lots.
+type Supplier struct {
+	ID      int64  `json:"id"`
+	Code    string `json:"code"`
+	Name    string `json:"name"`
+	Contact string `json:"contact"`
+}
+
 // StockMovement is a signed lot-based stock movement. Positive qty is inflow,
 // negative qty is outflow.
 type StockMovement struct {
