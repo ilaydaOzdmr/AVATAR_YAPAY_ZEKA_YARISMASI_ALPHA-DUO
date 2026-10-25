@@ -14,14 +14,20 @@ import (
 
 // Server exposes the REST API over the configured repo.
 type Server struct {
-	repo repo.Repo
-	cost *service.CostEngine
-	mux  *http.ServeMux
+	repo  repo.Repo
+	cost  *service.CostEngine
+	trace *service.Traceability
+	mux   *http.ServeMux
 }
 
 // NewServer builds the HTTP handler with all routes registered.
 func NewServer(r repo.Repo) http.Handler {
-	s := &Server{repo: r, cost: service.NewCostEngine(r), mux: http.NewServeMux()}
+	s := &Server{
+		repo:  r,
+		cost:  service.NewCostEngine(r),
+		trace: service.NewTraceability(r),
+		mux:   http.NewServeMux(),
+	}
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("GET /materials", s.handleListMaterials)
 	s.mux.HandleFunc("POST /materials", s.handleCreateMaterial)
@@ -34,6 +40,8 @@ func NewServer(r repo.Repo) http.Handler {
 	s.mux.HandleFunc("POST /stock-movements", s.handleAddStockMovement)
 	s.mux.HandleFunc("POST /production-orders", s.handleCreateProductionOrder)
 	s.mux.HandleFunc("GET /production-orders/{id}", s.handleGetProductionOrder)
+	s.mux.HandleFunc("GET /trace/forward", s.handleTraceForward)
+	s.mux.HandleFunc("GET /trace/backward", s.handleTraceBackward)
 	return s
 }
 
@@ -196,4 +204,40 @@ func (s *Server) handleGetProductionOrder(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
+}
+
+func (s *Server) handleTraceForward(w http.ResponseWriter, r *http.Request) {
+	lotCode := r.URL.Query().Get("lot")
+	if lotCode == "" {
+		writeError(w, http.StatusBadRequest, errors.New("lot query parameter is required"))
+		return
+	}
+	affected, err := s.trace.Forward(r.Context(), lotCode)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, affected)
+}
+
+func (s *Server) handleTraceBackward(w http.ResponseWriter, r *http.Request) {
+	lotCode := r.URL.Query().Get("lot")
+	if lotCode == "" {
+		writeError(w, http.StatusBadRequest, errors.New("lot query parameter is required"))
+		return
+	}
+	sources, err := s.trace.Backward(r.Context(), lotCode)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sources)
 }
