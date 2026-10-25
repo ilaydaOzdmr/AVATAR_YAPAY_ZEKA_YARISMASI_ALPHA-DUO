@@ -146,7 +146,9 @@ sync_outbox(id BIGINT PK AI, client_id VARCHAR, entity VARCHAR, entity_id BIGINT
 ## Task 3: Go backend iskeleti + temel CRUD + stok
 
 **Files:**
-- Create: `backend/go.mod`, `backend/cmd/server/main.go`, `internal/config/config.go`, `internal/db/db.go`, `internal/model/model.go`, `internal/repo/repo.go`, `internal/httpapi/server.go`, `internal/httpapi/dto.go`
+- Create: `backend/go.mod`, `backend/cmd/server/main.go`, `backend/internal/config/config.go`, `backend/internal/db/db.go`, `backend/internal/model/model.go`, `backend/internal/repo/repo.go`, `backend/internal/httpapi/server.go`, `backend/internal/httpapi/dto.go`
+- Create: `backend/Dockerfile`
+- Modify: `infra/docker-compose.yml` (mysql init-script mount + backend servisi)
 - Test: `backend/internal/httpapi/server_test.go`
 
 **Interfaces:**
@@ -155,7 +157,7 @@ sync_outbox(id BIGINT PK AI, client_id VARCHAR, entity VARCHAR, entity_id BIGINT
 
 - [ ] **Step 1:** `go.mod` (`module github.com/alpha-duo/avatar/backend`), bağımlılık yok (stdlib).
 - [ ] **Step 2:** `internal/config/config.go`: `Config{DSN string, Addr string}`; `Load() (*Config, error)` env'den okur.
-- [ ] **Step 3:** `internal/db/db.go`: `Open(dsn string) (*sql.DB, error)`; `RunMigrations(db)` (migration dosyalarını sırayla çalıştırır).
+- [ ] **Step 3:** `internal/db/db.go`: `Open(dsn string) (*sql.DB, error)` (ping + pool ayarları). Migration'lar MySQL init script olarak uygulanır (`infra/docker-compose.yml` içinde `backend/migrations` mount); backend migration çalıştırmaz.
 - [ ] **Step 4:** `internal/model/model.go`: şema struct'ları (JSON tag'leriyle).
 - [ ] **Step 5:** `internal/repo/repo.go`: yukarıdaki `Repo` arayüzü + MySQL implementasyonu (parametreli sorgular).
 - [ ] **Step 6:** `internal/httpapi/server.go`: router (`GET /health` → `{"status":"ok"}`; materials/products/lots CRUD; `POST /stock-movements`).
