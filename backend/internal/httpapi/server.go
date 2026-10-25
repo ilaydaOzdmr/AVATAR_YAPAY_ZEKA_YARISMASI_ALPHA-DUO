@@ -5,20 +5,23 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"avatar/backend/internal/model"
 	"avatar/backend/internal/repo"
+	"avatar/backend/internal/service"
 )
 
 // Server exposes the REST API over the configured repo.
 type Server struct {
 	repo repo.Repo
+	cost *service.CostEngine
 	mux  *http.ServeMux
 }
 
 // NewServer builds the HTTP handler with all routes registered.
 func NewServer(r repo.Repo) http.Handler {
-	s := &Server{repo: r, mux: http.NewServeMux()}
+	s := &Server{repo: r, cost: service.NewCostEngine(r), mux: http.NewServeMux()}
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("GET /materials", s.handleListMaterials)
 	s.mux.HandleFunc("POST /materials", s.handleCreateMaterial)
@@ -29,6 +32,8 @@ func NewServer(r repo.Repo) http.Handler {
 	s.mux.HandleFunc("GET /lots/{code}", s.handleGetLot)
 	s.mux.HandleFunc("GET /lots/{code}/movements", s.handleListMovements)
 	s.mux.HandleFunc("POST /stock-movements", s.handleAddStockMovement)
+	s.mux.HandleFunc("POST /production-orders", s.handleCreateProductionOrder)
+	s.mux.HandleFunc("GET /production-orders/{id}", s.handleGetProductionOrder)
 	return s
 }
 
@@ -152,4 +157,43 @@ func (s *Server) handleAddStockMovement(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
+}
+
+// productionOrderRequest is the payload for POST /production-orders.
+type productionOrderRequest struct {
+	model.ProductionOrder
+	Inputs  []model.ProductionOrderInput  `json:"inputs"`
+	Outputs []model.ProductionOrderOutput `json:"outputs"`
+}
+
+func (s *Server) handleCreateProductionOrder(w http.ResponseWriter, r *http.Request) {
+	var req productionOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	created, err := s.repo.CreateProductionOrder(r.Context(), req.ProductionOrder, req.Inputs, req.Outputs)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleGetProductionOrder(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	summary, err := s.cost.ProductionOrderCost(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
