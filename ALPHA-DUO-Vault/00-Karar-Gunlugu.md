@@ -11,7 +11,6 @@ Detay: `docs/superpowers/specs/2026-10-24-avatar-ai-competition-design.md`
 
 ## Alınan kararlar
 - **Yaklaşım:** Omurga önce (dikey dilimler); kayarsak minimal prototipe kırp.
-- **Süre:** 5 gün kod + 2 gün anlama/video; teslim 1 Kasım. Takım: 2 kişi.
 - **Öncelik:** bitmiş + eksiksiz + canlı çalışır proje (demo: ET-2026-001 → marketler).
 - **Teknik yığın:** Go (stdlib) + MySQL 8 + React (Vite+TS) + Kotlin (Compose+Room) + Python (FastAPI+sklearn).
 - **Fiyatlar:** tümü önceden tanımlı (seed), PDF ile birebir realist katalog.
@@ -24,6 +23,12 @@ Detay: `docs/superpowers/specs/2026-10-24-avatar-ai-competition-design.md`
 - Uygulama planı: `docs/superpowers/plans/2026-10-24-avatar-ai-competition.md` (11 görev).
 
 ## Durum
-- [ ] Tasarım onayı (yapıldı: 2026-10-24)
-- [ ] Plan onayı
+- [x] Tasarım onayı (2026-10-24)
+- [x] Plan onayı
 - [ ] Uygulama (Task 1..11)
+
+## İlerleme
+- [x] **Task 1** — monorepo iskeleti + Docker (MySQL, SonarQube) → `chore: scaffold...`
+- [x] **Task 2** — MySQL şema + seed → `feat: add mysql schema and scenario seed data`
+  - Doğrulandı (Docker/MySQL): 17 tablo; EKP 18,16 ₺ (girdi 1.076,00 + hizmet 467,50); marketler 30/25/30; UTF-8 OK.
+- [ ] **Task 3** — Go backend iskeleti + CRUD + stok
