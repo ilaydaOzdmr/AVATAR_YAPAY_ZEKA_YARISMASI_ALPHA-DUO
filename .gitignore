@@ -42,3 +42,6 @@ Thumbs.db
 coverage/
 *.coverprofile
 ml/report.json
+
+# Obsidian (repo-root workspace config; the real vault lives in ALPHA-DUO-Vault/)
+/.obsidian/
