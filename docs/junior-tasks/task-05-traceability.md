@@ -12,9 +12,10 @@ Kuralların (kesin uy):
 4. İsimlendirme İngilizce, açıklayıcı, mevcut kodla tutarlı. Clean code, LLM-okunur.
 5. Verilen testleri + iddiaları tam yaz.
 6. Derleme çalıştıramasan bile kod derlenecek şekilde yaz.
-7. **Günlük notu:** her gün yaptıklarını `ALPHA-DUO-Vault/ilayda/YYYY-MM-DD.md`
-   dosyasına yazabilirsin (o klasörde değişiklik yapma yetkin var). Günlük **gerçeği**
-   yaz; kendin çalıştırmadığın bir testi "geçti" diye yazma.
+7. **Günlük notu:** her gün yaptıklarını **kendi klasörün olan** `ALPHA-DUO-Vault/Meryem/YYYY-MM-DD.md`
+   dosyasına yazabilirsin (o klasörde değişiklik yapma yetkin var; `ilayda/` klasörü
+   senior'a aittir, oraya dokunma). Günlük **gerçeği** yaz; kendin çalıştırmadığın
+   bir testi "geçti" diye yazma.
 8. Teslimat: değiştirdiğin/eklediğin dosyaların **TAM içeriği**, dosya yollarıyla.
 
 ## BAĞLAM (mevcut kod)
