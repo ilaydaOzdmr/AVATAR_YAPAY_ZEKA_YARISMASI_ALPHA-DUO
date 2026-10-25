@@ -19,6 +19,12 @@ type Repo interface {
 	GetLotByCode(ctx context.Context, code string) (model.Lot, error)
 	AddStockMovement(ctx context.Context, m model.StockMovement) (model.StockMovement, error)
 	ListStockMovements(ctx context.Context, lotID int64) ([]model.StockMovement, error)
+	CreateProductionOrder(ctx context.Context, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) (model.ProductionOrder, error)
+	GetProductionOrder(ctx context.Context, id int64) (model.ProductionOrder, error)
+	ListProductionOrderInputs(ctx context.Context, poID int64) ([]model.ProductionOrderInput, error)
+	ListProductionOrderOutputs(ctx context.Context, poID int64) ([]model.ProductionOrderOutput, error)
+	GetLot(ctx context.Context, id int64) (model.Lot, error)
+	GetProduct(ctx context.Context, id int64) (model.Product, error)
 }
 
 // NewMySQLRepo returns a MySQL-backed implementation of Repo.
@@ -210,4 +216,127 @@ func nullString(v *string) any {
 		return nil
 	}
 	return *v
+}
+
+func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) (model.ProductionOrder, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.ProductionOrder{}, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO production_orders (code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		po.Code, po.Status, nullString(po.StartedAt), nullString(po.FinishedAt),
+		nullString(po.Notes), nullString(po.ServiceName), po.ServiceUnitCost, po.ServiceQty)
+	if err != nil {
+		return model.ProductionOrder{}, err
+	}
+	po.ID, err = res.LastInsertId()
+	if err != nil {
+		return model.ProductionOrder{}, err
+	}
+
+	for _, input := range inputs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO production_order_inputs (production_order_id, material_lot_id, qty) VALUES (?, ?, ?)`,
+			po.ID, input.MaterialLotID, input.Qty); err != nil {
+			return model.ProductionOrder{}, err
+		}
+	}
+
+	for _, output := range outputs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO production_order_outputs (production_order_id, product_lot_id, qty) VALUES (?, ?, ?)`,
+			po.ID, output.ProductLotID, output.Qty); err != nil {
+			return model.ProductionOrder{}, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	return po, nil
+}
+
+func (r *mysqlRepo) GetProductionOrder(ctx context.Context, id int64) (model.ProductionOrder, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty
+		 FROM production_orders WHERE id = ?`, id)
+
+	var po model.ProductionOrder
+	var startedAt, finishedAt, notes, serviceName sql.NullString
+	if err := row.Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt, &notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	if startedAt.Valid {
+		po.StartedAt = &startedAt.String
+	}
+	if finishedAt.Valid {
+		po.FinishedAt = &finishedAt.String
+	}
+	if notes.Valid {
+		po.Notes = &notes.String
+	}
+	if serviceName.Valid {
+		po.ServiceName = &serviceName.String
+	}
+	return po, nil
+}
+
+func (r *mysqlRepo) ListProductionOrderInputs(ctx context.Context, poID int64) ([]model.ProductionOrderInput, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, production_order_id, material_lot_id, qty FROM production_order_inputs WHERE production_order_id = ? ORDER BY id`, poID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.ProductionOrderInput
+	for rows.Next() {
+		var input model.ProductionOrderInput
+		if err := rows.Scan(&input.ID, &input.ProductionOrderID, &input.MaterialLotID, &input.Qty); err != nil {
+			return nil, err
+		}
+		out = append(out, input)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) ListProductionOrderOutputs(ctx context.Context, poID int64) ([]model.ProductionOrderOutput, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, production_order_id, product_lot_id, qty FROM production_order_outputs WHERE production_order_id = ? ORDER BY id`, poID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.ProductionOrderOutput
+	for rows.Next() {
+		var output model.ProductionOrderOutput
+		if err := rows.Scan(&output.ID, &output.ProductionOrderID, &output.ProductLotID, &output.Qty); err != nil {
+			return nil, err
+		}
+		out = append(out, output)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) GetLot(ctx context.Context, id int64) (model.Lot, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, item_type, item_id, qty, unit, supplier_id, purchase_price, unit_cost, received_at, expiry_date, status, created_at, updated_at FROM lots WHERE id = ?`,
+		id)
+	return scanLot(row)
+}
+
+func (r *mysqlRepo) GetProduct(ctx context.Context, id int64) (model.Product, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, name, unit, list_price, category, is_finished FROM products WHERE id = ?`, id)
+
+	var p model.Product
+	if err := row.Scan(&p.ID, &p.Code, &p.Name, &p.Unit, &p.ListPrice, &p.Category, &p.IsFinished); err != nil {
+		return model.Product{}, err
+	}
+	return p, nil
 }
