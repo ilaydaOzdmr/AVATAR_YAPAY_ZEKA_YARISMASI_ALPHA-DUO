@@ -31,4 +31,6 @@ Detay: `docs/superpowers/specs/2026-10-24-avatar-ai-competition-design.md`
 - [x] **Task 1** — monorepo iskeleti + Docker (MySQL, SonarQube) → `chore: scaffold...`
 - [x] **Task 2** — MySQL şema + seed → `feat: add mysql schema and scenario seed data`
   - Doğrulandı (Docker/MySQL): 17 tablo; EKP 18,16 ₺ (girdi 1.076,00 + hizmet 467,50); marketler 30/25/30; UTF-8 OK.
-- [ ] **Task 3** — Go backend iskeleti + CRUD + stok
+- [x] **Task 3** — Go backend iskeleti + CRUD + stok → `feat: add go backend skeleton...`
+  - Doğrulandı: `go build` + `go vet` + `go test` geçti; Docker'da `/health`, `/materials`, `/lots/{code}`, hareketler çalışıyor.
+- [ ] **Task 4** — Maliyet motoru (EKP/VKP/brüt kâr/marj)
