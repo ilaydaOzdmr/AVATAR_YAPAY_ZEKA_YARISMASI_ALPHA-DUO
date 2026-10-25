@@ -17,6 +17,8 @@ type Repo interface {
 	CreateLot(ctx context.Context, l model.Lot) (model.Lot, error)
 	ListLots(ctx context.Context, itemType string) ([]model.Lot, error)
 	GetLotByCode(ctx context.Context, code string) (model.Lot, error)
+	ListLotLinksByParent(ctx context.Context, parentID int64) ([]model.LotLink, error)
+	ListLotLinksByChild(ctx context.Context, childID int64) ([]model.LotLink, error)
 	AddStockMovement(ctx context.Context, m model.StockMovement) (model.StockMovement, error)
 	ListStockMovements(ctx context.Context, lotID int64) ([]model.StockMovement, error)
 	CreateProductionOrder(ctx context.Context, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) (model.ProductionOrder, error)
@@ -25,6 +27,8 @@ type Repo interface {
 	ListProductionOrderOutputs(ctx context.Context, poID int64) ([]model.ProductionOrderOutput, error)
 	GetLot(ctx context.Context, id int64) (model.Lot, error)
 	GetProduct(ctx context.Context, id int64) (model.Product, error)
+	GetMarket(ctx context.Context, id int64) (model.Market, error)
+	GetSupplier(ctx context.Context, id int64) (model.Supplier, error)
 }
 
 // NewMySQLRepo returns a MySQL-backed implementation of Repo.
@@ -136,6 +140,46 @@ func (r *mysqlRepo) GetLotByCode(ctx context.Context, code string) (model.Lot, e
 		`SELECT id, code, item_type, item_id, qty, unit, supplier_id, purchase_price, unit_cost, received_at, expiry_date, status, created_at, updated_at FROM lots WHERE code = ?`,
 		code)
 	return scanLot(row)
+}
+
+func (r *mysqlRepo) ListLotLinksByParent(ctx context.Context, parentID int64) ([]model.LotLink, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, parent_lot_id, child_lot_id, qty, link_type FROM lot_links WHERE parent_lot_id = ? ORDER BY id`,
+		parentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.LotLink
+	for rows.Next() {
+		var link model.LotLink
+		if err := rows.Scan(&link.ID, &link.ParentLotID, &link.ChildLotID, &link.Qty, &link.LinkType); err != nil {
+			return nil, err
+		}
+		out = append(out, link)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) ListLotLinksByChild(ctx context.Context, childID int64) ([]model.LotLink, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, parent_lot_id, child_lot_id, qty, link_type FROM lot_links WHERE child_lot_id = ? ORDER BY id`,
+		childID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.LotLink
+	for rows.Next() {
+		var link model.LotLink
+		if err := rows.Scan(&link.ID, &link.ParentLotID, &link.ChildLotID, &link.Qty, &link.LinkType); err != nil {
+			return nil, err
+		}
+		out = append(out, link)
+	}
+	return out, rows.Err()
 }
 
 func (r *mysqlRepo) AddStockMovement(ctx context.Context, m model.StockMovement) (model.StockMovement, error) {
@@ -339,4 +383,26 @@ func (r *mysqlRepo) GetProduct(ctx context.Context, id int64) (model.Product, er
 		return model.Product{}, err
 	}
 	return p, nil
+}
+
+func (r *mysqlRepo) GetMarket(ctx context.Context, id int64) (model.Market, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, name, contact FROM markets WHERE id = ?`, id)
+
+	var market model.Market
+	if err := row.Scan(&market.ID, &market.Code, &market.Name, &market.Contact); err != nil {
+		return model.Market{}, err
+	}
+	return market, nil
+}
+
+func (r *mysqlRepo) GetSupplier(ctx context.Context, id int64) (model.Supplier, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, name, contact FROM suppliers WHERE id = ?`, id)
+
+	var supplier model.Supplier
+	if err := row.Scan(&supplier.ID, &supplier.Code, &supplier.Name, &supplier.Contact); err != nil {
+		return model.Supplier{}, err
+	}
+	return supplier, nil
 }

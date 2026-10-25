@@ -21,15 +21,23 @@ func (f *fakeRepo) CreateMaterial(_ context.Context, m model.Material) (model.Ma
 	f.materials = append(f.materials, m)
 	return m, nil
 }
-func (f *fakeRepo) ListMaterials(_ context.Context) ([]model.Material, error) { return f.materials, nil }
+func (f *fakeRepo) ListMaterials(_ context.Context) ([]model.Material, error) {
+	return f.materials, nil
+}
 func (f *fakeRepo) CreateProduct(_ context.Context, p model.Product) (model.Product, error) {
 	return p, nil
 }
-func (f *fakeRepo) ListProducts(_ context.Context) ([]model.Product, error) { return nil, nil }
+func (f *fakeRepo) ListProducts(_ context.Context) ([]model.Product, error)     { return nil, nil }
 func (f *fakeRepo) CreateLot(_ context.Context, l model.Lot) (model.Lot, error) { return l, nil }
 func (f *fakeRepo) ListLots(_ context.Context, _ string) ([]model.Lot, error)   { return nil, nil }
 func (f *fakeRepo) GetLotByCode(_ context.Context, _ string) (model.Lot, error) {
 	return model.Lot{}, nil
+}
+func (f *fakeRepo) ListLotLinksByParent(_ context.Context, _ int64) ([]model.LotLink, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListLotLinksByChild(_ context.Context, _ int64) ([]model.LotLink, error) {
+	return nil, nil
 }
 func (f *fakeRepo) AddStockMovement(_ context.Context, m model.StockMovement) (model.StockMovement, error) {
 	return m, nil
@@ -54,6 +62,12 @@ func (f *fakeRepo) GetLot(_ context.Context, _ int64) (model.Lot, error) {
 }
 func (f *fakeRepo) GetProduct(_ context.Context, _ int64) (model.Product, error) {
 	return model.Product{}, nil
+}
+func (f *fakeRepo) GetMarket(_ context.Context, _ int64) (model.Market, error) {
+	return model.Market{}, nil
+}
+func (f *fakeRepo) GetSupplier(_ context.Context, _ int64) (model.Supplier, error) {
+	return model.Supplier{}, nil
 }
 
 func TestHealth(t *testing.T) {
