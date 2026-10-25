@@ -37,6 +37,24 @@ func (f *fakeRepo) AddStockMovement(_ context.Context, m model.StockMovement) (m
 func (f *fakeRepo) ListStockMovements(_ context.Context, _ int64) ([]model.StockMovement, error) {
 	return nil, nil
 }
+func (f *fakeRepo) CreateProductionOrder(_ context.Context, po model.ProductionOrder, _ []model.ProductionOrderInput, _ []model.ProductionOrderOutput) (model.ProductionOrder, error) {
+	return po, nil
+}
+func (f *fakeRepo) GetProductionOrder(_ context.Context, _ int64) (model.ProductionOrder, error) {
+	return model.ProductionOrder{}, nil
+}
+func (f *fakeRepo) ListProductionOrderInputs(_ context.Context, _ int64) ([]model.ProductionOrderInput, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListProductionOrderOutputs(_ context.Context, _ int64) ([]model.ProductionOrderOutput, error) {
+	return nil, nil
+}
+func (f *fakeRepo) GetLot(_ context.Context, _ int64) (model.Lot, error) {
+	return model.Lot{}, nil
+}
+func (f *fakeRepo) GetProduct(_ context.Context, _ int64) (model.Product, error) {
+	return model.Product{}, nil
+}
 
 func TestHealth(t *testing.T) {
 	h := NewServer(&fakeRepo{})

@@ -33,4 +33,5 @@ Detay: `docs/superpowers/specs/2026-10-24-avatar-ai-competition-design.md`
   - Doğrulandı (Docker/MySQL): 17 tablo; EKP 18,16 ₺ (girdi 1.076,00 + hizmet 467,50); marketler 30/25/30; UTF-8 OK.
 - [x] **Task 3** — Go backend iskeleti + CRUD + stok → `feat: add go backend skeleton...`
   - Doğrulandı: `go build` + `go vet` + `go test` geçti; Docker'da `/health`, `/materials`, `/lots/{code}`, hareketler çalışıyor.
-- [ ] **Task 4** — Maliyet motoru (EKP/VKP/brüt kâr/marj)
+- [x] **Task 4** — Maliyet motoru (EKP/VKP/brüt kâr/marj)
+  - Doğrulandı: `go build` + `go vet` + `go test` geçti; EKP 18,16 ₺, VKP 24,90 ₺, brüt kâr 6,74 ₺, marj %27,07.

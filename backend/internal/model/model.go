@@ -53,3 +53,32 @@ type StockMovement struct {
 	OccurredAt   string  `json:"occurred_at"`
 	CreatedAt    string  `json:"created_at"`
 }
+
+// ProductionOrder is a contract manufacturing order and its service cost.
+type ProductionOrder struct {
+	ID              int64   `json:"id"`
+	Code            string  `json:"code"`
+	Status          string  `json:"status"`
+	StartedAt       *string `json:"started_at"`
+	FinishedAt      *string `json:"finished_at"`
+	Notes           *string `json:"notes"`
+	ServiceName     *string `json:"service_name"`
+	ServiceUnitCost float64 `json:"service_unit_cost"`
+	ServiceQty      float64 `json:"service_qty"`
+}
+
+// ProductionOrderInput is a raw material lot consumed by a production order.
+type ProductionOrderInput struct {
+	ID                int64   `json:"id"`
+	ProductionOrderID int64   `json:"production_order_id"`
+	MaterialLotID     int64   `json:"material_lot_id"`
+	Qty               float64 `json:"qty"`
+}
+
+// ProductionOrderOutput is a finished product lot produced by a production order.
+type ProductionOrderOutput struct {
+	ID                int64   `json:"id"`
+	ProductionOrderID int64   `json:"production_order_id"`
+	ProductLotID      int64   `json:"product_lot_id"`
+	Qty               float64 `json:"qty"`
+}
