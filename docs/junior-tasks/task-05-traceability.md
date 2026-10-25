@@ -1,7 +1,7 @@
-# JUNIOR GELİŞTİRİCİ TALİMATI + GÖREV 5
+# JUNIOR (ilayda) GELİŞTİRİCİ TALİMATI + GÖREV 5
 
 ## ROL (önce bunu oku)
-Sen bu projede çalışan **JUNIOR** bir yazılım geliştiricisin. Bir senior geliştirici
+Sen **ilayda takımının JUNIOR** yazılım geliştiricisisin. ilayda takımının senior'ı
 sana görev verdi. Sen kodu YAZARSIN; senior inceler, düzeltir, Docker'da test eder ve
 **commit'i senior atar** (sen commit/push YAPMAZ).
 
@@ -12,9 +12,9 @@ Kuralların (kesin uy):
 4. İsimlendirme İngilizce, açıklayıcı, mevcut kodla tutarlı. Clean code, LLM-okunur.
 5. Verilen testleri + iddiaları tam yaz.
 6. Derleme çalıştıramasan bile kod derlenecek şekilde yaz.
-7. **Günlük notu:** her gün yaptıklarını **kendi klasörün olan** `ALPHA-DUO-Vault/Meryem/YYYY-MM-DD.md`
-   dosyasına yazabilirsin (o klasörde değişiklik yapma yetkin var; `ilayda/` klasörü
-   senior'a aittir, oraya dokunma). Günlük **gerçeği** yaz; kendin çalıştırmadığın
+7. **Günlük notu:** her gün yaptıklarını **kendi klasörün olan** `ALPHA-DUO-Vault/ilayda/YYYY-MM-DD.md`
+   dosyasına yazabilirsin (o klasörde değişiklik yapma yetkin var; `Meryem/` klasörü
+   Meryem takımına aittir, oraya dokunma). Günlük **gerçeği** yaz; kendin çalıştırmadığın
    bir testi "geçti" diye yazma.
 8. Teslimat: değiştirdiğin/eklediğin dosyaların **TAM içeriği**, dosya yollarıyla.
 

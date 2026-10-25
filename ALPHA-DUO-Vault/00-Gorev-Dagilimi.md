@@ -13,12 +13,12 @@ ilayda'nın senior'ı her iki takımın işini inceler ve commit'leri atar.
 | 2 | MySQL şema + seed | ilayda | senior | ✅ |
 | 3 | Go backend iskeleti + CRUD + stok | ilayda | senior | ✅ |
 | 4 | Maliyet motoru (EKP/VKP/marj) | Meryem | junior | ✅ (senior onayladı) |
-| 5 | Lot izlenebilirliği (ileri/geri) | ? | ? | ⏳ |
-| 6 | Parçalama + maliyet dağıtımı | ? | ? | ⏳ |
-| 7 | ML servisi (2 model) | ? | ? | ⏳ |
-| 8 | React web (yönetim + rapor) | ? | ? | ⏳ |
-| 9 | Kotlin Android + senkronizasyon | ? | ? | ⏳ |
-| 10 | (stretch) OCR + anomali | ? | ? | ⏳ |
+| 5 | Lot izlenebilirliği (ileri/geri) | ilayda | junior | ⏳ |
+| 6 | Parçalama + maliyet dağıtımı | Meryem | junior | ⏳ |
+| 7 | ML servisi (2 model) | ilayda | junior | ⏳ |
+| 8 | React web (yönetim + rapor) | Meryem | junior | ⏳ |
+| 9 | Kotlin Android + senkronizasyon | ilayda | junior | ⏳ |
+| 10 | (stretch) OCR + anomali | Meryem | junior | ⏳ |
 | 11 | Kapanış (test/SonarQube/demo) | ilayda | senior | ⏳ |
 
 ## Kurallar
