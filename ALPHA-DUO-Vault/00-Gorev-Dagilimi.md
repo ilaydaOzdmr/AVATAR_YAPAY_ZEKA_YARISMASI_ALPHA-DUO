@@ -14,7 +14,7 @@ ilayda'nın senior'ı her iki takımın işini inceler ve commit'leri atar.
 | 3 | Go backend iskeleti + CRUD + stok | ilayda | senior | ✅ |
 | 4 | Maliyet motoru (EKP/VKP/marj) | Meryem | junior | ✅ (senior onayladı) |
 | 5 | Lot izlenebilirliği (ileri/geri) | ilayda | junior | ✅ (senior onayladı) |
-| 6 | Parçalama + maliyet dağıtımı | Meryem | junior | ⏳ |
+| 6 | Parçalama + maliyet dağıtımı | Meryem | junior | ✅ (senior onayladı) |
 | 7 | ML servisi (2 model) | ilayda | junior | ⏳ |
 | 8 | React web (yönetim + rapor) | Meryem | junior | ⏳ |
 | 9 | Kotlin Android + senkronizasyon | ilayda | junior | ⏳ |
