@@ -23,6 +23,8 @@ Monorepo. Yeni `web/` dizini: Vite + React + TypeScript. Backend Go API şu anda
 - `GET /butchery-batches/{id}` → `ButcheryResult` (batch, items, weight_balance_ok,
   fire_weight, cost_mismatch, expected_cost)
 - `GET /trace/forward?lot=CODE` → `[AffectedLot]`; `GET /trace/backward?lot=CODE` → `[RawMaterialSource]`
+- `POST /recalls` (`{"source_lot_code","reason"}`) → `RecallResult`; `GET /recalls/{id}` → `RecallResult`
+  (`{event, source_lot_code, affected_lots, markets:[{market_code,market_name,contact,qty}], message}`)
 
 ## GÖREV: React web (yönetim + raporlama ekranları)
 
@@ -42,6 +44,8 @@ Monorepo. Yeni `web/` dizini: Vite + React + TypeScript. Backend Go API şu anda
   "Maliyet uyuşmazlığı (beklenen: X)" uyarısı göster.
 - `Traceability.tsx` — iki sekme: İleri (`/trace/forward`) ve Geri (`/trace/backward`);
   lot kodu gir → sonuç listesi (ileri: lot + marketler; geri: hammadde + tedarikçi).
+- `Recall.tsx` — kaynak lot kodu + sebep gir → `POST /recalls` → sonuç: etkilenen lotlar,
+  market tablosu (market, miktar, iletişim) + üretilen geri çağırma mesajı.
 
 ### 3) `web/src/App.tsx` — basit routing (React Router yerine state ile sekme geçişi yeter).
 
