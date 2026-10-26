@@ -1,0 +1,15 @@
+{
+  "yield": {
+    "model_mae": 0.1492,
+    "model_rmse": 0.1801,
+    "baseline_mae": 14.2857,
+    "baseline_rmse": 16.7161
+  },
+  "butchery": {
+    "model_mae": 0.0124,
+    "model_rmse": 0.0158,
+    "baseline_mae": 0.6349,
+    "baseline_rmse": 0.8645
+  },
+  "note": "Veri seti örnek/anonymize ve küçüktür; sonuçlar gösterim amaçlıdır."
+}
