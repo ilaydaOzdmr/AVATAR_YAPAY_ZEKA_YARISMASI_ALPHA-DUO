@@ -1,0 +1,130 @@
+:root {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #1f2933;
+  background-color: #f5f7fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.app-header h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.5rem;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.nav-button,
+.tab {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #cbd2d9;
+  border-radius: 0.4rem;
+  background: #ffffff;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nav-button.active,
+.tab.active {
+  background: #1f6feb;
+  border-color: #1f6feb;
+  color: #ffffff;
+}
+
+.content {
+  margin-top: 1.5rem;
+}
+
+h2 {
+  margin-top: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+  background: #ffffff;
+}
+
+th,
+td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #e4e7eb;
+  text-align: left;
+  vertical-align: top;
+}
+
+thead th {
+  background: #eef2f6;
+}
+
+.inline-form,
+.stack-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.stack-form {
+  flex-direction: column;
+  max-width: 420px;
+}
+
+.stack-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+input {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #cbd2d9;
+  border-radius: 0.4rem;
+}
+
+button[type="submit"] {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #1f6feb;
+  border-radius: 0.4rem;
+  background: #1f6feb;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.error {
+  color: #b42318;
+}
+
+.warning {
+  color: #b54708;
+  font-weight: 600;
+}
+
+.message {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #ffffff;
+  border-left: 4px solid #1f6feb;
+}
