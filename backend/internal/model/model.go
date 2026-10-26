@@ -129,3 +129,41 @@ type ButcheryItem struct {
 	Weight       float64 `json:"weight"`
 	IsWaste      bool    `json:"is_waste"`
 }
+
+// RecallEvent is a recall triggered from a source (raw material) lot.
+type RecallEvent struct {
+	ID          int64  `json:"id"`
+	Code        string `json:"code"`
+	Reason      string `json:"reason"`
+	SourceLotID int64  `json:"source_lot_id"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// RecallBlock marks a lot as blocked by a recall event.
+type RecallBlock struct {
+	ID            int64  `json:"id"`
+	RecallEventID int64  `json:"recall_event_id"`
+	LotID         int64  `json:"lot_id"`
+	BlockedAt     string `json:"blocked_at"`
+}
+
+// Sale is a sale to a market.
+type Sale struct {
+	ID       int64   `json:"id"`
+	Code     string  `json:"code"`
+	MarketID int64   `json:"market_id"`
+	SoldAt   string  `json:"sold_at"`
+	Status   string  `json:"status"`
+	ClientID *string `json:"client_id"`
+}
+
+// SaleLine is a lot-based line of a sale.
+type SaleLine struct {
+	ID              int64   `json:"id"`
+	SaleID          int64   `json:"sale_id"`
+	LotID           int64   `json:"lot_id"`
+	Qty             float64 `json:"qty"`
+	UnitPrice       float64 `json:"unit_price"`
+	TotalPrice      float64 `json:"total_price"`
+	StockMovementID *int64  `json:"stock_movement_id"`
+}
