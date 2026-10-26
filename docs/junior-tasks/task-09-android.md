@@ -13,6 +13,8 @@ Kuralların (kesin uy):
 4. Günlük notu: yaptıklarını **kendi klasörün olan** `ALPHA-DUO-Vault/Meryem/YYYY-MM-DD.md`
    dosyasına yaz (`ilayda/` klasörüne dokunma). Gerçeği yaz; derlemediğin şeyi "derlendi" diye yazma.
 5. Teslimat: `feat/task-09-android` branch'i + PR. Dosyaların TAM içeriği.
+6. **Çok sayıda ayrı commit at:** işi tek commit'e sıkıştırma. Her mantıksal parça
+   ayrı bir commit olacak (aşağıdaki "COMMIT'LER" bölümüne birebir uy).
 
 ## BAĞLAM
 Monorepo. Yeni `mobile/` dizini: Kotlin + Jetpack Compose + Room (SQLite).
@@ -46,6 +48,14 @@ Backend Go API `http://localhost:8080` üzerinde:
 - `History.kt` — yerel satışları listele (senkron durumuyla).
 
 ### 5) `MainActivity.kt` — Compose ile 3 ekran arası basit geçiş + `SyncRepository` çağrıları.
+
+## COMMIT'LER (ayrı ayrı, sırasıyla)
+1. `feat(android): scaffold gradle project` — settings/build/manifest.
+2. `feat(android): add room database and entities` — AppDatabase + LocalProduct/LocalLot/LocalSale/LocalSaleLine/Outbox.
+3. `feat(android): add sync repository` — SyncRepository (pull/push).
+4. `feat(android): add product list and sale screens` — ProductList.kt + Sale.kt.
+5. `feat(android): add history screen and main activity` — History.kt + MainActivity.kt.
+6. `docs: log task 9 work` — `ALPHA-DUO-Vault/Meryem/YYYY-MM-DD.md`.
 
 ## KABUL (senior kontrol edecek)
 - Gradle projesi derlenebilir yapıda (Kotlin/Compose/Room tutarlı).
