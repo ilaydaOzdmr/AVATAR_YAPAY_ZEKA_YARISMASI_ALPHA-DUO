@@ -32,6 +32,13 @@ type Repo interface {
 	CreateButcheryBatch(ctx context.Context, batch model.ButcheryBatch, items []model.ButcheryItem) (model.ButcheryBatch, error)
 	GetButcheryBatch(ctx context.Context, id int64) (model.ButcheryBatch, error)
 	ListButcheryItems(ctx context.Context, batchID int64) ([]model.ButcheryItem, error)
+	CreateRecallEvent(ctx context.Context, event model.RecallEvent) (model.RecallEvent, error)
+	GetRecallEvent(ctx context.Context, id int64) (model.RecallEvent, error)
+	CreateRecallBlock(ctx context.Context, block model.RecallBlock) (model.RecallBlock, error)
+	ListRecallBlocks(ctx context.Context, recallEventID int64) ([]model.RecallBlock, error)
+	IsLotBlocked(ctx context.Context, lotID int64) (bool, error)
+	ListBlockedLotCodes(ctx context.Context) ([]string, error)
+	CreateSale(ctx context.Context, sale model.Sale, lines []model.SaleLine) (model.Sale, error)
 }
 
 // NewMySQLRepo returns a MySQL-backed implementation of Repo.
@@ -479,4 +486,119 @@ func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]mod
 		out = append(out, item)
 	}
 	return out, rows.Err()
+}
+
+func (r *mysqlRepo) CreateRecallEvent(ctx context.Context, event model.RecallEvent) (model.RecallEvent, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO recall_events (code, reason, source_lot_id) VALUES (?, ?, ?)`,
+		event.Code, event.Reason, event.SourceLotID)
+	if err != nil {
+		return model.RecallEvent{}, err
+	}
+	event.ID, err = res.LastInsertId()
+	return event, err
+}
+
+func (r *mysqlRepo) GetRecallEvent(ctx context.Context, id int64) (model.RecallEvent, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, reason, source_lot_id, created_at FROM recall_events WHERE id = ?`, id)
+	var event model.RecallEvent
+	if err := row.Scan(&event.ID, &event.Code, &event.Reason, &event.SourceLotID, &event.CreatedAt); err != nil {
+		return model.RecallEvent{}, err
+	}
+	return event, nil
+}
+
+func (r *mysqlRepo) CreateRecallBlock(ctx context.Context, block model.RecallBlock) (model.RecallBlock, error) {
+	if block.BlockedAt == "" {
+		block.BlockedAt = time.Now().Format("2006-01-02 15:04:05")
+	}
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO recall_blocks (recall_event_id, lot_id, blocked_at) VALUES (?, ?, ?)`,
+		block.RecallEventID, block.LotID, block.BlockedAt)
+	if err != nil {
+		return model.RecallBlock{}, err
+	}
+	block.ID, err = res.LastInsertId()
+	return block, err
+}
+
+func (r *mysqlRepo) ListRecallBlocks(ctx context.Context, recallEventID int64) ([]model.RecallBlock, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, recall_event_id, lot_id, blocked_at FROM recall_blocks WHERE recall_event_id = ? ORDER BY id`, recallEventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.RecallBlock
+	for rows.Next() {
+		var block model.RecallBlock
+		if err := rows.Scan(&block.ID, &block.RecallEventID, &block.LotID, &block.BlockedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, block)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) IsLotBlocked(ctx context.Context, lotID int64) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM recall_blocks WHERE lot_id = ?)`, lotID).Scan(&exists)
+	return exists, err
+}
+
+func (r *mysqlRepo) ListBlockedLotCodes(ctx context.Context) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT DISTINCT l.code FROM recall_blocks rb JOIN lots l ON l.id = rb.lot_id ORDER BY l.code`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		out = append(out, code)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) CreateSale(ctx context.Context, sale model.Sale, lines []model.SaleLine) (model.Sale, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Sale{}, err
+	}
+	defer tx.Rollback()
+
+	if sale.SoldAt == "" {
+		sale.SoldAt = time.Now().Format("2006-01-02 15:04:05")
+	}
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO sales (code, market_id, sold_at, status, client_id) VALUES (?, ?, ?, ?, ?)`,
+		sale.Code, sale.MarketID, sale.SoldAt, sale.Status, nullString(sale.ClientID))
+	if err != nil {
+		return model.Sale{}, err
+	}
+	sale.ID, err = res.LastInsertId()
+	if err != nil {
+		return model.Sale{}, err
+	}
+
+	for _, line := range lines {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO sale_lines (sale_id, lot_id, qty, unit_price, total_price, stock_movement_id) VALUES (?, ?, ?, ?, ?, ?)`,
+			sale.ID, line.LotID, line.Qty, line.UnitPrice, line.TotalPrice, nullInt64(line.StockMovementID)); err != nil {
+			return model.Sale{}, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.Sale{}, err
+	}
+	return sale, nil
 }

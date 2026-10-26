@@ -78,6 +78,27 @@ func (f *fakeRepo) GetButcheryBatch(_ context.Context, _ int64) (model.ButcheryB
 func (f *fakeRepo) ListButcheryItems(_ context.Context, _ int64) ([]model.ButcheryItem, error) {
 	return nil, nil
 }
+func (f *fakeRepo) CreateRecallEvent(_ context.Context, e model.RecallEvent) (model.RecallEvent, error) {
+	return e, nil
+}
+func (f *fakeRepo) GetRecallEvent(_ context.Context, _ int64) (model.RecallEvent, error) {
+	return model.RecallEvent{}, nil
+}
+func (f *fakeRepo) CreateRecallBlock(_ context.Context, b model.RecallBlock) (model.RecallBlock, error) {
+	return b, nil
+}
+func (f *fakeRepo) ListRecallBlocks(_ context.Context, _ int64) ([]model.RecallBlock, error) {
+	return nil, nil
+}
+func (f *fakeRepo) IsLotBlocked(_ context.Context, _ int64) (bool, error) {
+	return false, nil
+}
+func (f *fakeRepo) ListBlockedLotCodes(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+func (f *fakeRepo) CreateSale(_ context.Context, sale model.Sale, _ []model.SaleLine) (model.Sale, error) {
+	return sale, nil
+}
 
 func TestHealth(t *testing.T) {
 	h := NewServer(&fakeRepo{})
