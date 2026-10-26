@@ -69,6 +69,15 @@ func (f *fakeRepo) GetMarket(_ context.Context, _ int64) (model.Market, error) {
 func (f *fakeRepo) GetSupplier(_ context.Context, _ int64) (model.Supplier, error) {
 	return model.Supplier{}, nil
 }
+func (f *fakeRepo) CreateButcheryBatch(_ context.Context, batch model.ButcheryBatch, _ []model.ButcheryItem) (model.ButcheryBatch, error) {
+	return batch, nil
+}
+func (f *fakeRepo) GetButcheryBatch(_ context.Context, _ int64) (model.ButcheryBatch, error) {
+	return model.ButcheryBatch{}, nil
+}
+func (f *fakeRepo) ListButcheryItems(_ context.Context, _ int64) ([]model.ButcheryItem, error) {
+	return nil, nil
+}
 
 func TestHealth(t *testing.T) {
 	h := NewServer(&fakeRepo{})
