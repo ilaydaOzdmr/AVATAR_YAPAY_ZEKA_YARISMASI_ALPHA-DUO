@@ -29,6 +29,9 @@ type Repo interface {
 	GetProduct(ctx context.Context, id int64) (model.Product, error)
 	GetMarket(ctx context.Context, id int64) (model.Market, error)
 	GetSupplier(ctx context.Context, id int64) (model.Supplier, error)
+	CreateButcheryBatch(ctx context.Context, batch model.ButcheryBatch, items []model.ButcheryItem) (model.ButcheryBatch, error)
+	GetButcheryBatch(ctx context.Context, id int64) (model.ButcheryBatch, error)
+	ListButcheryItems(ctx context.Context, batchID int64) ([]model.ButcheryItem, error)
 }
 
 // NewMySQLRepo returns a MySQL-backed implementation of Repo.
@@ -405,4 +408,75 @@ func (r *mysqlRepo) GetSupplier(ctx context.Context, id int64) (model.Supplier, 
 		return model.Supplier{}, err
 	}
 	return supplier, nil
+}
+
+func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.ButcheryBatch, items []model.ButcheryItem) (model.ButcheryBatch, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.ButcheryBatch{}, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO butchery_batches (code, animal_type, input_weight, unit_cost, total_cost, batch_date, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		batch.Code, batch.AnimalType, batch.InputWeight, batch.UnitCost,
+		batch.TotalCost, batch.BatchDate, batch.Status)
+	if err != nil {
+		return model.ButcheryBatch{}, err
+	}
+	batch.ID, err = res.LastInsertId()
+	if err != nil {
+		return model.ButcheryBatch{}, err
+	}
+
+	for _, item := range items {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, is_waste) VALUES (?, ?, ?, ?, ?)`,
+			batch.ID, item.ProductID, nullInt64(item.ProductLotID), item.Weight, item.IsWaste); err != nil {
+			return model.ButcheryBatch{}, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.ButcheryBatch{}, err
+	}
+	return batch, nil
+}
+
+func (r *mysqlRepo) GetButcheryBatch(ctx context.Context, id int64) (model.ButcheryBatch, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, animal_type, input_weight, unit_cost, total_cost, batch_date, status
+		 FROM butchery_batches WHERE id = ?`, id)
+
+	var batch model.ButcheryBatch
+	if err := row.Scan(&batch.ID, &batch.Code, &batch.AnimalType, &batch.InputWeight,
+		&batch.UnitCost, &batch.TotalCost, &batch.BatchDate, &batch.Status); err != nil {
+		return model.ButcheryBatch{}, err
+	}
+	return batch, nil
+}
+
+func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]model.ButcheryItem, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, batch_id, product_id, product_lot_id, weight, is_waste
+		 FROM butchery_items WHERE batch_id = ? ORDER BY id`, batchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.ButcheryItem
+	for rows.Next() {
+		var item model.ButcheryItem
+		var productLotID sql.NullInt64
+		if err := rows.Scan(&item.ID, &item.BatchID, &item.ProductID, &productLotID, &item.Weight, &item.IsWaste); err != nil {
+			return nil, err
+		}
+		if productLotID.Valid {
+			item.ProductLotID = &productLotID.Int64
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }
