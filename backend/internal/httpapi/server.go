@@ -14,19 +14,21 @@ import (
 
 // Server exposes the REST API over the configured repo.
 type Server struct {
-	repo  repo.Repo
-	cost  *service.CostEngine
-	trace *service.Traceability
-	mux   *http.ServeMux
+	repo     repo.Repo
+	cost     *service.CostEngine
+	trace    *service.Traceability
+	butchery *service.ButcheryService
+	mux      *http.ServeMux
 }
 
 // NewServer builds the HTTP handler with all routes registered.
 func NewServer(r repo.Repo) http.Handler {
 	s := &Server{
-		repo:  r,
-		cost:  service.NewCostEngine(r),
-		trace: service.NewTraceability(r),
-		mux:   http.NewServeMux(),
+		repo:     r,
+		cost:     service.NewCostEngine(r),
+		trace:    service.NewTraceability(r),
+		butchery: service.NewButcheryService(r),
+		mux:      http.NewServeMux(),
 	}
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 	s.mux.HandleFunc("GET /materials", s.handleListMaterials)
@@ -42,6 +44,8 @@ func NewServer(r repo.Repo) http.Handler {
 	s.mux.HandleFunc("GET /production-orders/{id}", s.handleGetProductionOrder)
 	s.mux.HandleFunc("GET /trace/forward", s.handleTraceForward)
 	s.mux.HandleFunc("GET /trace/backward", s.handleTraceBackward)
+	s.mux.HandleFunc("POST /butchery-batches", s.handleCreateButcheryBatch)
+	s.mux.HandleFunc("GET /butchery-batches/{id}", s.handleGetButcheryBatch)
 	return s
 }
 
@@ -240,4 +244,42 @@ func (s *Server) handleTraceBackward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, sources)
+}
+
+// butcheryBatchRequest is the payload for POST /butchery-batches.
+type butcheryBatchRequest struct {
+	Batch model.ButcheryBatch  `json:"batch"`
+	Items []model.ButcheryItem `json:"items"`
+}
+
+func (s *Server) handleCreateButcheryBatch(w http.ResponseWriter, r *http.Request) {
+	var req butcheryBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	result, err := s.butchery.CreateBatch(r.Context(), req.Batch, req.Items)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (s *Server) handleGetButcheryBatch(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	result, err := s.butchery.GetBatch(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
