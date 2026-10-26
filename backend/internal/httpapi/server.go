@@ -18,6 +18,7 @@ type Server struct {
 	cost     *service.CostEngine
 	trace    *service.Traceability
 	butchery *service.ButcheryService
+	recall   *service.RecallService
 	mux      *http.ServeMux
 }
 
@@ -28,6 +29,7 @@ func NewServer(r repo.Repo) http.Handler {
 		cost:     service.NewCostEngine(r),
 		trace:    service.NewTraceability(r),
 		butchery: service.NewButcheryService(r),
+		recall:   service.NewRecallService(r),
 		mux:      http.NewServeMux(),
 	}
 	s.mux.HandleFunc("GET /health", s.handleHealth)
@@ -46,6 +48,11 @@ func NewServer(r repo.Repo) http.Handler {
 	s.mux.HandleFunc("GET /trace/backward", s.handleTraceBackward)
 	s.mux.HandleFunc("POST /butchery-batches", s.handleCreateButcheryBatch)
 	s.mux.HandleFunc("GET /butchery-batches/{id}", s.handleGetButcheryBatch)
+	s.mux.HandleFunc("POST /recalls", s.handleCreateRecall)
+	s.mux.HandleFunc("GET /recalls/{id}", s.handleGetRecall)
+	s.mux.HandleFunc("POST /sales", s.handleCreateSale)
+	s.mux.HandleFunc("POST /sync/push", s.handleSyncPush)
+	s.mux.HandleFunc("GET /sync/pull", s.handleSyncPull)
 	return s
 }
 
@@ -282,4 +289,115 @@ func (s *Server) handleGetButcheryBatch(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// recallRequest is the payload for POST /recalls.
+type recallRequest struct {
+	SourceLotCode string `json:"source_lot_code"`
+	Reason        string `json:"reason"`
+}
+
+func (s *Server) handleCreateRecall(w http.ResponseWriter, r *http.Request) {
+	var req recallRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.SourceLotCode == "" {
+		writeError(w, http.StatusBadRequest, errors.New("source_lot_code is required"))
+		return
+	}
+	result, err := s.recall.Create(r.Context(), req.SourceLotCode, req.Reason)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, result)
+}
+
+func (s *Server) handleGetRecall(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	result, err := s.recall.Get(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// saleRequest is the payload for POST /sales and sync push.
+type saleRequest struct {
+	model.Sale
+	Lines []model.SaleLine `json:"lines"`
+}
+
+func (s *Server) handleCreateSale(w http.ResponseWriter, r *http.Request) {
+	var req saleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	created, err := s.recall.CreateSale(r.Context(), req.Sale, req.Lines)
+	if err != nil {
+		if errors.Is(err, service.ErrLotBlocked) {
+			writeError(w, http.StatusConflict, err)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Sales []saleRequest `json:"sales"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	created := make([]model.Sale, 0, len(req.Sales))
+	for _, saleReq := range req.Sales {
+		sale, err := s.recall.CreateSale(r.Context(), saleReq.Sale, saleReq.Lines)
+		if err != nil {
+			if errors.Is(err, service.ErrLotBlocked) {
+				writeError(w, http.StatusConflict, err)
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		created = append(created, sale)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"created": created})
+}
+
+func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
+	blocked, err := s.repo.ListBlockedLotCodes(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	products, err := s.repo.ListProducts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"blocked_lot_codes": blocked,
+		"products":          products,
+	})
 }
