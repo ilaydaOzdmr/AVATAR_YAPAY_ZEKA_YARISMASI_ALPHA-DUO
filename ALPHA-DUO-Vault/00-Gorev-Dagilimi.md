@@ -21,6 +21,12 @@ ilayda'nın senior'ı her iki takımın işini inceler ve commit'leri atar.
 | 10 | (stretch) OCR + anomali | Meryem | junior | ⏳ |
 | 11 | Kapanış (test/SonarQube/demo) | ilayda | senior | ⏳ |
 
+## Backend ekleri (senior — ilayda)
+Görev 5'in kalan kısmı senior tarafından öne alındı:
+- Geri çağırma (`POST /recalls`, `GET /recalls/{id}`) + lot bloklama → ✅
+- Satış (`POST /sales`) + bloklu lot engeli (409) → ✅
+- Senkronizasyon (`POST /sync/push`, `GET /sync/pull`) → ✅
+
 ## Kurallar
 - Meryem takımı günlüğünü `Meryem/`, ilayda takımı `ilayda/` klasörüne yazar.
 - Commit'leri ilayda senior atar; junior'lar commit/push yapmaz.
