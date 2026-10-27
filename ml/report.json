@@ -1,15 +1,15 @@
 {
   "yield": {
-    "model_mae": 0.1492,
-    "model_rmse": 0.1801,
-    "baseline_mae": 14.2857,
-    "baseline_rmse": 16.7161
+    "model_mae": 1.3588,
+    "model_rmse": 1.7965,
+    "baseline_mae": 17.8184,
+    "baseline_rmse": 19.8893
   },
   "butchery": {
-    "model_mae": 0.0124,
-    "model_rmse": 0.0158,
-    "baseline_mae": 0.6349,
-    "baseline_rmse": 0.8645
+    "model_mae": 0.0762,
+    "model_rmse": 0.0946,
+    "baseline_mae": 1.1956,
+    "baseline_rmse": 1.4166
   },
-  "note": "Veri seti örnek/anonymize ve küçüktür; sonuçlar gösterim amaçlıdır."
+  "note": "Veri seti gerçekçi üretim/parçalama oranlarından üretilmiş 200'er örnekten oluşur (anonymize); metrikler ayrı test kümesi (%20) üzerinden raporlanır."
 }

@@ -30,7 +30,6 @@ interface MlReport {
 
 export default function Predictions() {
   const [rawMaterialKg, setRawMaterialKg] = useState("100");
-  const [serviceCost, setServiceCost] = useState("467.5");
   const [yieldResult, setYieldResult] = useState<YieldResult | null>(null);
   const [yieldError, setYieldError] = useState<string | null>(null);
 
@@ -54,9 +53,8 @@ export default function Predictions() {
     setYieldResult(null);
 
     const raw = Number.parseFloat(rawMaterialKg);
-    const service = Number.parseFloat(serviceCost);
-    if (Number.isNaN(raw) || Number.isNaN(service)) {
-      setYieldError("Enter numeric raw material kg and service cost.");
+    if (Number.isNaN(raw)) {
+      setYieldError("Enter numeric raw material kg.");
       return;
     }
 
@@ -64,7 +62,6 @@ export default function Predictions() {
       setYieldResult(
         await mlPost<YieldResult>("/predict/yield", {
           raw_material_kg: raw,
-          service_cost: service,
         }),
       );
     } catch (err) {
@@ -105,11 +102,6 @@ export default function Predictions() {
           value={rawMaterialKg}
           onChange={(event) => setRawMaterialKg(event.target.value)}
           placeholder="Raw material kg"
-        />
-        <input
-          value={serviceCost}
-          onChange={(event) => setServiceCost(event.target.value)}
-          placeholder="Service cost"
         />
         <button type="submit">Predict yield</button>
       </form>

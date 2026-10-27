@@ -9,6 +9,7 @@ from ml.train import (
     MATERIAL_UNIT_COST,
     PRODUCT_CODES,
     REPORT_PATH,
+    SERVICE_PER_PACKAGE,
     encode_animal_type,
     train_models,
 )
@@ -27,7 +28,6 @@ REPORT = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 
 class YieldRequest(BaseModel):
     raw_material_kg: float
-    service_cost: float
 
 
 class ButcheryRequest(BaseModel):
@@ -42,9 +42,10 @@ def health():
 
 @app.post("/predict/yield")
 def predict_yield(payload: YieldRequest):
-    features = [[payload.raw_material_kg, payload.service_cost]]
+    features = [[payload.raw_material_kg]]
     predicted_qty = float(predict(MODELS["yield"], features)[0])
-    total_cost = payload.raw_material_kg * MATERIAL_UNIT_COST + payload.service_cost
+    service_cost = predicted_qty * SERVICE_PER_PACKAGE
+    total_cost = payload.raw_material_kg * MATERIAL_UNIT_COST + service_cost
     predicted_unit_cost = total_cost / predicted_qty if predicted_qty > 0 else 0.0
     return {
         "predicted_qty": round(predicted_qty, 3),
