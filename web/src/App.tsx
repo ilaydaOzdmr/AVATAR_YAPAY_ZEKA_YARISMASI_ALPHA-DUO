@@ -6,6 +6,7 @@ import ProductionOrders from "./pages/ProductionOrders";
 import Butchery from "./pages/Butchery";
 import Traceability from "./pages/Traceability";
 import Recall from "./pages/Recall";
+import Predictions from "./pages/Predictions";
 
 const pages = [
   { key: "dashboard", label: "Dashboard" },
@@ -15,6 +16,7 @@ const pages = [
   { key: "butchery", label: "Butchery" },
   { key: "traceability", label: "Traceability" },
   { key: "recall", label: "Recall" },
+  { key: "predictions", label: "Predictions" },
 ] as const;
 
 type PageKey = (typeof pages)[number]["key"];
@@ -47,6 +49,7 @@ export default function App() {
         {page === "butchery" && <Butchery />}
         {page === "traceability" && <Traceability />}
         {page === "recall" && <Recall />}
+        {page === "predictions" && <Predictions />}
       </main>
     </div>
   );
