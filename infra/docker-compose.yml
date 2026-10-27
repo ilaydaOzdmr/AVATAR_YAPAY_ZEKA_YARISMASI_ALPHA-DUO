@@ -33,6 +33,26 @@ services:
       mysql:
         condition: service_healthy
 
+  ml:
+    build:
+      context: ../ml
+      dockerfile: Dockerfile
+    container_name: avatar-ml
+    restart: unless-stopped
+    ports:
+      - "${ML_PORT:-8000}:8000"
+
+  web:
+    build:
+      context: ../web
+    container_name: avatar-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      - backend
+      - ml
+
   sonarqube:
     image: sonarqube:${SONARQUBE_VERSION:-lts-community}
     container_name: avatar-sonarqube

@@ -19,7 +19,7 @@ ilayda'nın senior'ı her iki takımın işini inceler ve commit'leri atar.
 | 8 | React web (yönetim + rapor) | Meryem | junior | ✅ (senior onayladı) |
 | 9 | Kotlin Android + senkronizasyon | Meryem | junior | ✅ (senior onayladı) |
 | 10 | ML tahmin + rapor ekranı (web) | Meryem | junior | ✅ (senior onayladı) |
-| 11 | Kapanış (test/SonarQube/demo) | ilayda | senior | ⏳ |
+| 11 | Kapanış (test/SonarQube/demo) | ilayda | senior | ✅ (Docker orchestration + demo script + logo + README) |
 
 ## Backend ekleri (senior — ilayda)
 Görev 5'in kalan kısmı senior tarafından öne alındı:

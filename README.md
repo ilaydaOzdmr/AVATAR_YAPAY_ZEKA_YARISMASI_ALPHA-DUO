@@ -15,8 +15,8 @@ bir prototip.
 | 2 | Bütün kuzu **parçalama** + maliyet dağıtımı + tutarsızlık tespiti | ✅ |
 | 3 | **Lot izlenebilirliği** (ileri/geri) + **geri çağırma** + satış engeli | ✅ |
 | — | İki zorunlu **KI modeli** (üretim verimi/EKP, parçalama verimi) | ✅ |
-| — | **Android** satış + offline SQLite + senkronizasyon | ⏳ |
-| — | Opsiyonel: fatura OCR + anomali uyarıları | ⏳ |
+| — | **Android** satış + offline SQLite + senkronizasyon | ✅ |
+| — | Opsiyonel: fatura OCR + anomali uyarıları | kapsam dışı |
 
 ### Demo senaryosu (değerlendirme odağı)
 `ET-2026-001` (100 kg et) → üretim emri `URT-2026-045` → `SUC-2026-045` (85 paket sucuk)
@@ -83,40 +83,31 @@ ALPHA-DUO-Vault/    Obsidian notları (karar günlüğü, görev dağılımı, g
 
 ## Hızlı başlangıç
 
-### Gereksinimler
-- Docker Desktop (MySQL + backend + SonarQube için)
-- Go 1.23+ (backend'i lokal çalıştırmak için; Docker ile de mümkün)
-- Node 18+ (web), Python 3.11+ (ml)
-
-### 1) Backend + MySQL + SonarQube (Docker)
+### Tek komutla her şey (Docker)
 ```bash
 cp .env.example .env
-docker compose -f infra/docker-compose.yml up -d
+docker compose -f infra/docker-compose.yml up -d --build
 ```
-- API: `http://localhost:8080` · MySQL: `localhost:3306` (db `avatar`) · SonarQube: `http://localhost:9000`
-- Migration'lar MySQL ilk açılışta otomatik uygulanır (`backend/migrations/`).
+- Web: `http://localhost:5173` · API: `http://localhost:8080` · ML: `http://localhost:8000` · SonarQube: `http://localhost:9000`
+- MySQL şeması ve seed verisi ilk açılışta otomatik uygulanır.
 
-### 2) Web (React)
+### Lokal geliştirme (Docker'sız)
 ```bash
-cd web && npm install && npm run dev      # http://localhost:5173
-```
-
-### 3) ML servisi (Python)
-```bash
-cd ml && pip install -r requirements.txt
-uvicorn ml.app:app --reload              # http://localhost:8000
-python ml/train.py                       # modelleri eğitir, report.json üretir
+cd backend && go run ./cmd/server                    # Go 1.23+ (API :8080)
+cd web && npm install && npm run dev                 # Node 18+ (web :5173)
+cd ml && pip install -r requirements.txt && uvicorn ml.app:app --reload   # Python 3.11+ (ML :8000)
+cd mobile && gradlew assembleDebug                   # JDK 17 + Android SDK 34 (APK)
 ```
 
-### 4) Testler
+### Testler
 ```bash
-# backend
-cd backend && go test ./...
-# ml
-cd ml && pytest
-# web
-cd web && npm run build
+cd backend && go test ./...      # backend
+cd ml && pytest                  # ml
+cd web && npm run build          # web
 ```
+
+### SonarQube
+`infra/sonar-project.properties` hazır; talimatlar `docs/sonarqube.md` içinde.
 
 ---
 
@@ -159,4 +150,5 @@ Lot izlenebilirliği ve geri çağırma **KI tahminine değil**, kesin kayıt il
 - Tasarım: `docs/superpowers/specs/2026-10-24-avatar-ai-competition-design.md`
 - Uygulama planı: `docs/superpowers/plans/2026-10-24-avatar-ai-competition.md`
 - Veri modeli: `docs/data-model.md` · API: `docs/api.md`
+- Demo scripti: `docs/demo-script.md` · SonarQube: `docs/sonarqube.md` · Logo: `docs/logo.svg`
 - Görev dağılımı: `ALPHA-DUO-Vault/00-Gorev-Dagilimi.md`
