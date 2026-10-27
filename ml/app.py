@@ -1,6 +1,7 @@
 import json
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ml.model import predict
@@ -14,6 +15,12 @@ from ml.train import (
 
 
 app = FastAPI(title="AVATAR ML Service")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 MODELS = train_models()
 REPORT = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
 
