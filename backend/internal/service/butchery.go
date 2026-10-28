@@ -10,6 +10,7 @@ import (
 type ButcheryItemCost struct {
 	ProductID     int64   `json:"product_id"`
 	Weight        float64 `json:"weight"`
+	Quantity      int     `json:"quantity"`
 	IsWaste       bool    `json:"is_waste"`
 	AllocatedCost float64 `json:"allocated_cost"`
 }
@@ -89,6 +90,7 @@ func (s *ButcheryService) buildResult(batch model.ButcheryBatch, items []model.B
 		costs = append(costs, ButcheryItemCost{
 			ProductID:     item.ProductID,
 			Weight:        item.Weight,
+			Quantity:      item.Quantity,
 			IsWaste:       item.IsWaste,
 			AllocatedCost: allocatedCost,
 		})

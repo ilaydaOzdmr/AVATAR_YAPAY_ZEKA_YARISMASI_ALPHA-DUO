@@ -102,6 +102,7 @@ CREATE TABLE butchery_items (
   product_id BIGINT NOT NULL,
   product_lot_id BIGINT NULL,
   weight DECIMAL(12,3) NOT NULL,
+  quantity INT NOT NULL DEFAULT 1,
   is_waste BOOL NOT NULL DEFAULT FALSE,
   CONSTRAINT fk_bi_batch FOREIGN KEY (batch_id) REFERENCES butchery_batches(id),
   CONSTRAINT fk_bi_product FOREIGN KEY (product_id) REFERENCES products(id),

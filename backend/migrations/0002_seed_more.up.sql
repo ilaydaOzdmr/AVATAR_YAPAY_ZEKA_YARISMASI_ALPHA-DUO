@@ -104,16 +104,36 @@ INSERT INTO butchery_batches (id, code, animal_type, input_weight, unit_cost, to
   (8, 'PRC-2026-008', 'dana', 40.000, 13.20, 528.00, '2026-10-26', 'completed'),
   (9, 'PRC-2026-009', 'kuzu', 23.000, 11.50, 264.50, '2026-10-26', 'completed');
 
-INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, is_waste) VALUES
-  (1, 2, 15, 4.500, 0), (1, 3, 16, 2.500, 0), (1, 4, 17, 3.700, 0), (1, 5, 18, 2.000, 0), (1, 6, 19, 3.700, 0), (1, 7, 20, 1.500, 0), (1, 8, NULL, 1.200, 1),
-  (2, 2, NULL, 4.000, 0), (2, 3, NULL, 2.200, 0), (2, 4, NULL, 3.300, 0),
-  (3, 6, NULL, 6.000, 0), (3, 7, NULL, 2.500, 0),
-  (4, 2, NULL, 3.600, 0), (4, 6, NULL, 3.000, 0),
-  (5, 2, NULL, 4.700, 0), (5, 3, NULL, 2.600, 0),
-  (6, 6, NULL, 7.000, 0), (6, 7, NULL, 2.800, 0),
-  (7, 2, NULL, 4.300, 0), (7, 3, NULL, 2.400, 0),
-  (8, 6, NULL, 5.500, 0), (8, 7, NULL, 2.200, 0),
-  (9, 2, NULL, 4.100, 0), (9, 3, NULL, 2.300, 0);
+-- Parçalama ürünleri: her hayvan -> 2 but, 1 sırt, 2 omuz/kol, 1 kaburga, kıyma, kuşbaşı, kemik
+-- (toplam ~%86; fire ~%14). product_id: 2=but 3=sırt 4=omuz 5=kaburga 6=kıyma 7=kuşbaşı 8=kemik
+INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste) VALUES
+  -- PRC-2026-001 kuzu 25kg
+  (1, 2, 15, 4.500, 2, 0), (1, 3, 16, 3.000, 1, 0), (1, 4, 17, 3.500, 2, 0),
+  (1, 5, 18, 2.000, 1, 0), (1, 6, 19, 3.500, 1, 0), (1, 7, 20, 1.750, 1, 0), (1, 8, NULL, 3.250, 1, 0),
+  -- PRC-2026-002 kuzu 22kg
+  (2, 2, NULL, 3.960, 2, 0), (2, 3, NULL, 2.640, 1, 0), (2, 4, NULL, 3.080, 2, 0),
+  (2, 5, NULL, 1.760, 1, 0), (2, 6, NULL, 3.080, 1, 0), (2, 7, NULL, 1.540, 1, 0), (2, 8, NULL, 2.860, 1, 0),
+  -- PRC-2026-003 dana 45kg
+  (3, 2, NULL, 7.200, 2, 0), (3, 3, NULL, 5.850, 1, 0), (3, 4, NULL, 5.850, 2, 0),
+  (3, 5, NULL, 4.050, 1, 0), (3, 6, NULL, 6.750, 1, 0), (3, 7, NULL, 3.600, 1, 0), (3, 8, NULL, 5.400, 1, 0),
+  -- PRC-2026-004 kuzu 20kg
+  (4, 2, NULL, 3.600, 2, 0), (4, 3, NULL, 2.400, 1, 0), (4, 4, NULL, 2.800, 2, 0),
+  (4, 5, NULL, 1.600, 1, 0), (4, 6, NULL, 2.800, 1, 0), (4, 7, NULL, 1.400, 1, 0), (4, 8, NULL, 2.600, 1, 0),
+  -- PRC-2026-005 kuzu 26kg
+  (5, 2, NULL, 4.680, 2, 0), (5, 3, NULL, 3.120, 1, 0), (5, 4, NULL, 3.640, 2, 0),
+  (5, 5, NULL, 2.080, 1, 0), (5, 6, NULL, 3.640, 1, 0), (5, 7, NULL, 1.820, 1, 0), (5, 8, NULL, 3.380, 1, 0),
+  -- PRC-2026-006 dana 50kg
+  (6, 2, NULL, 8.000, 2, 0), (6, 3, NULL, 6.500, 1, 0), (6, 4, NULL, 6.500, 2, 0),
+  (6, 5, NULL, 4.500, 1, 0), (6, 6, NULL, 7.500, 1, 0), (6, 7, NULL, 4.000, 1, 0), (6, 8, NULL, 6.000, 1, 0),
+  -- PRC-2026-007 kuzu 24kg
+  (7, 2, NULL, 4.320, 2, 0), (7, 3, NULL, 2.880, 1, 0), (7, 4, NULL, 3.360, 2, 0),
+  (7, 5, NULL, 1.920, 1, 0), (7, 6, NULL, 3.360, 1, 0), (7, 7, NULL, 1.680, 1, 0), (7, 8, NULL, 3.120, 1, 0),
+  -- PRC-2026-008 dana 40kg
+  (8, 2, NULL, 6.400, 2, 0), (8, 3, NULL, 5.200, 1, 0), (8, 4, NULL, 5.200, 2, 0),
+  (8, 5, NULL, 3.600, 1, 0), (8, 6, NULL, 6.000, 1, 0), (8, 7, NULL, 3.200, 1, 0), (8, 8, NULL, 4.800, 1, 0),
+  -- PRC-2026-009 kuzu 23kg
+  (9, 2, NULL, 4.140, 2, 0), (9, 3, NULL, 2.760, 1, 0), (9, 4, NULL, 3.220, 2, 0),
+  (9, 5, NULL, 1.840, 1, 0), (9, 6, NULL, 3.220, 1, 0), (9, 7, NULL, 1.610, 1, 0), (9, 8, NULL, 2.990, 1, 0);
 
 -- Ek stok hareketleri (girişler + sevkiyatlar)
 INSERT INTO stock_movements (lot_id, movement_type, qty, unit_cost, total_cost, ref_type, ref_id, occurred_at) VALUES

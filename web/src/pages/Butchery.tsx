@@ -4,6 +4,7 @@ import { get } from "../api";
 interface ButcheryItemCost {
   product_id: number;
   weight: number;
+  quantity: number;
   is_waste: boolean;
   allocated_cost: number;
 }
@@ -79,6 +80,7 @@ export default function Butchery() {
             <thead>
               <tr>
                 <th>Product ID</th>
+                <th>Qty</th>
                 <th>Weight</th>
                 <th>Waste</th>
                 <th>Allocated cost</th>
@@ -88,6 +90,7 @@ export default function Butchery() {
               {result.items.map((item, index) => (
                 <tr key={`${item.product_id}-${index}`}>
                   <td>{item.product_id}</td>
+                  <td>{item.quantity}</td>
                   <td>{item.weight}</td>
                   <td>{item.is_waste ? "Yes" : "No"}</td>
                   <td>{item.allocated_cost.toFixed(2)}</td>

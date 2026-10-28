@@ -439,8 +439,8 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 
 	for _, item := range items {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, is_waste) VALUES (?, ?, ?, ?, ?)`,
-			batch.ID, item.ProductID, nullInt64(item.ProductLotID), item.Weight, item.IsWaste); err != nil {
+			`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste) VALUES (?, ?, ?, ?, ?, ?)`,
+			batch.ID, item.ProductID, nullInt64(item.ProductLotID), item.Weight, item.Quantity, item.IsWaste); err != nil {
 			return model.ButcheryBatch{}, err
 		}
 	}
@@ -466,7 +466,7 @@ func (r *mysqlRepo) GetButcheryBatch(ctx context.Context, id int64) (model.Butch
 
 func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]model.ButcheryItem, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, batch_id, product_id, product_lot_id, weight, is_waste
+		`SELECT id, batch_id, product_id, product_lot_id, weight, quantity, is_waste
 		 FROM butchery_items WHERE batch_id = ? ORDER BY id`, batchID)
 	if err != nil {
 		return nil, err
@@ -477,7 +477,7 @@ func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]mod
 	for rows.Next() {
 		var item model.ButcheryItem
 		var productLotID sql.NullInt64
-		if err := rows.Scan(&item.ID, &item.BatchID, &item.ProductID, &productLotID, &item.Weight, &item.IsWaste); err != nil {
+		if err := rows.Scan(&item.ID, &item.BatchID, &item.ProductID, &productLotID, &item.Weight, &item.Quantity, &item.IsWaste); err != nil {
 			return nil, err
 		}
 		if productLotID.Valid {

@@ -127,6 +127,7 @@ type ButcheryItem struct {
 	ProductID    int64   `json:"product_id"`
 	ProductLotID *int64  `json:"product_lot_id"`
 	Weight       float64 `json:"weight"`
+	Quantity     int     `json:"quantity"`
 	IsWaste      bool    `json:"is_waste"`
 }
 
