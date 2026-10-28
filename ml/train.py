@@ -28,10 +28,12 @@ PRODUCT_CODES = [
 ]
 ANIMAL_TYPE_CODES = {"kuzu": 0, "dana": 1}
 
-# Gerçekçi parça oranları (karkas ağırlığının payı; toplam ~0.80, kalan fire).
+# Gerçekçi parça oranları (girdi ağırlığının payı).
+# Sıra: but(2 adet), sırt(1), omuz/kol(2), kaburga(1), kıyma, kuşbaşı, kemik.
+# Toplam ~0.86 → fire ~%14 (kemik, deri, sakatat, fire).
 BUTCHERY_RATIOS = {
-    "kuzu": [0.18, 0.10, 0.15, 0.08, 0.15, 0.06, 0.08],
-    "dana": [0.20, 0.12, 0.14, 0.09, 0.13, 0.07, 0.05],
+    "kuzu": [0.18, 0.12, 0.14, 0.08, 0.14, 0.07, 0.13],
+    "dana": [0.16, 0.13, 0.13, 0.09, 0.15, 0.08, 0.12],
 }
 BUTCHERY_INPUT_RANGES = {"kuzu": (18.0, 30.0), "dana": (35.0, 55.0)}
 
@@ -79,7 +81,7 @@ def build_butchery_dataframe():
                 "input_weight": round(float(input_weight), 1),
             }
             for product_code, ratio in zip(PRODUCT_CODES, ratios):
-                weight = input_weight * ratio + RNG.normal(0.0, 0.08)
+                weight = input_weight * ratio + RNG.normal(0.0, 0.05)
                 record[product_code] = round(float(max(weight, 0.0)), 3)
             records.append(record)
     return pd.DataFrame(records)

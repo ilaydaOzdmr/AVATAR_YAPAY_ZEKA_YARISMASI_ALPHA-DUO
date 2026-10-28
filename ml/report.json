@@ -6,10 +6,10 @@
     "baseline_rmse": 19.8893
   },
   "butchery": {
-    "model_mae": 0.0762,
-    "model_rmse": 0.0946,
-    "baseline_mae": 1.1956,
-    "baseline_rmse": 1.4166
+    "model_mae": 0.0454,
+    "model_rmse": 0.0557,
+    "baseline_mae": 1.2719,
+    "baseline_rmse": 1.3879
   },
   "note": "Veri seti gerçekçi üretim/parçalama oranlarından üretilmiş 200'er örnekten oluşur (anonymize); metrikler ayrı test kümesi (%20) üzerinden raporlanır."
 }
