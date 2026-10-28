@@ -150,6 +150,7 @@ Lot izlenebilirliği ve geri çağırma **KI tahminine değil**, kesin kayıt il
 - Tasarım: `docs/superpowers/specs/2026-10-24-avatar-ai-competition-design.md`
 - Uygulama planı: `docs/superpowers/plans/2026-10-24-avatar-ai-competition.md`
 - Veri modeli: `docs/data-model.md` · API: `docs/api.md`
+- ER diyagramı: `docs/er-diagram.md` · DB inceleme: `docs/db-inspection.md`
 - Demo scripti: `docs/demo-script.md` · SonarQube: `docs/sonarqube.md` · Logo: `docs/logo.svg`
 - Android çalıştırma: `docs/android.md`
 - Görev dağılımı: `ALPHA-DUO-Vault/00-Gorev-Dagilimi.md`
