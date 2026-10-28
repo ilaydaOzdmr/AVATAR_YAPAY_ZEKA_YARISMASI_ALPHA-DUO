@@ -64,6 +64,17 @@ services:
       - sonarqube_extensions:/opt/sonarqube/extensions
       - sonarqube_logs:/opt/sonarqube/logs
 
+  adminer:
+    image: adminer:latest
+    container_name: avatar-adminer
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    depends_on:
+      - mysql
+
 volumes:
   mysql_data:
   sonarqube_data:
