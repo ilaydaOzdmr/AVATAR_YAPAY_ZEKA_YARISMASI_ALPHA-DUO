@@ -9,18 +9,27 @@ interface RecallEvent {
   created_at: string;
 }
 
-interface RecallMarket {
+interface MarketImpact {
   market_code: string;
   market_name: string;
   contact: string;
   qty: number;
 }
 
+interface AffectedLot {
+  lot_code: string;
+  product_code: string;
+  product_name: string;
+  item_type: string;
+  qty: number;
+  unit: string;
+  markets: MarketImpact[];
+}
+
 interface RecallResult {
   event: RecallEvent;
   source_lot_code: string;
-  affected_lots: string[];
-  markets: RecallMarket[];
+  affected_lots: AffectedLot[];
   message: string;
 }
 
@@ -77,30 +86,41 @@ export default function Recall() {
             Recall <strong>{result.event.code}</strong> for{" "}
             <strong>{result.source_lot_code}</strong>
           </p>
-          <p>
-            Affected lots:{" "}
-            {result.affected_lots.length === 0 ? "-" : result.affected_lots.join(", ")}
-          </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Market code</th>
-                <th>Market</th>
-                <th>Quantity</th>
-                <th>Contact</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.markets.map((market) => (
-                <tr key={market.market_code}>
-                  <td>{market.market_code}</td>
-                  <td>{market.market_name}</td>
-                  <td>{market.qty}</td>
-                  <td>{market.contact}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {result.affected_lots.length === 0 && <p>No affected product lots.</p>}
+          {result.affected_lots.map((lot) => (
+            <div key={lot.lot_code} className="section">
+              <p>
+                <strong>Ürün:</strong> {lot.product_name} ({lot.product_code}) — lot{" "}
+                {lot.lot_code} · {lot.qty} {lot.unit}
+              </p>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Market code</th>
+                    <th>Market</th>
+                    <th>Quantity</th>
+                    <th>Contact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lot.markets.length === 0 ? (
+                    <tr>
+                      <td colSpan={4}>-</td>
+                    </tr>
+                  ) : (
+                    lot.markets.map((market) => (
+                      <tr key={`${lot.lot_code}-${market.market_code}`}>
+                        <td>{market.market_code}</td>
+                        <td>{market.market_name}</td>
+                        <td>{market.qty}</td>
+                        <td>{market.contact}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ))}
           <p className="message">{result.message}</p>
         </>
       )}

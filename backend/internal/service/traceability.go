@@ -17,11 +17,13 @@ type MarketImpact struct {
 
 // AffectedLot is a product lot reachable from a source lot, with its shipments.
 type AffectedLot struct {
-	LotCode  string         `json:"lot_code"`
-	ItemType string         `json:"item_type"`
-	Qty      float64        `json:"qty"`
-	Unit     string         `json:"unit"`
-	Markets  []MarketImpact `json:"markets"`
+	LotCode     string         `json:"lot_code"`
+	ProductCode string         `json:"product_code"`
+	ProductName string         `json:"product_name"`
+	ItemType    string         `json:"item_type"`
+	Qty         float64        `json:"qty"`
+	Unit        string         `json:"unit"`
+	Markets     []MarketImpact `json:"markets"`
 }
 
 // RawMaterialSource is a material lot and its supplier behind a product lot.
@@ -41,6 +43,7 @@ type TraceRepository interface {
 	ListStockMovements(ctx context.Context, lotID int64) ([]model.StockMovement, error)
 	GetMarket(ctx context.Context, id int64) (model.Market, error)
 	GetSupplier(ctx context.Context, id int64) (model.Supplier, error)
+	GetProduct(ctx context.Context, id int64) (model.Product, error)
 }
 
 // Traceability traces lots forward to markets and backward to raw materials.
@@ -69,13 +72,18 @@ func (t *Traceability) Forward(ctx context.Context, sourceLotCode string) ([]Aff
 			if err != nil {
 				return nil, err
 			}
-			affected = append(affected, AffectedLot{
+			affectedLot := AffectedLot{
 				LotCode:  lot.Code,
 				ItemType: lot.ItemType,
 				Qty:      lot.Qty,
 				Unit:     lot.Unit,
 				Markets:  markets,
-			})
+			}
+			if product, err := t.repo.GetProduct(ctx, lot.ItemID); err == nil {
+				affectedLot.ProductCode = product.Code
+				affectedLot.ProductName = product.Name
+			}
+			affected = append(affected, affectedLot)
 		}
 
 		links, err := t.repo.ListLotLinksByParent(ctx, lot.ID)

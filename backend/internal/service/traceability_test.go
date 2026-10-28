@@ -16,6 +16,7 @@ type fakeTraceRepository struct {
 	movementsByLot map[int64][]model.StockMovement
 	marketsByID    map[int64]model.Market
 	suppliersByID  map[int64]model.Supplier
+	productsByID   map[int64]model.Product
 }
 
 func (f *fakeTraceRepository) GetLotByCode(_ context.Context, code string) (model.Lot, error) {
@@ -46,6 +47,10 @@ func (f *fakeTraceRepository) GetSupplier(_ context.Context, id int64) (model.Su
 	return f.suppliersByID[id], nil
 }
 
+func (f *fakeTraceRepository) GetProduct(_ context.Context, id int64) (model.Product, error) {
+	return f.productsByID[id], nil
+}
+
 func seededTraceRepository() *fakeTraceRepository {
 	supplierID1 := int64(1)
 	supplierID2 := int64(2)
@@ -59,7 +64,7 @@ func seededTraceRepository() *fakeTraceRepository {
 		{ID: 1, Code: "ET-2026-001", ItemType: "material", Qty: 100, Unit: "kg", SupplierID: &supplierID1},
 		{ID: 2, Code: "BAH-2026-001", ItemType: "material", Qty: 2, Unit: "kg", SupplierID: &supplierID2},
 		{ID: 3, Code: "BAR-2026-001", ItemType: "material", Qty: 5, Unit: "kg", SupplierID: &supplierID3},
-		{ID: 4, Code: "SUC-2026-045", ItemType: "product", Qty: 85, Unit: "paket"},
+		{ID: 4, Code: "SUC-2026-045", ItemType: "product", ItemID: 1, Qty: 85, Unit: "paket"},
 	}
 	lotsByCode := make(map[string]model.Lot, len(lots))
 	lotsByID := make(map[int64]model.Lot, len(lots))
@@ -102,6 +107,9 @@ func seededTraceRepository() *fakeTraceRepository {
 			2: {ID: 2, Code: "SUP-002", Name: "Baharat Tedarikçisi", Contact: "0212 000 00 02"},
 			3: {ID: 3, Code: "SUP-003", Name: "Bağırsak Tedarikçisi", Contact: "0212 000 00 03"},
 		},
+		productsByID: map[int64]model.Product{
+			1: {ID: 1, Code: "PRD-001", Name: "Narin Sucuk (1 kg)"},
+		},
 	}
 }
 
@@ -118,6 +126,9 @@ func TestForwardET2026001(t *testing.T) {
 	got := res[0]
 	if got.LotCode != "SUC-2026-045" || got.ItemType != "product" || got.Qty != 85 || got.Unit != "paket" {
 		t.Fatalf("affected lot = %+v, want SUC-2026-045/product/85/paket", got)
+	}
+	if got.ProductCode != "PRD-001" || got.ProductName != "Narin Sucuk (1 kg)" {
+		t.Fatalf("product = %+v, want PRD-001/Narin Sucuk (1 kg)", got)
 	}
 	if len(got.Markets) != 3 {
 		t.Fatalf("len(markets) = %d, want 3: %+v", len(got.Markets), got.Markets)

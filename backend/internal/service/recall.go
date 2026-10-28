@@ -13,20 +13,11 @@ import (
 // ErrLotBlocked is returned when a sale targets a lot blocked by a recall.
 var ErrLotBlocked = errors.New("lot is blocked by a recall")
 
-// RecallMarket is a market with the affected quantity and contact info.
-type RecallMarket struct {
-	MarketCode string  `json:"market_code"`
-	MarketName string  `json:"market_name"`
-	Contact    string  `json:"contact"`
-	Qty        float64 `json:"qty"`
-}
-
-// RecallResult is a recall event plus its affected lots and markets.
+// RecallResult is a recall event plus its affected product lots (with markets).
 type RecallResult struct {
 	Event         model.RecallEvent `json:"event"`
 	SourceLotCode string            `json:"source_lot_code"`
-	AffectedLots  []string          `json:"affected_lots"`
-	Markets       []RecallMarket    `json:"markets"`
+	AffectedLots  []AffectedLot     `json:"affected_lots"`
 	Message       string            `json:"message"`
 }
 
@@ -99,23 +90,15 @@ func (s *RecallService) buildResult(ctx context.Context, event model.RecallEvent
 	result := &RecallResult{
 		Event:         event,
 		SourceLotCode: sourceLotCode,
-		AffectedLots:  make([]string, 0, len(affected)),
-		Markets:       make([]RecallMarket, 0),
+		AffectedLots:  affected,
 	}
+	marketCount := 0
 	for _, lot := range affected {
-		result.AffectedLots = append(result.AffectedLots, lot.LotCode)
-		for _, m := range lot.Markets {
-			result.Markets = append(result.Markets, RecallMarket{
-				MarketCode: m.MarketCode,
-				MarketName: m.MarketName,
-				Contact:    m.Contact,
-				Qty:        m.Qty,
-			})
-		}
+		marketCount += len(lot.Markets)
 	}
 	result.Message = fmt.Sprintf(
 		"Geri çağırma: %s lotundan etkilenen ürünler %d mamul lotunda tespit edildi ve satışı engellendi. Etkilenen market sayısı: %d.",
-		sourceLotCode, len(result.AffectedLots), len(result.Markets))
+		sourceLotCode, len(affected), marketCount)
 	return result, nil
 }
 
