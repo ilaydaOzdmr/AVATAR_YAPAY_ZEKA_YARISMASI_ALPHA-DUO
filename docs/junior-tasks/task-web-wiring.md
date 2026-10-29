@@ -59,6 +59,10 @@ Kuralların (kesin uy):
 ### 9) `Dashboard.tsx` (Genel Bakış) — çoğu hazır; şunu ekle
 - "Son işlemler" ve "Dikkat gerektirenler" bölümünü gerçek veriye bağla (ör. son sevkiyatlar, açık geri çağırmalar).
 
+### 10) Anomali uyarıları + Fatura OCR (yeni ekranlar)
+- `GET /anomalies` → `[{type, severity, message, ref}]` listesini bir "Anomaliler" bölümünde göster (Dashboard'a uyarı olarak da eklenebilir).
+- `POST /ocr/invoice` (gövde `{"text":"..."}`) → `{items:[{product_name, qty, unit, lot_code, unit_cost}]}` önerilerini bir "Fatura OCR" ekranında göster; kullanıcı onayladığında ilgili lot/stok kaydını mevcut uçlarla oluştur.
+
 ## COMMIT'LER (ayrı ayrı, sırasıyla)
 1. `feat(web): wire inventory and production screens`
 2. `feat(web): wire butchery and sales screens`
