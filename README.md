@@ -79,6 +79,7 @@ web/                React + Vite + TS
 ml/                 Python ML servisi (FastAPI)
 infra/              docker-compose (mysql, backend, sonarqube) + sonar-project.properties
 docs/               veri modeli, API, tasarım, plan, junior görevleri
+skills/             ajan becerileri (material-3, impeccable)
 ALPHA-DUO-Vault/    Obsidian notları (karar günlüğü, görev dağılımı, günlükler)
 ```
 
