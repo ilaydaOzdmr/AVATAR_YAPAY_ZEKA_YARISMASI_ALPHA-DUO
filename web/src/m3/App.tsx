@@ -56,7 +56,7 @@ const titles: Record<string, string> = {
   "invoice-ocr": "Fatura OCR",
 };
 
-function renderView(key: string) {
+function renderView(key: string, onNavigate: (view: string) => void) {
   switch (key) {
     case "inventory":
       return <Inventory />;
@@ -75,7 +75,7 @@ function renderView(key: string) {
     case "mobile":
       return <MobilePreview />;
     case "reports":
-      return <Reports />;
+      return <Reports onNavigate={onNavigate} />;
     case "invoice-ocr":
       return <InvoiceOcr />;
     case "dashboard":
@@ -92,7 +92,7 @@ export default function App() {
   const toastTimer = useRef<number | undefined>(undefined);
 
   const activeLabel = titles[view] ?? "Genel Bakış";
-  const viewEl = useMemo(() => renderView(view), [view]);
+  const viewEl = useMemo(() => renderView(view, navigate), [view]);
 
   function showToast(message: string) {
     setToast(message);

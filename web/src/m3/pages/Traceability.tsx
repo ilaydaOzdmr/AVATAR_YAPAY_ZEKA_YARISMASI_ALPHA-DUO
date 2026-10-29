@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { get } from "../../api";
+import { downloadCsv } from "../csv";
 
 interface MarketImpact {
   market_code: string;
@@ -58,6 +59,24 @@ export default function Traceability() {
 
   const totalQty = affected.reduce((sum, lot) => sum + lot.qty, 0);
 
+  function exportReport() {
+    if (mode === "forward" && affected.length > 0) {
+      const rows: (string | number)[][] = affected.flatMap((lot) =>
+        lot.markets.length > 0
+          ? lot.markets.map((m) => [lot.lot_code, lot.qty, lot.unit, m.market_code, m.market_name, m.qty, m.contact])
+          : [[lot.lot_code, lot.qty, lot.unit, "—", "—", "—", "—"]],
+      );
+      downloadCsv(
+        "izlenebilirlik-ileri-raporu.csv",
+        ["Mamul lotu", "Miktar", "Birim", "Market kodu", "Market", "Sevk miktarı", "İletişim"],
+        rows,
+      );
+    } else if (mode === "backward" && sources.length > 0) {
+      const rows: (string | number)[][] = sources.map((s) => [s.lot_code, s.supplier_code, s.supplier_name, s.qty]);
+      downloadCsv("izlenebilirlik-geri-raporu.csv", ["Hammadde lotu", "Tedarikçi kodu", "Tedarikçi", "Miktar"], rows);
+    }
+  }
+
   return (
     <section>
       <div className="pagehead">
@@ -66,7 +85,7 @@ export default function Traceability() {
           <h1>Lot İzlenebilirliği</h1>
           <p>Bir hammaddeden etkilenen bütün mamullere veya mamulden tedarikçiye ulaşın.</p>
         </div>
-        <button className="btn btn-secondary" type="button">⇩ Rapor indir</button>
+        <button className="btn btn-secondary" type="button" onClick={exportReport}>⇩ Rapor indir</button>
       </div>
 
       <div className="panel lot-search">
