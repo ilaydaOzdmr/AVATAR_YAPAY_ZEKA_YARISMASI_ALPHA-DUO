@@ -52,15 +52,15 @@ INSERT INTO lots (id, code, item_type, item_id, qty, unit, supplier_id, purchase
   (20, 'KUS-2026-001', 'product', 7,  1.500,   'kg', NULL, 0, 0, '2026-10-23 18:00:00', NULL, 'active');
 
 -- Ek üretim emirleri (toplam 9: 1 mevcut + 8 yeni)
-INSERT INTO production_orders (id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty) VALUES
-  (2, 'URT-2026-046', 'completed', '2026-10-21 09:00:00', '2026-10-21 17:00:00', 'Sözleşmeli üretim 2', 'Sucuk üretim hizmeti', 5.50, 90.000),
-  (3, 'URT-2026-047', 'completed', '2026-10-22 09:00:00', '2026-10-22 17:00:00', 'Sözleşmeli üretim 3', 'Sucuk üretim hizmeti', 5.50, 80.000),
-  (4, 'URT-2026-048', 'completed', '2026-10-23 09:00:00', '2026-10-23 17:00:00', 'Sözleşmeli üretim 4', 'Sucuk üretim hizmeti', 5.50, 70.000),
-  (5, 'URT-2026-049', 'completed', '2026-10-24 09:00:00', '2026-10-24 17:00:00', 'Sözleşmeli üretim 5', 'Sucuk üretim hizmeti', 5.50, 95.000),
-  (6, 'URT-2026-050', 'completed', '2026-10-24 09:00:00', '2026-10-24 17:00:00', 'Sözleşmeli üretim 6', 'Sucuk üretim hizmeti', 5.50, 60.000),
-  (7, 'URT-2026-051', 'completed', '2026-10-25 09:00:00', '2026-10-25 17:00:00', 'Sözleşmeli üretim 7', 'Sucuk üretim hizmeti', 5.50, 100.000),
-  (8, 'URT-2026-052', 'completed', '2026-10-25 09:00:00', '2026-10-25 17:00:00', 'Sözleşmeli üretim 8', 'Sucuk üretim hizmeti', 5.50, 55.000),
-  (9, 'URT-2026-053', 'completed', '2026-10-26 09:00:00', '2026-10-26 17:00:00', 'Sözleşmeli üretim 9', 'Sucuk üretim hizmeti', 5.50, 88.000);
+INSERT INTO production_orders (id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty, expected_qty) VALUES
+  (2, 'URT-2026-046', 'completed', '2026-10-21 09:00:00', '2026-10-21 17:00:00', 'Sözleşmeli üretim 2', 'Sucuk üretim hizmeti', 5.50, 90.000, 100.000),
+  (3, 'URT-2026-047', 'completed', '2026-10-22 09:00:00', '2026-10-22 17:00:00', 'Sözleşmeli üretim 3', 'Sucuk üretim hizmeti', 5.50, 80.000, 85.000),
+  (4, 'URT-2026-048', 'completed', '2026-10-23 09:00:00', '2026-10-23 17:00:00', 'Sözleşmeli üretim 4', 'Sucuk üretim hizmeti', 5.50, 70.000, 75.000),
+  (5, 'URT-2026-049', 'completed', '2026-10-24 09:00:00', '2026-10-24 17:00:00', 'Sözleşmeli üretim 5', 'Sucuk üretim hizmeti', 5.50, 95.000, 100.000),
+  (6, 'URT-2026-050', 'completed', '2026-10-24 09:00:00', '2026-10-24 17:00:00', 'Sözleşmeli üretim 6', 'Sucuk üretim hizmeti', 5.50, 60.000, 65.000),
+  (7, 'URT-2026-051', 'completed', '2026-10-25 09:00:00', '2026-10-25 17:00:00', 'Sözleşmeli üretim 7', 'Sucuk üretim hizmeti', 5.50, 100.000, 110.000),
+  (8, 'URT-2026-052', 'completed', '2026-10-25 09:00:00', '2026-10-25 17:00:00', 'Sözleşmeli üretim 8', 'Sucuk üretim hizmeti', 5.50, 55.000, 60.000),
+  (9, 'URT-2026-053', 'completed', '2026-10-26 09:00:00', '2026-10-26 17:00:00', 'Sözleşmeli üretim 9', 'Sucuk üretim hizmeti', 5.50, 88.000, 90.000);
 
 -- Ek üretim girdileri/çıktıları (her emir için)
 INSERT INTO production_order_inputs (production_order_id, material_lot_id, qty) VALUES

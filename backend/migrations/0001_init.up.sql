@@ -62,7 +62,8 @@ CREATE TABLE production_orders (
   notes TEXT NULL,
   service_name VARCHAR(255) NULL,
   service_unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
-  service_qty DECIMAL(12,3) NOT NULL DEFAULT 0.000
+  service_qty DECIMAL(12,3) NOT NULL DEFAULT 0.000,
+  expected_qty DECIMAL(12,3) NOT NULL DEFAULT 0.000
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE production_order_inputs (

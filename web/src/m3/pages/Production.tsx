@@ -8,13 +8,16 @@ interface ProductionOrder {
   service_name: string | null;
   service_unit_cost: number;
   service_qty: number;
+  expected_qty: number;
 }
 
 interface CostSummary {
   input_cost: number;
   service_cost: number;
   total_cost: number;
+  expected_qty: number;
   finished_qty: number;
+  quantity_diff: number;
   ekp: number;
   vkp: number;
   gross_profit: number;
@@ -140,13 +143,13 @@ export default function Production() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Üretim emri</th><th>Hizmet</th><th>Miktar</th><th>Durum</th></tr>
+                <tr><th>Üretim emri</th><th>Beklenen</th><th>Hizmet miktarı</th><th>Durum</th></tr>
               </thead>
               <tbody>
                 {orders.map((order) => (
                   <tr key={order.id} style={{ cursor: "pointer" }} onClick={() => setSelectedId(String(order.id))}>
                     <td className="id">{order.code}</td>
-                    <td>{order.service_name ?? "—"}</td>
+                    <td>{order.expected_qty}</td>
                     <td>{order.service_qty}</td>
                     <td>
                       {order.status === "completed" ? <span className="status ok">Tamamlandı</span> : <span className="status progress">İşlemde</span>}
@@ -175,6 +178,14 @@ export default function Production() {
                 <tr><td>Hammadde maliyeti</td><td style={{ textAlign: "right" }}>€ {summary ? summary.input_cost.toFixed(2) : "—"}</td></tr>
                 <tr><td>Hizmet maliyeti</td><td style={{ textAlign: "right" }}>€ {summary ? summary.service_cost.toFixed(2) : "—"}</td></tr>
                 <tr><td><b>Toplam maliyet</b></td><td style={{ textAlign: "right" }}><b>€ {summary ? summary.total_cost.toFixed(2) : "—"}</b></td></tr>
+                <tr><td>Beklenen miktar</td><td style={{ textAlign: "right" }}>{summary ? summary.expected_qty : "—"}</td></tr>
+                <tr><td>Gerçekleşen (mamul kabulü)</td><td style={{ textAlign: "right" }}>{summary ? summary.finished_qty : "—"}</td></tr>
+                <tr>
+                  <td>Miktar farkı</td>
+                  <td style={{ textAlign: "right", color: summary && summary.quantity_diff > 0 ? "var(--amber)" : "var(--green-3)" }}>
+                    {summary ? summary.quantity_diff : "—"}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>

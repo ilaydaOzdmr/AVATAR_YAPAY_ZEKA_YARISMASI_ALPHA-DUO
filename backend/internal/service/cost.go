@@ -9,14 +9,16 @@ import (
 
 // CostSummary is the cost breakdown for a production order.
 type CostSummary struct {
-	InputCost   float64 `json:"input_cost"`
-	ServiceCost float64 `json:"service_cost"`
-	TotalCost   float64 `json:"total_cost"`
-	FinishedQty float64 `json:"finished_qty"`
-	EKP         float64 `json:"ekp"`
-	VKP         float64 `json:"vkp"`
-	GrossProfit float64 `json:"gross_profit"`
-	Margin      float64 `json:"margin"`
+	InputCost    float64 `json:"input_cost"`
+	ServiceCost  float64 `json:"service_cost"`
+	TotalCost    float64 `json:"total_cost"`
+	ExpectedQty  float64 `json:"expected_qty"`
+	FinishedQty  float64 `json:"finished_qty"`
+	QuantityDiff float64 `json:"quantity_diff"`
+	EKP          float64 `json:"ekp"`
+	VKP          float64 `json:"vkp"`
+	GrossProfit  float64 `json:"gross_profit"`
+	Margin       float64 `json:"margin"`
 }
 
 // CostEngine computes production order costs (EKP, VKP, gross profit, margin).
@@ -104,13 +106,15 @@ func (e *CostEngine) ProductionOrderCost(ctx context.Context, poID int64) (CostS
 	}
 
 	return CostSummary{
-		InputCost:   round2(inputCost),
-		ServiceCost: round2(serviceCost),
-		TotalCost:   round2(totalCost),
-		FinishedQty: finishedQty,
-		EKP:         ekp,
-		VKP:         vkp,
-		GrossProfit: GrossProfit(vkp, ekp),
-		Margin:      Margin(vkp, ekp),
+		InputCost:    round2(inputCost),
+		ServiceCost:  round2(serviceCost),
+		TotalCost:    round2(totalCost),
+		ExpectedQty:  po.ExpectedQty,
+		FinishedQty:  finishedQty,
+		QuantityDiff: round2(po.ExpectedQty - finishedQty),
+		EKP:          ekp,
+		VKP:          vkp,
+		GrossProfit:  GrossProfit(vkp, ekp),
+		Margin:       Margin(vkp, ekp),
 	}, nil
 }

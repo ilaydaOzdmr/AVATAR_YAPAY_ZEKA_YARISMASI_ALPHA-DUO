@@ -285,10 +285,10 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO production_orders (code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO production_orders (code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty, expected_qty)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		po.Code, po.Status, nullString(po.StartedAt), nullString(po.FinishedAt),
-		nullString(po.Notes), nullString(po.ServiceName), po.ServiceUnitCost, po.ServiceQty)
+		nullString(po.Notes), nullString(po.ServiceName), po.ServiceUnitCost, po.ServiceQty, po.ExpectedQty)
 	if err != nil {
 		return model.ProductionOrder{}, err
 	}
@@ -321,12 +321,12 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 
 func (r *mysqlRepo) GetProductionOrder(ctx context.Context, id int64) (model.ProductionOrder, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty
+		`SELECT id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty, expected_qty
 		 FROM production_orders WHERE id = ?`, id)
 
 	var po model.ProductionOrder
 	var startedAt, finishedAt, notes, serviceName sql.NullString
-	if err := row.Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt, &notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty); err != nil {
+	if err := row.Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt, &notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty, &po.ExpectedQty); err != nil {
 		return model.ProductionOrder{}, err
 	}
 	if startedAt.Valid {
@@ -537,7 +537,7 @@ func (r *mysqlRepo) ListButcheryBatches(ctx context.Context) ([]model.ButcheryBa
 
 func (r *mysqlRepo) ListProductionOrders(ctx context.Context) ([]model.ProductionOrder, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty
+		`SELECT id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty, expected_qty
 		 FROM production_orders ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -548,7 +548,7 @@ func (r *mysqlRepo) ListProductionOrders(ctx context.Context) ([]model.Productio
 	for rows.Next() {
 		var po model.ProductionOrder
 		var startedAt, finishedAt, notes, serviceName sql.NullString
-		if err := rows.Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt, &notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty); err != nil {
+		if err := rows.Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt, &notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty, &po.ExpectedQty); err != nil {
 			return nil, err
 		}
 		if startedAt.Valid {

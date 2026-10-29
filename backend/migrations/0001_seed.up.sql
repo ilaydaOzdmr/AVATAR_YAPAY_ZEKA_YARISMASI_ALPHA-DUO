@@ -41,8 +41,8 @@ INSERT INTO lots (id, code, item_type, item_id, qty, unit, supplier_id, purchase
   (4, 'SUC-2026-045', 'product', 1, 85.000, 'paket', NULL, 0.00, 18.16, '2026-10-19 17:00:00', '2026-11-18', 'active');
 
 -- Production order (contract manufacturing)
-INSERT INTO production_orders (id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty) VALUES
-  (1, 'URT-2026-045', 'completed', '2026-10-19 09:00:00', '2026-10-19 17:00:00', 'Sözleşmeli üretim: 100 kg et, 2 kg baharat, 5 kg bağırsak', 'Sucuk üretim hizmeti', 5.50, 85.000);
+INSERT INTO production_orders (id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty, expected_qty) VALUES
+  (1, 'URT-2026-045', 'completed', '2026-10-19 09:00:00', '2026-10-19 17:00:00', 'Sözleşmeli üretim: 100 kg et, 2 kg baharat, 5 kg bağırsak', 'Sucuk üretim hizmeti', 5.50, 85.000, 90.000);
 
 -- Production order inputs
 INSERT INTO production_order_inputs (production_order_id, material_lot_id, qty) VALUES

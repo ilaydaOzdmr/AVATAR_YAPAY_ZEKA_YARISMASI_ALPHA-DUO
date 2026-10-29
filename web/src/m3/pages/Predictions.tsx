@@ -1,9 +1,28 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { mlGet, mlPost } from "../../api";
+import { get, mlGet, mlPost } from "../../api";
 
 interface YieldResult {
   predicted_qty: number;
   predicted_unit_cost: number;
+}
+
+interface ProductionOrder {
+  id: number;
+  code: string;
+  expected_qty: number;
+}
+
+interface CostSummary {
+  expected_qty: number;
+  finished_qty: number;
+  quantity_diff: number;
+}
+
+interface ForecastRow {
+  code: string;
+  expected: number;
+  actual: number;
+  diff: number;
 }
 
 interface ButcheryPart {
@@ -26,7 +45,6 @@ interface MlReport {
 
 export default function Predictions() {
   const [rawKg, setRawKg] = useState("100");
-  const [serviceCost, setServiceCost] = useState("467.5");
   const [yieldResult, setYieldResult] = useState<YieldResult | null>(null);
 
   const [animalType, setAnimalType] = useState("kuzu");
@@ -34,10 +52,29 @@ export default function Predictions() {
   const [parts, setParts] = useState<ButcheryPart[]>([]);
 
   const [report, setReport] = useState<MlReport | null>(null);
+  const [forecast, setForecast] = useState<ForecastRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     mlGet<MlReport>("/report").then(setReport).catch(() => {});
+    get<ProductionOrder[]>("/production-orders").then(async (orders) => {
+      const rows = await Promise.all(
+        orders.map(async (order) => {
+          try {
+            const summary = await get<CostSummary>(`/production-orders/${order.id}`);
+            return {
+              code: order.code,
+              expected: summary.expected_qty,
+              actual: summary.finished_qty,
+              diff: summary.quantity_diff,
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      setForecast(rows.filter((row): row is ForecastRow => row !== null));
+    });
   }, []);
 
   async function runYield() {
@@ -46,7 +83,6 @@ export default function Predictions() {
       setYieldResult(
         await mlPost<YieldResult>("/predict/yield", {
           raw_material_kg: Number.parseFloat(rawKg),
-          service_cost: Number.parseFloat(serviceCost),
         }),
       );
     } catch (err) {
@@ -124,8 +160,7 @@ export default function Predictions() {
           </div>
           <div style={{ padding: 20 }}>
             <form className="inline-form" onSubmit={predictYield}>
-              <input value={rawKg} onChange={(e) => setRawKg(e.target.value)} placeholder="Hammadde kg" style={{ width: 120 }} />
-              <input value={serviceCost} onChange={(e) => setServiceCost(e.target.value)} placeholder="Hizmet maliyeti" style={{ width: 130 }} />
+              <input value={rawKg} onChange={(e) => setRawKg(e.target.value)} placeholder="Hammadde kg" style={{ width: 140 }} />
               <button className="btn btn-secondary" type="submit">Tahmin et</button>
             </form>
             {yieldResult && (
@@ -176,6 +211,35 @@ export default function Predictions() {
           </div>
         </div>
       </div>
+
+      {forecast.length > 0 && (
+        <div className="panel" style={{ marginTop: 16 }}>
+          <div className="panel-head">
+            <div>
+              <h2>Tahmin vs Gerçek sapma</h2>
+              <p>Üretim emirleri: beklenen (tahmin) ve gerçekleşen miktar karşılaştırması</p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Üretim emri</th><th>Beklenen (tahmin)</th><th>Gerçekleşen</th><th>Sapma</th><th>%</th></tr>
+              </thead>
+              <tbody>
+                {forecast.map((row) => (
+                  <tr key={row.code}>
+                    <td className="id">{row.code}</td>
+                    <td>{row.expected}</td>
+                    <td>{row.actual}</td>
+                    <td style={{ color: row.diff > 0 ? "var(--amber)" : "var(--green-3)" }}>{row.diff}</td>
+                    <td>{row.expected > 0 ? `${((row.diff / row.expected) * 100).toFixed(1)}%` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {report && (
         <div className="two-col" style={{ marginTop: 16 }}>

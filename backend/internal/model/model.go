@@ -90,6 +90,7 @@ type ProductionOrder struct {
 	ServiceName     *string `json:"service_name"`
 	ServiceUnitCost float64 `json:"service_unit_cost"`
 	ServiceQty      float64 `json:"service_qty"`
+	ExpectedQty     float64 `json:"expected_qty"`
 }
 
 // ProductionOrderInput is a raw material lot consumed by a production order.
