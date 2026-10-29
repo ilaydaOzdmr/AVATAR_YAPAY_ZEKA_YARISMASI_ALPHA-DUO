@@ -1,5 +1,12 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { get, post } from "../../api";
+
+interface Market {
+  id: number;
+  code: string;
+  name: string;
+  contact: string;
+}
 
 interface Lot {
   id: number;
@@ -12,55 +19,67 @@ interface Lot {
 
 interface Product {
   id: number;
-  code: string;
   name: string;
   list_price: number;
 }
 
+interface Sale {
+  id: number;
+  code: string;
+  market_id: number;
+  sold_at: string;
+  status: string;
+}
+
 export default function Sales() {
+  const [markets, setMarkets] = useState<Market[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [lotId, setLotId] = useState("");
-  const [qty, setQty] = useState("1");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [sales, setSales] = useState<Sale[]>([]);
 
-  useEffect(() => {
+  const [lotId, setLotId] = useState("");
+  const [marketId, setMarketId] = useState("");
+  const [qty, setQty] = useState("1");
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    get<Market[]>("/markets").then(setMarkets).catch(() => {});
     get<Lot[]>("/lots?item_type=product").then(setLots).catch(() => {});
     get<Product[]>("/products").then(setProducts).catch(() => {});
+    get<Sale[]>("/sales").then(setSales).catch(() => {});
   }, []);
 
-  const productName = (id: number) => products.find((p) => p.id === id)?.name ?? "—";
-  const productListPrice = (id: number) => products.find((p) => p.id === id)?.list_price ?? 0;
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const productById = (id: number) => products.find((p) => p.id === id);
+  const marketName = (id: number) => markets.find((m) => m.id === id)?.name ?? `Market #${id}`;
 
   async function quickSale(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-    setMessage("");
-    const id = Number.parseInt(lotId, 10);
+    setFeedback(null);
+    const lot = lots.find((l) => l.id === Number.parseInt(lotId, 10));
     const quantity = Number.parseFloat(qty);
-    if (Number.isNaN(id) || Number.isNaN(quantity) || quantity <= 0) {
-      setError("Lot ve geçerli bir miktar seçin.");
+    if (!lot || Number.isNaN(quantity) || quantity <= 0 || !marketId) {
+      setFeedback("Lot, market ve geçerli bir miktar seçin.");
       return;
     }
-    const lot = lots.find((l) => l.id === id);
-    if (!lot) {
-      setError("Lot bulunamadı.");
-      return;
-    }
-    const price = productListPrice(lot.item_id);
+    const price = productById(lot.item_id)?.list_price ?? 0;
     try {
       await post("/sales", {
         code: `SAT-${Date.now()}`,
-        market_id: 1,
+        market_id: Number.parseInt(marketId, 10),
         sold_at: new Date().toISOString().slice(0, 19).replace("T", " "),
         status: "completed",
         client_id: "web",
-        lines: [{ lot_id: id, qty: quantity, unit_price: price, total_price: price * quantity }],
+        lines: [{ lot_id: lot.id, qty: quantity, unit_price: price, total_price: price * quantity }],
       });
-      setMessage("Satış kaydedildi.");
+      setQty("1");
+      setFeedback("Satış kaydedildi.");
+      load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setFeedback(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -72,7 +91,6 @@ export default function Sales() {
           <h1>Satış &amp; Sevkiyat</h1>
           <p>Satış satırlarını lotla eşleştirin; sevk edilen her paketin izini koruyun.</p>
         </div>
-        <button className="btn btn-primary" type="button">＋ Yeni satış</button>
       </div>
 
       <div className="metrics">
@@ -82,17 +100,17 @@ export default function Sales() {
           <div className="metric-foot">Satışa hazır</div>
         </div>
         <div className="metric">
-          <div className="metric-top">Toplam mamul stok <span className="metric-icon">▤</span></div>
-          <strong>{lots.reduce((s, l) => s + l.qty, 0).toLocaleString("tr-TR")} paket</strong>
-          <div className="metric-foot">Mevcut miktar</div>
+          <div className="metric-top">Toplam satış <span className="metric-icon">↗</span></div>
+          <strong>{sales.length}</strong>
+          <div className="metric-foot">Kayıtlı işlem</div>
         </div>
         <div className="metric">
-          <div className="metric-top">İzlenebilir satış satırı <span className="metric-icon">⌘</span></div>
-          <strong>100%</strong>
-          <div className="metric-foot">Lot kaydı zorunlu</div>
+          <div className="metric-top">Market <span className="metric-icon">▤</span></div>
+          <strong>{markets.length}</strong>
+          <div className="metric-foot">Alıcı</div>
         </div>
         <div className="metric">
-          <div className="metric-top">Bloke lot kontrolü <span className="metric-icon" style={{ background: "var(--red-bg)", color: "var(--red)" }}>⛨</span></div>
+          <div className="metric-top">Bloke kontrolü <span className="metric-icon" style={{ background: "var(--red-bg)", color: "var(--red)" }}>⛨</span></div>
           <strong>Aktif</strong>
           <div className="metric-foot positive">Satış öncesi doğrulama</div>
         </div>
@@ -100,59 +118,49 @@ export default function Sales() {
 
       <div className="two-col">
         <div className="panel">
-          <div className="panel-head">
-            <h2>Mamul lotları</h2>
-          </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Lot</th>
-                  <th>Ürün</th>
-                  <th>Mevcut stok</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lots.map((lot) => (
-                  <tr key={lot.id}>
-                    <td className="id">{lot.code}</td>
-                    <td>{productName(lot.item_id)}</td>
-                    <td>{lot.qty} {lot.unit}</td>
-                  </tr>
-                ))}
-                {lots.length === 0 && (
-                  <tr><td colSpan={3} className="muted">Mamul lotu bulunamadı.</td></tr>
-                )}
-              </tbody>
-            </table>
+          <div className="panel-head"><h2>Hızlı satış</h2></div>
+          <div style={{ padding: 20 }}>
+            <form className="stack-form" onSubmit={quickSale}>
+              <label>Mamul lotu
+                <select value={lotId} onChange={(e) => setLotId(e.target.value)}>
+                  <option value="">Lot seçin...</option>
+                  {lots.map((lot) => <option key={lot.id} value={lot.id}>{lot.code}</option>)}
+                </select>
+              </label>
+              <label>Market
+                <select value={marketId} onChange={(e) => setMarketId(e.target.value)}>
+                  <option value="">Market seçin...</option>
+                  {markets.map((m) => <option key={m.id} value={m.id}>{m.name} ({m.code})</option>)}
+                </select>
+              </label>
+              <label>Miktar
+                <input value={qty} onChange={(e) => setQty(e.target.value)} placeholder="1" />
+              </label>
+              <button className="btn btn-primary" type="submit">Satışı kaydet</button>
+            </form>
+            {feedback && <p className="muted" style={{ marginTop: 8 }}>{feedback}</p>}
           </div>
         </div>
 
         <div className="panel">
-          <div className="panel-head">
-            <h2>Hızlı satış</h2>
-          </div>
-          <div style={{ padding: 20 }}>
-            <form className="stack-form" onSubmit={quickSale}>
-              <label>
-                Mamul lotu
-                <select value={lotId} onChange={(event) => setLotId(event.target.value)}>
-                  <option value="">Lot seçin...</option>
-                  {lots.map((lot) => (
-                    <option key={lot.id} value={lot.id}>
-                      {lot.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Miktar
-                <input value={qty} onChange={(event) => setQty(event.target.value)} placeholder="1" />
-              </label>
-              <button className="btn btn-primary" type="submit">Satışı kaydet</button>
-            </form>
-            {error && <p className="muted" style={{ marginTop: 8 }}>{error}</p>}
-            {message && <p className="muted" style={{ marginTop: 8, color: "var(--green-4)" }}>{message}</p>}
+          <div className="panel-head"><h2>Son satışlar</h2></div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Satış</th><th>Market</th><th>Tarih</th><th>Durum</th></tr>
+              </thead>
+              <tbody>
+                {sales.map((sale) => (
+                  <tr key={sale.id}>
+                    <td className="id">{sale.code}</td>
+                    <td>{marketName(sale.market_id)}</td>
+                    <td>{sale.sold_at}</td>
+                    <td><span className="status ok">{sale.status}</span></td>
+                  </tr>
+                ))}
+                {sales.length === 0 && <tr><td colSpan={4} className="muted">Satış bulunamadı.</td></tr>}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

@@ -28,6 +28,7 @@ type Repo interface {
 	GetLot(ctx context.Context, id int64) (model.Lot, error)
 	GetProduct(ctx context.Context, id int64) (model.Product, error)
 	GetMarket(ctx context.Context, id int64) (model.Market, error)
+	ListMarkets(ctx context.Context) ([]model.Market, error)
 	GetSupplier(ctx context.Context, id int64) (model.Supplier, error)
 	CreateButcheryBatch(ctx context.Context, batch model.ButcheryBatch, items []model.ButcheryItem) (model.ButcheryBatch, error)
 	GetButcheryBatch(ctx context.Context, id int64) (model.ButcheryBatch, error)
@@ -41,6 +42,7 @@ type Repo interface {
 	IsLotBlocked(ctx context.Context, lotID int64) (bool, error)
 	ListBlockedLotCodes(ctx context.Context) ([]string, error)
 	CreateSale(ctx context.Context, sale model.Sale, lines []model.SaleLine) (model.Sale, error)
+	ListSales(ctx context.Context) ([]model.Sale, error)
 }
 
 // NewMySQLRepo returns a MySQL-backed implementation of Repo.
@@ -657,4 +659,46 @@ func (r *mysqlRepo) CreateSale(ctx context.Context, sale model.Sale, lines []mod
 		return model.Sale{}, err
 	}
 	return sale, nil
+}
+
+func (r *mysqlRepo) ListSales(ctx context.Context) ([]model.Sale, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, code, market_id, sold_at, status, client_id FROM sales ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.Sale
+	for rows.Next() {
+		var sale model.Sale
+		var clientID sql.NullString
+		if err := rows.Scan(&sale.ID, &sale.Code, &sale.MarketID, &sale.SoldAt, &sale.Status, &clientID); err != nil {
+			return nil, err
+		}
+		if clientID.Valid {
+			sale.ClientID = &clientID.String
+		}
+		out = append(out, sale)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) ListMarkets(ctx context.Context) ([]model.Market, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, code, name, contact FROM markets ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.Market
+	for rows.Next() {
+		var market model.Market
+		if err := rows.Scan(&market.ID, &market.Code, &market.Name, &market.Contact); err != nil {
+			return nil, err
+		}
+		out = append(out, market)
+	}
+	return out, rows.Err()
 }

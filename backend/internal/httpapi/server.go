@@ -45,14 +45,18 @@ func NewServer(r repo.Repo) http.Handler {
 	s.mux.HandleFunc("GET /lots/{code}/movements", s.handleListMovements)
 	s.mux.HandleFunc("POST /stock-movements", s.handleAddStockMovement)
 	s.mux.HandleFunc("POST /production-orders", s.handleCreateProductionOrder)
+	s.mux.HandleFunc("GET /production-orders", s.handleListProductionOrders)
 	s.mux.HandleFunc("GET /production-orders/{id}", s.handleGetProductionOrder)
 	s.mux.HandleFunc("GET /trace/forward", s.handleTraceForward)
 	s.mux.HandleFunc("GET /trace/backward", s.handleTraceBackward)
 	s.mux.HandleFunc("POST /butchery-batches", s.handleCreateButcheryBatch)
+	s.mux.HandleFunc("GET /butchery-batches", s.handleListButcheryBatches)
 	s.mux.HandleFunc("GET /butchery-batches/{id}", s.handleGetButcheryBatch)
 	s.mux.HandleFunc("POST /recalls", s.handleCreateRecall)
 	s.mux.HandleFunc("GET /recalls/{id}", s.handleGetRecall)
+	s.mux.HandleFunc("GET /markets", s.handleListMarkets)
 	s.mux.HandleFunc("POST /sales", s.handleCreateSale)
+	s.mux.HandleFunc("GET /sales", s.handleListSales)
 	s.mux.HandleFunc("POST /sync/push", s.handleSyncPush)
 	s.mux.HandleFunc("GET /sync/pull", s.handleSyncPull)
 	s.mux.HandleFunc("GET /anomalies", s.handleAnomalies)
@@ -435,4 +439,40 @@ func (s *Server) handleOCRInvoice(w http.ResponseWriter, r *http.Request) {
 	}
 	items := service.ParseInvoice(req.Text)
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Server) handleListProductionOrders(w http.ResponseWriter, r *http.Request) {
+	orders, err := s.repo.ListProductionOrders(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, orders)
+}
+
+func (s *Server) handleListButcheryBatches(w http.ResponseWriter, r *http.Request) {
+	batches, err := s.repo.ListButcheryBatches(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, batches)
+}
+
+func (s *Server) handleListMarkets(w http.ResponseWriter, r *http.Request) {
+	markets, err := s.repo.ListMarkets(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, markets)
+}
+
+func (s *Server) handleListSales(w http.ResponseWriter, r *http.Request) {
+	sales, err := s.repo.ListSales(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sales)
 }
