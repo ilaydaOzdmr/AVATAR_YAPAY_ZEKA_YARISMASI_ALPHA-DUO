@@ -9,6 +9,7 @@ import Recall from "./pages/Recall";
 import Predictions from "./pages/Predictions";
 import MobilePreview from "./pages/MobilePreview";
 import Reports from "./pages/Reports";
+import InvoiceOcr from "./pages/InvoiceOcr";
 
 interface NavItem {
   key: string;
@@ -36,6 +37,7 @@ const groups: { label: string; items: NavItem[] }[] = [
       { key: "ai", label: "Yapay Zekâ", icon: "✳" },
       { key: "mobile", label: "Mobil Uygulama", icon: "▯" },
       { key: "reports", label: "Raporlar", icon: "▥" },
+      { key: "invoice-ocr", label: "Fatura OCR", icon: "⌗" },
     ],
   },
 ];
@@ -51,6 +53,7 @@ const titles: Record<string, string> = {
   ai: "Yapay Zekâ Merkezi",
   mobile: "Mobil Uygulama",
   reports: "Raporlar",
+  "invoice-ocr": "Fatura OCR",
 };
 
 function renderView(key: string) {
@@ -73,6 +76,8 @@ function renderView(key: string) {
       return <MobilePreview />;
     case "reports":
       return <Reports />;
+    case "invoice-ocr":
+      return <InvoiceOcr />;
     case "dashboard":
     default:
       return <Dashboard />;

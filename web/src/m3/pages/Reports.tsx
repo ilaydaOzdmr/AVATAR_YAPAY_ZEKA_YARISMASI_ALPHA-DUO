@@ -6,10 +6,6 @@ interface Lot {
   item_type: string;
 }
 
-interface Anomaly {
-  ref: string;
-}
-
 export default function Reports() {
   const [productionCount, setProductionCount] = useState(0);
   const [saleCount, setSaleCount] = useState(0);
