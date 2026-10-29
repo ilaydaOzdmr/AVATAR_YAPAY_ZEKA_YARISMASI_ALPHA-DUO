@@ -16,7 +16,8 @@ bir prototip.
 | 3 | **Lot izlenebilirliği** (ileri/geri) + **geri çağırma** + satış engeli | ✅ |
 | — | İki zorunlu **KI modeli** (üretim verimi/EKP, parçalama verimi) | ✅ |
 | — | **Android** satış + offline SQLite + senkronizasyon | ✅ |
-| — | Opsiyonel: fatura OCR + anomali uyarıları | kapsam dışı |
+| — | **React web** yönetim paneli (Food Intelligence, 10+ ekran, canlı veri, rapor indirme) | ✅ |
+| — | Opsiyonel: fatura **OCR** + **anomali uyarıları** | ✅ |
 
 ### Demo senaryosu (değerlendirme odağı)
 `ET-2026-001` (100 kg et) → üretim emri `URT-2026-045` → `SUC-2026-045` (85 paket sucuk)
@@ -45,7 +46,9 @@ bulur, lotları bloke eder ve satışı engeller.
 ```
 
 - **Go backend** — tek doğruluk kaynağı (REST, MySQL, parametreli SQL).
-- **React web** — yönetim, raporlama, izlenebilirlik ve geri çağırma ekranı.
+- **React web** — Food Intelligence yönetim paneli (`:5174`): genel bakış, stok, üretim,
+  parçalama, satış, lot izlenebilirliği, geri çağırma, yapay zekâ, raporlar (CSV indirme),
+  fatura OCR ve anomali uyarıları. Tüm ekranlar canlı backend verisi kullanır.
 - **Kotlin Android** — satış, offline SQLite, senkronizasyon (outbox + LWW).
 - **Python ML** — iki lineer regresyon modeli + baseline karşılaştırma + MAE/RMSE.
 
@@ -88,7 +91,7 @@ ALPHA-DUO-Vault/    Obsidian notları (karar günlüğü, görev dağılımı, g
 cp .env.example .env
 docker compose -f infra/docker-compose.yml up -d --build
 ```
-- **Web (ham / API testi): `http://localhost:5173`** · **Web (Material 3, takip): `http://localhost:5174`** · API: `http://localhost:8080` · ML: `http://localhost:8000` · SonarQube: `http://localhost:9000`
+- **Web (ham / API testi): `http://localhost:5173`** · **Web (Food Intelligence): `http://localhost:5174`** · API: `http://localhost:8080` · ML: `http://localhost:8000` · SonarQube: `http://localhost:9000`
 - **Veritabanı (web arayüzü — Adminer): `http://localhost:8081`** (sunucu `mysql`, kullanıcı `avatar`, şifre `avatar`, db `avatar`)
 - MySQL şeması ve seed verisi ilk açılışta otomatik uygulanır.
 
@@ -121,12 +124,15 @@ cd web && npm run build          # web
 | GET/POST | `/lots` | lotlar |
 | GET | `/lots/{code}`, `/lots/{code}/movements` | lot + hareketler |
 | POST | `/stock-movements` | stok hareketi |
-| POST | `/production-orders`, GET `/production-orders/{id}` | üretim emri + maliyet |
-| POST | `/butchery-batches`, GET `/butchery-batches/{id}` | parçalama + dağıtım |
+| GET/POST | `/production-orders`, GET `/production-orders/{id}` | üretim emri listesi/oluşturma + maliyet |
+| GET/POST | `/butchery-batches`, GET `/butchery-batches/{id}` | parçalama listesi/oluşturma + dağıtım |
 | GET | `/trace/forward?lot=`, `/trace/backward?lot=` | ileri/geri izleme |
 | POST | `/recalls`, GET `/recalls/{id}` | geri çağırma + bloke |
-| POST | `/sales` | satış (bloklu lot → 409) |
+| GET/POST | `/sales` | satış listesi/oluşturma (bloklu lot → 409) |
+| GET | `/markets` | market listesi |
 | POST | `/sync/push`, GET `/sync/pull` | mobil senkronizasyon |
+| GET | `/anomalies` | kural tabanlı anomali uyarıları |
+| POST | `/ocr/invoice` | fatura/irsaliye metninden kalem çıkarma |
 
 Tam referans: `docs/api.md`. Veri modeli: `docs/data-model.md`.
 
@@ -155,3 +161,17 @@ Lot izlenebilirliği ve geri çağırma **KI tahminine değil**, kesin kayıt il
 - Demo scripti: `docs/demo-script.md` · SonarQube: `docs/sonarqube.md` · Logo: `docs/logo.svg`
 - Android çalıştırma: `docs/android.md`
 - Görev dağılımı: `ALPHA-DUO-Vault/00-Gorev-Dagilimi.md`
+
+---
+
+## Ajan becerileri (Skills)
+
+Arayüz geliştirmede kullanılan beceriler `skills/` klasöründe projeye dahil edildi:
+
+- **`skills/material-3/`** — Material Design 3 rehberi (renk, bileşen, tipografi, layout).
+  Kaynak: <https://github.com/hamen/material-3-skill>
+- **`skills/impeccable/`** — tasarım sözlüğü (polish/bolder/critique/audit) + 62 kuralılık
+  slop dedektörü. Kaynak: <https://github.com/pbakaus/impeccable>
+
+Web arayüzünün görsel dili: koyu orman yeşili (`#173f35`), kırık beyaz (`#f7f8f5`),
+yumuşak gri ve ölçülü amber uyarılar.
