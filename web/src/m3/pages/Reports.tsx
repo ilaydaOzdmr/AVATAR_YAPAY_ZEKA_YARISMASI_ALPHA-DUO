@@ -1,12 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
-import { get } from "../../api";
+import { get, mlGet } from "../../api";
+import { downloadCsv } from "../csv";
 
 interface Lot {
   id: number;
+  code: string;
   item_type: string;
 }
 
-export default function Reports() {
+interface Movement {
+  movement_type: string;
+  qty: number;
+  occurred_at: string;
+}
+
+interface ProductionOrder {
+  id: number;
+  code: string;
+}
+
+interface CostSummary {
+  ekp: number;
+  total_cost: number;
+  finished_qty: number;
+}
+
+interface Metrics {
+  model_mae: number;
+  model_rmse: number;
+  baseline_mae: number;
+  baseline_rmse: number;
+}
+
+interface MlReport {
+  yield: Metrics;
+  butchery: Metrics;
+  note: string;
+}
+
+export default function Reports({ onNavigate }: { onNavigate: (view: string) => void }) {
   const [productionCount, setProductionCount] = useState(0);
   const [saleCount, setSaleCount] = useState(0);
   const [lotCount, setLotCount] = useState(0);
@@ -14,6 +46,7 @@ export default function Reports() {
   const [productCount, setProductCount] = useState(0);
   const [movementCount, setMovementCount] = useState(0);
   const [anomalyCount, setAnomalyCount] = useState(0);
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(() => {
     get<unknown[]>("/production-orders").then((r) => setProductionCount(r.length)).catch(() => {});
@@ -37,11 +70,70 @@ export default function Reports() {
     load();
   }, [load]);
 
+  async function exportCostReport() {
+    setFeedback(null);
+    try {
+      const orders = await get<ProductionOrder[]>("/production-orders");
+      const rows: (string | number)[][] = [];
+      for (const order of orders) {
+        try {
+          const cost = await get<CostSummary>(`/production-orders/${order.id}`);
+          rows.push([order.code, cost.ekp.toFixed(2), cost.total_cost.toFixed(2), cost.finished_qty]);
+        } catch {
+          rows.push([order.code, "—", "—", "—"]);
+        }
+      }
+      downloadCsv("uretim-maliyet-raporu.csv", ["Üretim emri", "EKP", "Toplam maliyet", "Mamul miktarı"], rows);
+      setFeedback("Üretim maliyet raporu indirildi.");
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function exportLotHistory() {
+    setFeedback(null);
+    try {
+      const lots = await get<Lot[]>("/lots");
+      const rows: (string | number)[][] = [];
+      for (const lot of lots) {
+        try {
+          const movements = await get<Movement[]>(`/lots/${lot.id}/movements`);
+          for (const movement of movements) {
+            rows.push([lot.code, movement.movement_type, movement.qty, movement.occurred_at]);
+          }
+        } catch {
+          /* skip lot with no movements */
+        }
+      }
+      downloadCsv("lot-hareket-gecmisi.csv", ["Lot", "Hareket türü", "Miktar", "Tarih"], rows);
+      setFeedback("Lot hareket geçmişi indirildi.");
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function exportAiReport() {
+    setFeedback(null);
+    try {
+      const report = await mlGet<MlReport>("/report");
+      const rows: (string | number)[][] = [
+        ["Üretim MAE", report.yield.model_mae, report.yield.baseline_mae],
+        ["Üretim RMSE", report.yield.model_rmse, report.yield.baseline_rmse],
+        ["Parçalama MAE", report.butchery.model_mae, report.butchery.baseline_mae],
+        ["Parçalama RMSE", report.butchery.model_rmse, report.butchery.baseline_rmse],
+      ];
+      downloadCsv("ai-tahmin-hata-raporu.csv", ["Metrik", "Model", "Referans"], rows);
+      setFeedback("AI tahmin raporu indirildi.");
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   const catalog = [
-    { name: "Gerçek üretim maliyeti", scope: "Hammadde + hizmet + EKP", format: "PDF / CSV" },
-    { name: "Lot hareket geçmişi", scope: "Giriş, transfer, üretim, satış", format: "CSV" },
-    { name: "Geri çağırma alıcı listesi", scope: "Market ve miktar bazında", format: "CSV" },
-    { name: "AI tahmin hata raporu", scope: "Gerçek / tahmin / MAE / RMSE", format: "PDF" },
+    { name: "Gerçek üretim maliyeti", scope: "Hammadde + hizmet + EKP", format: "CSV", action: exportCostReport },
+    { name: "Lot hareket geçmişi", scope: "Giriş, transfer, üretim, satış", format: "CSV", action: exportLotHistory },
+    { name: "Geri çağırma alıcı listesi", scope: "Market ve miktar bazında", format: "CSV", action: () => onNavigate("recall") },
+    { name: "AI tahmin hata raporu", scope: "Gerçek / tahmin / MAE / RMSE", format: "CSV", action: exportAiReport },
   ];
 
   return (
@@ -91,6 +183,8 @@ export default function Reports() {
         </div>
       </div>
 
+      {feedback && <p className="muted" style={{ marginBottom: 12 }}>{feedback}</p>}
+
       <div className="panel">
         <div className="panel-head">
           <h2>Rapor kataloğu</h2>
@@ -106,7 +200,7 @@ export default function Reports() {
                   <td><b>{report.name}</b></td>
                   <td>{report.scope}</td>
                   <td>{report.format}</td>
-                  <td><button className="btn btn-secondary" type="button">Oluştur</button></td>
+                  <td><button className="btn btn-secondary" type="button" onClick={report.action}>Oluştur</button></td>
                 </tr>
               ))}
             </tbody>

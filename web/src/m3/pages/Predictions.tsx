@@ -40,8 +40,7 @@ export default function Predictions() {
     mlGet<MlReport>("/report").then(setReport).catch(() => {});
   }, []);
 
-  async function predictYield(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function runYield() {
     setError(null);
     try {
       setYieldResult(
@@ -55,8 +54,7 @@ export default function Predictions() {
     }
   }
 
-  async function predictButchery(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function runButchery() {
     setError(null);
     try {
       const result = await mlPost<{ parts: ButcheryPart[] }>("/predict/butchery", {
@@ -67,6 +65,22 @@ export default function Predictions() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  function predictYield(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void runYield();
+  }
+
+  function predictButchery(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void runButchery();
+  }
+
+  async function refreshAll() {
+    setError(null);
+    await Promise.all([runYield(), runButchery()]);
+    mlGet<MlReport>("/report").then(setReport).catch(() => {});
   }
 
   function metricsTable(metrics: ModelMetrics) {
@@ -95,7 +109,7 @@ export default function Predictions() {
           <h1>Yapay Zekâ Merkezi</h1>
           <p>Tahminleri gerçek sonuçlarla karşılaştırın. Operasyon kararlarını kesin kayıtlarla verin.</p>
         </div>
-        <button className="btn btn-primary" type="button">↻ Tahminleri güncelle</button>
+        <button className="btn btn-primary" type="button" onClick={refreshAll}>↻ Tahminleri güncelle</button>
       </div>
 
       {error && <p className="muted" style={{ marginBottom: 12 }}>{error}</p>}
