@@ -29,9 +29,10 @@ class SyncRepository(
     private val baseUrl: String = DEFAULT_BASE_URL,
 ) {
     companion object {
-        // 10.0.2.2 = Android emulator host alias (127.0.0.1 of the dev machine).
-        // On a physical device, replace with the host's LAN IP.
-        const val DEFAULT_BASE_URL = "http://10.0.2.2:8080"
+        // Fiziksel cihazda: adb reverse tcp:8080 tcp:8080 ile cihazın localhost:8080'i
+        // host'un backend'ine yönlendirilir (weble aynı yer).
+        // Emülatörde: adb reverse de çalışır; alternatif 10.0.2.2:8080.
+        const val DEFAULT_BASE_URL = "http://localhost:8080"
         private const val CLIENT_ID = "android"
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
