@@ -5,8 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +22,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.avatar.app.data.entities.LocalLot
@@ -26,6 +32,9 @@ import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.data.entities.LocalSaleLine
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+
+private val Green = Color(0xFF2C7058)
+private val Red = Color(0xFFB83B35)
 
 private val SOLD_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
@@ -48,87 +57,94 @@ fun Sale(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("New Sale", style = MaterialTheme.typography.headlineSmall)
+        Text("SATIŞ & DAĞITIM", style = MaterialTheme.typography.labelSmall, color = Green, fontWeight = FontWeight.Bold)
+        Text("Hızlı Satış", style = MaterialTheme.typography.headlineSmall)
 
-        Column {
-            Button(onClick = { productMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(selectedProduct?.let { "${it.code} — ${it.name}" } ?: "Select product")
-            }
-            DropdownMenu(expanded = productMenu, onDismissRequest = { productMenu = false }) {
-                products.forEach { product ->
-                    DropdownMenuItem(
-                        text = { Text("${product.code} — ${product.name}") },
-                        onClick = {
-                            selectedProduct = product
-                            productMenu = false
-                        },
-                    )
+        Card(shape = RoundedCornerShape(14.dp)) {
+            Column(
+                Modifier.fillMaxWidth().padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                // Ürün seçimi
+                Button(
+                    onClick = { productMenu = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow, contentColor = MaterialTheme.colorScheme.onSurface),
+                ) {
+                    Text(selectedProduct?.let { "${it.code} — ${it.name}" } ?: "Ürün seç")
+                }
+                DropdownMenu(expanded = productMenu, onDismissRequest = { productMenu = false }) {
+                    products.forEach { product ->
+                        DropdownMenuItem(
+                            text = { Text("${product.code} — ${product.name}") },
+                            onClick = { selectedProduct = product; productMenu = false },
+                        )
+                    }
+                }
+
+                // Lot seçimi
+                Button(
+                    onClick = { lotMenu = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow, contentColor = MaterialTheme.colorScheme.onSurface),
+                ) {
+                    Text(selectedLot?.let { if (it.blocked) "${it.code} (bloke)" else it.code } ?: "Lot seç")
+                }
+                DropdownMenu(expanded = lotMenu, onDismissRequest = { lotMenu = false }) {
+                    lots.forEach { lot ->
+                        DropdownMenuItem(
+                            text = { Text("${lot.code} (${lot.item_type})") },
+                            enabled = !lot.blocked,
+                            onClick = { selectedLot = lot; lotMenu = false },
+                        )
+                    }
+                }
+
+                // Miktar
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it },
+                    label = { Text("Miktar") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                val product = selectedProduct
+                val lot = selectedLot
+                val qty = quantity.toDoubleOrNull()
+                val canSell = product != null && lot != null && !lot.blocked && qty != null && qty > 0
+
+                Button(
+                    onClick = {
+                        if (product != null && lot != null && qty != null) {
+                            val sale = LocalSale(
+                                code = "AND-${System.currentTimeMillis()}",
+                                market_id = 1L,
+                                sold_at = LocalDateTime.now().format(SOLD_AT_FORMAT),
+                                status = "completed",
+                                synced = false,
+                            )
+                            val line = LocalSaleLine(
+                                sale_id = 0,
+                                lot_id = lot.id,
+                                qty = qty,
+                                unit_price = product.list_price,
+                                total_price = product.list_price * qty,
+                            )
+                            onCreateSale(sale, line)
+                        }
+                    },
+                    enabled = canSell,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Green),
+                ) {
+                    Text("Satışı kaydet")
+                }
+
+                if (message != null) {
+                    Text(message, style = MaterialTheme.typography.labelMedium, color = Green)
                 }
             }
-        }
-
-        Column {
-            Button(onClick = { lotMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                val label = selectedLot?.let { lot ->
-                    if (lot.blocked) "${lot.code} (blocked)" else lot.code
-                } ?: "Select lot"
-                Text(label)
-            }
-            DropdownMenu(expanded = lotMenu, onDismissRequest = { lotMenu = false }) {
-                lots.forEach { lot ->
-                    DropdownMenuItem(
-                        text = { Text("${lot.code} (${lot.item_type})") },
-                        enabled = !lot.blocked,
-                        onClick = {
-                            selectedLot = lot
-                            lotMenu = false
-                        },
-                    )
-                }
-            }
-        }
-
-        OutlinedTextField(
-            value = quantity,
-            onValueChange = { quantity = it },
-            label = { Text("Quantity") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.fillMaxWidth(),
-        )
-
-        val product = selectedProduct
-        val lot = selectedLot
-        val qty = quantity.toDoubleOrNull()
-        val canSell = product != null && lot != null && !lot.blocked && qty != null && qty > 0
-
-        Button(
-            onClick = {
-                if (product != null && lot != null && qty != null) {
-                    val sale = LocalSale(
-                        code = "AND-${System.currentTimeMillis()}",
-                        market_id = 1L,
-                        sold_at = LocalDateTime.now().format(SOLD_AT_FORMAT),
-                        status = "completed",
-                        synced = false,
-                    )
-                    val line = LocalSaleLine(
-                        sale_id = 0,
-                        lot_id = lot.id,
-                        qty = qty,
-                        unit_price = product.list_price,
-                        total_price = product.list_price * qty,
-                    )
-                    onCreateSale(sale, line)
-                }
-            },
-            enabled = canSell,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text("Create sale")
-        }
-
-        if (message != null) {
-            Text(message, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
