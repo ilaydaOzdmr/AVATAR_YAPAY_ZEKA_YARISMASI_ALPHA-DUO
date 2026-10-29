@@ -86,7 +86,7 @@ function renderView(key: string, onNavigate: (view: string) => void) {
 
 export default function App() {
   const [view, setView] = useState("dashboard");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
@@ -102,7 +102,6 @@ export default function App() {
 
   function navigate(next: string) {
     setView(next);
-    setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -118,7 +117,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <aside className={sidebarOpen ? "sidebar open" : "sidebar"} id="sidebar">
+      <aside className={collapsed ? "sidebar collapsed" : "sidebar"} id="sidebar">
         <div className="brand">
           <div className="logo">A</div>
           <div>
@@ -163,7 +162,7 @@ export default function App() {
             className="mobile-menu"
             type="button"
             aria-label="Menü"
-            onClick={() => setSidebarOpen((open) => !open)}
+            onClick={() => setCollapsed((open) => !open)}
           >
             ☰
           </button>
