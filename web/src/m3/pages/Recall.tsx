@@ -12,18 +12,27 @@ interface RecallEvent {
   code: string;
 }
 
-interface RecallMarket {
+interface MarketImpact {
   market_code: string;
   market_name: string;
   contact: string;
   qty: number;
 }
 
+interface AffectedLot {
+  lot_code: string;
+  product_code: string;
+  product_name: string;
+  item_type: string;
+  qty: number;
+  unit: string;
+  markets: MarketImpact[];
+}
+
 interface RecallResult {
   event: RecallEvent;
   source_lot_code: string;
-  affected_lots: string[];
-  markets: RecallMarket[];
+  affected_lots: AffectedLot[];
   message: string;
 }
 
@@ -56,10 +65,14 @@ export default function Recall() {
     }
   }
 
+  // Tüm etkilenen lotların marketlerini tek listeye indir.
+  const allMarkets = result ? result.affected_lots.flatMap((lot) => lot.markets) : [];
+  const totalQty = allMarkets.reduce((sum, m) => sum + m.qty, 0);
+
   function downloadCsv() {
     if (!result) return;
     const header = "Alıcı,Kod,Miktar,İletişim\n";
-    const rows = result.markets
+    const rows = allMarkets
       .map((m) => `${m.market_name},${m.market_code},${m.qty},${m.contact}`)
       .join("\n");
     const blob = new Blob([`\ufeff${header}${rows}`], { type: "text/csv;charset=utf-8;" });
@@ -71,7 +84,6 @@ export default function Recall() {
     URL.revokeObjectURL(url);
   }
 
-  const totalQty = result ? result.markets.reduce((sum, m) => sum + m.qty, 0) : 0;
   const criticalAnomalies = anomalies.filter((a) => a.severity === "critical");
 
   return (
@@ -124,16 +136,18 @@ export default function Recall() {
             <div className="metric">
               <div className="metric-top">Etkilenen mamul <span className="metric-icon">▤</span></div>
               <strong>{totalQty} paket</strong>
-              <div className="metric-foot">{result.affected_lots.join(", ") || result.source_lot_code}</div>
+              <div className="metric-foot">
+                {result.affected_lots.map((l) => l.product_name).filter(Boolean).join(", ") || result.source_lot_code}
+              </div>
             </div>
             <div className="metric">
               <div className="metric-top">Dağıtım noktası <span className="metric-icon">↗</span></div>
-              <strong>{result.markets.length}</strong>
+              <strong>{allMarkets.length}</strong>
               <div className="metric-foot">markete sevk edildi</div>
             </div>
             <div className="metric">
               <div className="metric-top">Alıcı teyidi <span className="metric-icon">✓</span></div>
-              <strong>{confirmed.size} / {result.markets.length}</strong>
+              <strong>{confirmed.size} / {allMarkets.length}</strong>
               <div className="metric-foot">Teyit bekleniyor</div>
             </div>
             <div className="metric">
@@ -143,37 +157,48 @@ export default function Recall() {
             </div>
           </div>
 
-          <div className="panel">
-            <div className="panel-head">
-              <h2>Alıcı iletişim ve miktar listesi</h2>
-              <button className="btn btn-secondary" type="button" onClick={downloadCsv}>⇩ Listeyi dışa aktar</button>
+          {result.affected_lots.map((lot) => (
+            <div key={lot.lot_code} className="panel" style={{ marginBottom: 16 }}>
+              <div className="panel-head">
+                <div>
+                  <h2>{lot.product_name} ({lot.product_code})</h2>
+                  <p>Lot {lot.lot_code} · {lot.qty} {lot.unit}</p>
+                </div>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>Alıcı</th><th>Kod</th><th>Miktar</th><th>İletişim</th><th>Durum</th><th>Aksiyon</th></tr>
+                  </thead>
+                  <tbody>
+                    {lot.markets.map((market) => {
+                      const done = confirmed.has(market.market_code);
+                      return (
+                        <tr key={`${lot.lot_code}-${market.market_code}`}>
+                          <td><b>{market.market_name}</b></td>
+                          <td className="id">{market.market_code}</td>
+                          <td>{market.qty} paket</td>
+                          <td>{market.contact}</td>
+                          <td>{done ? <span className="status ok">Teyit edildi</span> : <span className="status warn">Teyit bekliyor</span>}</td>
+                          <td>
+                            <button className="btn btn-secondary" type="button" disabled={done} onClick={() => setConfirmed((prev) => new Set(prev).add(market.market_code))}>
+                              {done ? "✓ Teyit edildi" : "Teyit alındı"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {lot.markets.length === 0 && <tr><td colSpan={6} className="muted">Etkilenen market bulunamadı.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr><th>Alıcı</th><th>Kod</th><th>Miktar</th><th>İletişim</th><th>Durum</th><th>Aksiyon</th></tr>
-                </thead>
-                <tbody>
-                  {result.markets.map((market) => {
-                    const done = confirmed.has(market.market_code);
-                    return (
-                      <tr key={market.market_code}>
-                        <td><b>{market.market_name}</b></td>
-                        <td className="id">{market.market_code}</td>
-                        <td>{market.qty} paket</td>
-                        <td>{market.contact}</td>
-                        <td>{done ? <span className="status ok">Teyit edildi</span> : <span className="status warn">Teyit bekliyor</span>}</td>
-                        <td>
-                          <button className="btn btn-secondary" type="button" disabled={done} onClick={() => setConfirmed((prev) => new Set(prev).add(market.market_code))}>
-                            {done ? "✓ Teyit edildi" : "Teyit alındı"}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {result.markets.length === 0 && <tr><td colSpan={6} className="muted">Etkilenen market bulunamadı.</td></tr>}
-                </tbody>
-              </table>
+          ))}
+
+          <div className="panel" style={{ marginTop: 8 }}>
+            <div className="panel-head">
+              <h2>Alıcı iletişim ve miktar listesi (özet)</h2>
+              <button className="btn btn-secondary" type="button" onClick={downloadCsv}>⇩ Listeyi dışa aktar</button>
             </div>
           </div>
 
