@@ -78,6 +78,12 @@ func (f *fakeRepo) GetButcheryBatch(_ context.Context, _ int64) (model.ButcheryB
 func (f *fakeRepo) ListButcheryItems(_ context.Context, _ int64) ([]model.ButcheryItem, error) {
 	return nil, nil
 }
+func (f *fakeRepo) ListButcheryBatches(_ context.Context) ([]model.ButcheryBatch, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListProductionOrders(_ context.Context) ([]model.ProductionOrder, error) {
+	return nil, nil
+}
 func (f *fakeRepo) CreateRecallEvent(_ context.Context, e model.RecallEvent) (model.RecallEvent, error) {
 	return e, nil
 }

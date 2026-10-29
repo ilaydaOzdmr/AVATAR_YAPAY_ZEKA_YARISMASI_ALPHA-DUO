@@ -19,6 +19,7 @@ type Server struct {
 	trace    *service.Traceability
 	butchery *service.ButcheryService
 	recall   *service.RecallService
+	anomaly  *service.AnomalyService
 	mux      *http.ServeMux
 }
 
@@ -30,6 +31,7 @@ func NewServer(r repo.Repo) http.Handler {
 		trace:    service.NewTraceability(r),
 		butchery: service.NewButcheryService(r),
 		recall:   service.NewRecallService(r),
+		anomaly:  service.NewAnomalyService(r),
 		mux:      http.NewServeMux(),
 	}
 	s.mux.HandleFunc("GET /health", s.handleHealth)
@@ -53,6 +55,8 @@ func NewServer(r repo.Repo) http.Handler {
 	s.mux.HandleFunc("POST /sales", s.handleCreateSale)
 	s.mux.HandleFunc("POST /sync/push", s.handleSyncPush)
 	s.mux.HandleFunc("GET /sync/pull", s.handleSyncPull)
+	s.mux.HandleFunc("GET /anomalies", s.handleAnomalies)
+	s.mux.HandleFunc("POST /ocr/invoice", s.handleOCRInvoice)
 	return s
 }
 
@@ -407,4 +411,28 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		"blocked_lot_codes": blocked,
 		"products":          products,
 	})
+}
+
+func (s *Server) handleAnomalies(w http.ResponseWriter, r *http.Request) {
+	anomalies, err := s.anomaly.Detect(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, anomalies)
+}
+
+// ocrRequest is the payload for POST /ocr/invoice.
+type ocrRequest struct {
+	Text string `json:"text"`
+}
+
+func (s *Server) handleOCRInvoice(w http.ResponseWriter, r *http.Request) {
+	var req ocrRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	items := service.ParseInvoice(req.Text)
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }

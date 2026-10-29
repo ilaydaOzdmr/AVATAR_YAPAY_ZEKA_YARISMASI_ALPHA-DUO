@@ -32,6 +32,8 @@ type Repo interface {
 	CreateButcheryBatch(ctx context.Context, batch model.ButcheryBatch, items []model.ButcheryItem) (model.ButcheryBatch, error)
 	GetButcheryBatch(ctx context.Context, id int64) (model.ButcheryBatch, error)
 	ListButcheryItems(ctx context.Context, batchID int64) ([]model.ButcheryItem, error)
+	ListButcheryBatches(ctx context.Context) ([]model.ButcheryBatch, error)
+	ListProductionOrders(ctx context.Context) ([]model.ProductionOrder, error)
 	CreateRecallEvent(ctx context.Context, event model.RecallEvent) (model.RecallEvent, error)
 	GetRecallEvent(ctx context.Context, id int64) (model.RecallEvent, error)
 	CreateRecallBlock(ctx context.Context, block model.RecallBlock) (model.RecallBlock, error)
@@ -484,6 +486,60 @@ func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]mod
 			item.ProductLotID = &productLotID.Int64
 		}
 		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) ListButcheryBatches(ctx context.Context) ([]model.ButcheryBatch, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, code, animal_type, input_weight, unit_cost, total_cost, batch_date, status
+		 FROM butchery_batches ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.ButcheryBatch
+	for rows.Next() {
+		var batch model.ButcheryBatch
+		if err := rows.Scan(&batch.ID, &batch.Code, &batch.AnimalType, &batch.InputWeight,
+			&batch.UnitCost, &batch.TotalCost, &batch.BatchDate, &batch.Status); err != nil {
+			return nil, err
+		}
+		out = append(out, batch)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) ListProductionOrders(ctx context.Context) ([]model.ProductionOrder, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, code, status, started_at, finished_at, notes, service_name, service_unit_cost, service_qty
+		 FROM production_orders ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.ProductionOrder
+	for rows.Next() {
+		var po model.ProductionOrder
+		var startedAt, finishedAt, notes, serviceName sql.NullString
+		if err := rows.Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt, &notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty); err != nil {
+			return nil, err
+		}
+		if startedAt.Valid {
+			po.StartedAt = &startedAt.String
+		}
+		if finishedAt.Valid {
+			po.FinishedAt = &finishedAt.String
+		}
+		if notes.Valid {
+			po.Notes = &notes.String
+		}
+		if serviceName.Valid {
+			po.ServiceName = &serviceName.String
+		}
+		out = append(out, po)
 	}
 	return out, rows.Err()
 }
