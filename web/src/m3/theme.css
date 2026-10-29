@@ -1,0 +1,405 @@
+/* ============================================================================
+   Material Design 3 theme — AVATAR web
+   Design tokens (--md-sys-*) following the MD3 spec, plus base/component
+   styles. Light theme by default, dark via prefers-color-scheme.
+   ========================================================================== */
+
+:root {
+  /* Typography */
+  --md-sys-typescale-font: "Roboto Flex", "Roboto", system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+
+  /* Shape */
+  --md-sys-shape-corner-none: 0px;
+  --md-sys-shape-corner-extra-small: 4px;
+  --md-sys-shape-corner-small: 8px;
+  --md-sys-shape-corner-medium: 12px;
+  --md-sys-shape-corner-large: 16px;
+  --md-sys-shape-corner-extra-large: 28px;
+  --md-sys-shape-corner-full: 9999px;
+
+  /* Spacing (8dp system) */
+  --md-sys-spacing-1: 8px;
+  --md-sys-spacing-2: 16px;
+  --md-sys-spacing-3: 24px;
+  --md-sys-spacing-4: 32px;
+  --md-sys-spacing-5: 40px;
+
+  /* Light color scheme (baseline) */
+  --md-sys-color-primary: #6750a4;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #eaddff;
+  --md-sys-color-on-primary-container: #21005d;
+  --md-sys-color-secondary: #625b71;
+  --md-sys-color-on-secondary: #ffffff;
+  --md-sys-color-secondary-container: #e8def8;
+  --md-sys-color-on-secondary-container: #1d192b;
+  --md-sys-color-tertiary: #7d5260;
+  --md-sys-color-on-tertiary: #ffffff;
+  --md-sys-color-tertiary-container: #ffd8e4;
+  --md-sys-color-on-tertiary-container: #31111d;
+  --md-sys-color-error: #b3261e;
+  --md-sys-color-on-error: #ffffff;
+  --md-sys-color-error-container: #f9dedc;
+  --md-sys-color-on-error-container: #410e0b;
+  --md-sys-color-surface: #fef7ff;
+  --md-sys-color-on-surface: #1d1b20;
+  --md-sys-color-on-surface-variant: #49454f;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f7f2fa;
+  --md-sys-color-surface-container: #f3edf7;
+  --md-sys-color-surface-container-high: #ece6f0;
+  --md-sys-color-surface-container-highest: #e6e0e9;
+  --md-sys-color-surface-dim: #ded8e1;
+  --md-sys-color-surface-bright: #fef7ff;
+  --md-sys-color-outline: #79747e;
+  --md-sys-color-outline-variant: #cac4d0;
+  --md-sys-color-inverse-surface: #322f35;
+  --md-sys-color-inverse-on-surface: #f5eff7;
+  --md-sys-color-inverse-primary: #d0bcff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --md-sys-color-primary: #d0bcff;
+    --md-sys-color-on-primary: #381e72;
+    --md-sys-color-primary-container: #4f378b;
+    --md-sys-color-on-primary-container: #eaddff;
+    --md-sys-color-secondary: #ccc2dc;
+    --md-sys-color-on-secondary: #332d41;
+    --md-sys-color-secondary-container: #4a4458;
+    --md-sys-color-on-secondary-container: #e8def8;
+    --md-sys-color-tertiary: #efb8c8;
+    --md-sys-color-on-tertiary: #492532;
+    --md-sys-color-tertiary-container: #633b48;
+    --md-sys-color-on-tertiary-container: #ffd8e4;
+    --md-sys-color-error: #f2b8b5;
+    --md-sys-color-on-error: #601410;
+    --md-sys-color-error-container: #8c1d18;
+    --md-sys-color-on-error-container: #f9dedc;
+    --md-sys-color-surface: #141218;
+    --md-sys-color-on-surface: #e6e0e9;
+    --md-sys-color-on-surface-variant: #cac4d0;
+    --md-sys-color-surface-container-lowest: #0f0d13;
+    --md-sys-color-surface-container-low: #1d1b20;
+    --md-sys-color-surface-container: #211f26;
+    --md-sys-color-surface-container-high: #2b2930;
+    --md-sys-color-surface-container-highest: #36343b;
+    --md-sys-color-surface-dim: #141218;
+    --md-sys-color-surface-bright: #3b383e;
+    --md-sys-color-outline: #938f99;
+    --md-sys-color-outline-variant: #49454f;
+    --md-sys-color-inverse-surface: #e6e0e9;
+    --md-sys-color-inverse-on-surface: #322f35;
+    --md-sys-color-inverse-primary: #6750a4;
+  }
+}
+
+/* ============================== Base ==================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+body {
+  font-family: var(--md-sys-typescale-font);
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  color: var(--md-sys-color-on-surface);
+}
+
+a {
+  color: var(--md-sys-color-primary);
+}
+
+/* =========================== App shell ================================== */
+
+.m3-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--md-sys-color-surface);
+}
+
+.m3-top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-2);
+  padding: 0 var(--md-sys-spacing-2);
+  height: 64px;
+  background: var(--md-sys-color-surface-container);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.m3-top-bar__title {
+  font-size: 1.375rem;
+  font-weight: 500;
+}
+
+.m3-top-bar__subtitle {
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.m3-body {
+  display: flex;
+  flex: 1;
+}
+
+.m3-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--md-sys-spacing-1);
+  padding: var(--md-sys-spacing-2) var(--md-sys-spacing-1);
+  width: 232px;
+  background: var(--md-sys-color-surface-container-low);
+  border-right: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.m3-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--md-sys-spacing-2);
+  padding: 0 var(--md-sys-spacing-2);
+  height: 48px;
+  border: none;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.m3-nav__item:hover {
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+.m3-nav__item.active {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.m3-nav__icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  fill: currentColor;
+}
+
+.m3-content {
+  flex: 1;
+  padding: var(--md-sys-spacing-3);
+  max-width: 1040px;
+}
+
+.m3-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--md-sys-spacing-2);
+}
+
+.m3-page__title {
+  font-size: 1.75rem;
+  font-weight: 500;
+}
+
+/* ============================ Cards ===================================== */
+
+.m3-card {
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface-container-lowest);
+  padding: var(--md-sys-spacing-2);
+}
+
+.m3-card--filled {
+  background: var(--md-sys-color-surface-container);
+  border: none;
+}
+
+/* ============================ Tables ==================================== */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 12px var(--md-sys-spacing-2);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+th {
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
+}
+
+tbody tr:hover {
+  background: var(--md-sys-color-surface-container-low);
+}
+
+/* ============================ Buttons =================================== */
+
+button {
+  font-family: inherit;
+}
+
+.m3-button,
+button[type="submit"],
+.m3-nav__item {
+  border: none;
+  border-radius: var(--md-sys-shape-corner-full);
+  height: 40px;
+  padding: 0 24px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.m3-button,
+button[type="submit"] {
+  background: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+  transition: opacity 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.m3-button:hover,
+button[type="submit"]:hover {
+  opacity: 0.9;
+}
+
+/* ============================ Forms ===================================== */
+
+input {
+  height: 48px;
+  padding: 0 var(--md-sys-spacing-2);
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-small);
+  background: transparent;
+  color: var(--md-sys-color-on-surface);
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+input:focus {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: -1px;
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--md-sys-spacing-1);
+  align-items: center;
+}
+
+.stack-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--md-sys-spacing-2);
+  max-width: 560px;
+}
+
+.stack-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--md-sys-spacing-1);
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* ============================ Status ==================================== */
+
+.error {
+  color: var(--md-sys-color-error);
+}
+
+.warning {
+  color: var(--md-sys-color-error);
+  background: var(--md-sys-color-error-container);
+  padding: var(--md-sys-spacing-1) var(--md-sys-spacing-2);
+  border-radius: var(--md-sys-shape-corner-small);
+}
+
+.message {
+  color: var(--md-sys-color-on-secondary-container);
+  background: var(--md-sys-color-secondary-container);
+  padding: var(--md-sys-spacing-1) var(--md-sys-spacing-2);
+  border-radius: var(--md-sys-shape-corner-small);
+}
+
+/* ============================ Tabs ====================================== */
+
+.tabs {
+  display: flex;
+  gap: var(--md-sys-spacing-1);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.tab {
+  border: none;
+  background: transparent;
+  color: var(--md-sys-color-on-surface-variant);
+  padding: 12px var(--md-sys-spacing-2);
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab.active {
+  color: var(--md-sys-color-primary);
+  border-bottom-color: var(--md-sys-color-primary);
+}
+
+/* =========================== Responsive ================================= */
+
+@media (max-width: 719px) {
+  .m3-body {
+    flex-direction: column;
+  }
+
+  .m3-nav {
+    flex-direction: row;
+    width: 100%;
+    overflow-x: auto;
+    border-right: none;
+    border-top: 1px solid var(--md-sys-color-outline-variant);
+    position: sticky;
+    bottom: 0;
+    background: var(--md-sys-color-surface-container-low);
+  }
+
+  .m3-nav__item {
+    flex: 1;
+    justify-content: center;
+    white-space: nowrap;
+  }
+}
