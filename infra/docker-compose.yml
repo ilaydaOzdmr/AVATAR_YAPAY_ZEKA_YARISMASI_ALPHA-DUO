@@ -53,6 +53,18 @@ services:
       - backend
       - ml
 
+  web-m3:
+    build:
+      context: ../web
+      dockerfile: Dockerfile.m3
+    container_name: avatar-web-m3
+    restart: unless-stopped
+    ports:
+      - "${WEB_M3_PORT:-5174}:80"
+    depends_on:
+      - backend
+      - ml
+
   sonarqube:
     image: sonarqube:${SONARQUBE_VERSION:-lts-community}
     container_name: avatar-sonarqube

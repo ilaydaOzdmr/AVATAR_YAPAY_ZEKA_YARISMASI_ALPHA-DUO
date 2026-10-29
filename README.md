@@ -88,7 +88,7 @@ ALPHA-DUO-Vault/    Obsidian notları (karar günlüğü, görev dağılımı, g
 cp .env.example .env
 docker compose -f infra/docker-compose.yml up -d --build
 ```
-- Web: `http://localhost:5173` · API: `http://localhost:8080` · ML: `http://localhost:8000` · SonarQube: `http://localhost:9000`
+- **Web (ham / API testi): `http://localhost:5173`** · **Web (Material 3, takip): `http://localhost:5174`** · API: `http://localhost:8080` · ML: `http://localhost:8000` · SonarQube: `http://localhost:9000`
 - **Veritabanı (web arayüzü — Adminer): `http://localhost:8081`** (sunucu `mysql`, kullanıcı `avatar`, şifre `avatar`, db `avatar`)
 - MySQL şeması ve seed verisi ilk açılışta otomatik uygulanır.
 
