@@ -6,11 +6,12 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,6 +29,7 @@ import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.ui.screens.History
 import com.avatar.app.ui.screens.ProductList
 import com.avatar.app.ui.screens.Sale
+import com.avatar.app.ui.theme.AvatarAppTheme
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -35,7 +37,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val repository = SyncRepository(AppDatabase.get(this))
         setContent {
-            MaterialTheme {
+            AvatarAppTheme {
                 AvatarApp(repository)
             }
         }
@@ -44,6 +46,7 @@ class MainActivity : ComponentActivity() {
 
 private enum class Screen { Products, Sale, History }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AvatarApp(repository: SyncRepository) {
     var screen by remember { mutableStateOf(Screen.Products) }
@@ -75,6 +78,9 @@ private fun AvatarApp(repository: SyncRepository) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(title = { Text("AVATAR Sales") })
+        },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
