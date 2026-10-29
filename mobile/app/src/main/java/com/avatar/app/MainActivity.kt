@@ -27,6 +27,7 @@ import com.avatar.app.data.entities.LocalLot
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.ui.screens.History
+import com.avatar.app.ui.screens.Home
 import com.avatar.app.ui.screens.ProductList
 import com.avatar.app.ui.screens.Sale
 import com.avatar.app.ui.theme.AvatarAppTheme
@@ -44,12 +45,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Products, Sale, History }
+private enum class Screen { Home, Products, Sale, History }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AvatarApp(repository: SyncRepository) {
-    var screen by remember { mutableStateOf(Screen.Products) }
+    var screen by remember { mutableStateOf(Screen.Home) }
     var products by remember { mutableStateOf(emptyList<LocalProduct>()) }
     var lots by remember { mutableStateOf(emptyList<LocalLot>()) }
     var sales by remember { mutableStateOf(emptyList<LocalSale>()) }
@@ -79,10 +80,16 @@ private fun AvatarApp(repository: SyncRepository) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(title = { Text("AVATAR Sales") })
+            TopAppBar(title = { Text("AVATAR OPERASYON") })
         },
         bottomBar = {
             NavigationBar {
+                NavigationBarItem(
+                    selected = screen == Screen.Home,
+                    onClick = { screen = Screen.Home },
+                    icon = {},
+                    label = { Text("Ana Sayfa") },
+                )
                 NavigationBarItem(
                     selected = screen == Screen.Products,
                     onClick = { screen = Screen.Products },
@@ -110,6 +117,15 @@ private fun AvatarApp(repository: SyncRepository) {
                 .padding(innerPadding),
         ) {
             when (screen) {
+                Screen.Home -> Home(
+                    blockedLots = lots.filter { it.blocked },
+                    lastSale = sales.firstOrNull(),
+                    onQuickSale = { screen = Screen.Sale },
+                    onScan = { message = "Barkod tarama simüle edildi." },
+                    onStock = { screen = Screen.Products },
+                    onShipments = { screen = Screen.History },
+                    onViewAlerts = { screen = Screen.Products },
+                )
                 Screen.Products -> ProductList(
                     products = products,
                     lots = lots,
