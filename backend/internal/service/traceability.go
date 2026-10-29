@@ -26,12 +26,13 @@ type AffectedLot struct {
 	Markets     []MarketImpact `json:"markets"`
 }
 
-// RawMaterialSource is a material lot and its supplier behind a product lot.
+// RawMaterialSource is a material lot, its supplier and production orders behind a product lot.
 type RawMaterialSource struct {
-	LotCode      string  `json:"lot_code"`
-	SupplierCode string  `json:"supplier_code"`
-	SupplierName string  `json:"supplier_name"`
-	Qty          float64 `json:"qty"`
+	LotCode         string   `json:"lot_code"`
+	SupplierCode    string   `json:"supplier_code"`
+	SupplierName    string   `json:"supplier_name"`
+	ProductionOrders []string `json:"production_orders"`
+	Qty             float64  `json:"qty"`
 }
 
 // TraceRepository is the data access contract required for traceability.
@@ -44,6 +45,7 @@ type TraceRepository interface {
 	GetMarket(ctx context.Context, id int64) (model.Market, error)
 	GetSupplier(ctx context.Context, id int64) (model.Supplier, error)
 	GetProduct(ctx context.Context, id int64) (model.Product, error)
+	ListProductionOrderCodesByInputLot(ctx context.Context, lotID int64) ([]string, error)
 }
 
 // Traceability traces lots forward to markets and backward to raw materials.
@@ -133,6 +135,9 @@ func (t *Traceability) Backward(ctx context.Context, productLotCode string) ([]R
 				}
 				source.SupplierCode = supplier.Code
 				source.SupplierName = supplier.Name
+			}
+			if orders, err := t.repo.ListProductionOrderCodesByInputLot(ctx, lot.ID); err == nil {
+				source.ProductionOrders = orders
 			}
 			sources = append(sources, source)
 		}

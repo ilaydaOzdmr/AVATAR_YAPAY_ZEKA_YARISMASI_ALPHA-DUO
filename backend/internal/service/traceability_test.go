@@ -51,6 +51,10 @@ func (f *fakeTraceRepository) GetProduct(_ context.Context, id int64) (model.Pro
 	return f.productsByID[id], nil
 }
 
+func (f *fakeTraceRepository) ListProductionOrderCodesByInputLot(_ context.Context, lotID int64) ([]string, error) {
+	return nil, nil
+}
+
 func seededTraceRepository() *fakeTraceRepository {
 	supplierID1 := int64(1)
 	supplierID2 := int64(2)
@@ -166,7 +170,8 @@ func TestBackwardSUC2026045(t *testing.T) {
 		{LotCode: "BAR-2026-001", SupplierCode: "SUP-003", SupplierName: "Bağırsak Tedarikçisi", Qty: 5},
 	}
 	for _, wantSource := range want {
-		if got := byLotCode[wantSource.LotCode]; got != wantSource {
+		got := byLotCode[wantSource.LotCode]
+		if got.SupplierCode != wantSource.SupplierCode || got.SupplierName != wantSource.SupplierName || got.Qty != wantSource.Qty {
 			t.Fatalf("source %q = %+v, want %+v", wantSource.LotCode, got, wantSource)
 		}
 	}

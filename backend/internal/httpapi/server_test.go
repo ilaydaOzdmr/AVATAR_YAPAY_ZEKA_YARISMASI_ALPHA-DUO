@@ -54,6 +54,9 @@ func (f *fakeRepo) GetProductionOrder(_ context.Context, _ int64) (model.Product
 func (f *fakeRepo) ListProductionOrderInputs(_ context.Context, _ int64) ([]model.ProductionOrderInput, error) {
 	return nil, nil
 }
+func (f *fakeRepo) ListProductionOrderCodesByInputLot(_ context.Context, _ int64) ([]string, error) {
+	return nil, nil
+}
 func (f *fakeRepo) ListProductionOrderOutputs(_ context.Context, _ int64) ([]model.ProductionOrderOutput, error) {
 	return nil, nil
 }

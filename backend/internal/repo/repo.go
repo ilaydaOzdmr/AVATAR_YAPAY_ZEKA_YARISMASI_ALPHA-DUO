@@ -24,6 +24,7 @@ type Repo interface {
 	CreateProductionOrder(ctx context.Context, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) (model.ProductionOrder, error)
 	GetProductionOrder(ctx context.Context, id int64) (model.ProductionOrder, error)
 	ListProductionOrderInputs(ctx context.Context, poID int64) ([]model.ProductionOrderInput, error)
+	ListProductionOrderCodesByInputLot(ctx context.Context, lotID int64) ([]string, error)
 	ListProductionOrderOutputs(ctx context.Context, poID int64) ([]model.ProductionOrderOutput, error)
 	GetLot(ctx context.Context, id int64) (model.Lot, error)
 	GetProduct(ctx context.Context, id int64) (model.Product, error)
@@ -362,6 +363,27 @@ func (r *mysqlRepo) ListProductionOrderInputs(ctx context.Context, poID int64) (
 	return out, rows.Err()
 }
 
+func (r *mysqlRepo) ListProductionOrderCodesByInputLot(ctx context.Context, lotID int64) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT DISTINCT po.code FROM production_order_inputs poi
+		 JOIN production_orders po ON po.id = poi.production_order_id
+		 WHERE poi.material_lot_id = ? ORDER BY po.code`, lotID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		out = append(out, code)
+	}
+	return out, rows.Err()
+}
+
 func (r *mysqlRepo) ListProductionOrderOutputs(ctx context.Context, poID int64) ([]model.ProductionOrderOutput, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, production_order_id, product_lot_id, qty FROM production_order_outputs WHERE production_order_id = ? ORDER BY id`, poID)
@@ -648,9 +670,22 @@ func (r *mysqlRepo) CreateSale(ctx context.Context, sale model.Sale, lines []mod
 	}
 
 	for _, line := range lines {
+		// Satışa karşılık stok hareketi (çıkış) oluştur ve satış satırına bağla.
+		movement, err := tx.ExecContext(ctx,
+			`INSERT INTO stock_movements (lot_id, movement_type, qty, unit_cost, total_cost, ref_type, ref_id, occurred_at)
+			 VALUES (?, 'sale', ?, ?, ?, 'sale', ?, ?)`,
+			line.LotID, -line.Qty, line.UnitPrice, line.TotalPrice, sale.ID, sale.SoldAt)
+		if err != nil {
+			return model.Sale{}, err
+		}
+		movementID, err := movement.LastInsertId()
+		if err != nil {
+			return model.Sale{}, err
+		}
+
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO sale_lines (sale_id, lot_id, qty, unit_price, total_price, stock_movement_id) VALUES (?, ?, ?, ?, ?, ?)`,
-			sale.ID, line.LotID, line.Qty, line.UnitPrice, line.TotalPrice, nullInt64(line.StockMovementID)); err != nil {
+			sale.ID, line.LotID, line.Qty, line.UnitPrice, line.TotalPrice, movementID); err != nil {
 			return model.Sale{}, err
 		}
 	}
