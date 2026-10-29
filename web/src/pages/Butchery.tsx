@@ -1,5 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { get } from "../api";
+
+interface Product {
+  id: number;
+  name: string;
+}
 
 interface ButcheryItemCost {
   product_id: number;
@@ -31,6 +36,17 @@ export default function Butchery() {
   const [batchID, setBatchID] = useState("");
   const [result, setResult] = useState<ButcheryResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [productNames, setProductNames] = useState<Map<number, string>>(new Map());
+
+  useEffect(() => {
+    get<Product[]>("/products")
+      .then((products) => {
+        setProductNames(new Map(products.map((product) => [product.id, product.name])));
+      })
+      .catch(() => {
+        // Product names are a display convenience; keep the raw ID on failure.
+      });
+  }, []);
 
   async function loadBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -48,6 +64,11 @@ export default function Butchery() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  function productLabel(productId: number): string {
+    const name = productNames.get(productId);
+    return name ? `${name} (#${productId})` : `#${productId}`;
   }
 
   return (
@@ -79,7 +100,7 @@ export default function Butchery() {
           <table>
             <thead>
               <tr>
-                <th>Product ID</th>
+                <th>Product</th>
                 <th>Qty</th>
                 <th>Weight</th>
                 <th>Waste</th>
@@ -89,7 +110,7 @@ export default function Butchery() {
             <tbody>
               {result.items.map((item, index) => (
                 <tr key={`${item.product_id}-${index}`}>
-                  <td>{item.product_id}</td>
+                  <td>{productLabel(item.product_id)}</td>
                   <td>{item.quantity}</td>
                   <td>{item.weight}</td>
                   <td>{item.is_waste ? "Yes" : "No"}</td>
