@@ -37,6 +37,7 @@ interface ButcheryResult {
 interface ItemDraft {
   product_id: string;
   weight: string;
+  quantity: string;
   is_waste: boolean;
 }
 
@@ -52,6 +53,8 @@ export default function Butchery() {
   const [animalType, setAnimalType] = useState("kuzu");
   const [inputWeight, setInputWeight] = useState("");
   const [unitCost, setUnitCost] = useState("");
+  const [batchDate, setBatchDate] = useState(new Date().toISOString().slice(0, 10));
+  const [totalCost, setTotalCost] = useState("");
   const [items, setItems] = useState<ItemDraft[]>([]);
 
   const load = useCallback(() => {
@@ -86,6 +89,7 @@ export default function Butchery() {
       .map((item) => ({
         product_id: Number.parseInt(item.product_id, 10),
         weight: Number.parseFloat(item.weight) || 0,
+        quantity: Number.parseInt(item.quantity, 10) || 0,
         is_waste: item.is_waste,
       }))
       .filter((item) => !Number.isNaN(item.product_id));
@@ -96,8 +100,8 @@ export default function Butchery() {
           animal_type: animalType,
           input_weight: weight,
           unit_cost: cost,
-          total_cost: weight * cost,
-          batch_date: new Date().toISOString().slice(0, 10),
+          total_cost: Number.parseFloat(totalCost) || weight * cost,
+          batch_date: batchDate,
           status: "draft",
         },
         items: parsedItems,
@@ -105,6 +109,7 @@ export default function Butchery() {
       setCode("");
       setInputWeight("");
       setUnitCost("");
+      setTotalCost("");
       setItems([]);
       setShowForm(false);
       setFeedback("Parçalama kaydı oluşturuldu.");
@@ -135,6 +140,8 @@ export default function Butchery() {
                 <input value={animalType} onChange={(e) => setAnimalType(e.target.value)} placeholder="Hayvan türü" style={{ width: 120 }} />
                 <input value={inputWeight} onChange={(e) => setInputWeight(e.target.value)} placeholder="Giriş ağırlığı" style={{ width: 120 }} />
                 <input value={unitCost} onChange={(e) => setUnitCost(e.target.value)} placeholder="Birim maliyet" style={{ width: 120 }} />
+                <input value={batchDate} onChange={(e) => setBatchDate(e.target.value)} type="date" placeholder="Tarih" style={{ width: 150 }} />
+                <input value={totalCost} onChange={(e) => setTotalCost(e.target.value)} placeholder="Toplam maliyet (ops.)" style={{ width: 150 }} />
               </div>
               <div>
                 {items.map((item, index) => (
@@ -150,7 +157,13 @@ export default function Butchery() {
                       value={item.weight}
                       onChange={(e) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, weight: e.target.value } : it)))}
                       placeholder="Ağırlık"
-                      style={{ width: 100 }}
+                      style={{ width: 90 }}
+                    />
+                    <input
+                      value={item.quantity}
+                      onChange={(e) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, quantity: e.target.value } : it)))}
+                      placeholder="Adet"
+                      style={{ width: 70 }}
                     />
                     <label style={{ flexDirection: "row", alignItems: "center", gap: 6, fontSize: 12 }}>
                       <input
@@ -164,7 +177,7 @@ export default function Butchery() {
                     <button className="btn btn-secondary" type="button" onClick={() => setItems((prev) => prev.filter((_, i) => i !== index))}>✕</button>
                   </div>
                 ))}
-                <button className="btn btn-secondary" type="button" onClick={() => setItems((prev) => [...prev, { product_id: "", weight: "", is_waste: false }])}>
+                <button className="btn btn-secondary" type="button" onClick={() => setItems((prev) => [...prev, { product_id: "", weight: "", quantity: "", is_waste: false }])}>
                   ＋ Parça ekle
                 </button>
               </div>
