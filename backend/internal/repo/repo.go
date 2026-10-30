@@ -200,18 +200,20 @@ func (r *mysqlRepo) ListLotLinksByChild(ctx context.Context, childID int64) ([]m
 }
 
 func (r *mysqlRepo) AddStockMovement(ctx context.Context, m model.StockMovement) (model.StockMovement, error) {
-	if m.OccurredAt == "" {
-		m.OccurredAt = time.Now().Format("2006-01-02 15:04:05")
-	}
-	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO stock_movements (lot_id, movement_type, qty, unit_cost, total_cost, ref_type, ref_id, occurred_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		m.LotID, m.MovementType, m.Qty, m.UnitCost, m.TotalCost, nullString(m.RefType), nullInt64(m.RefID), m.OccurredAt)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.StockMovement{}, err
 	}
-	m.ID, err = res.LastInsertId()
-	return m, err
+	defer tx.Rollback()
+
+	moved, err := applyMovementTx(ctx, tx, m)
+	if err != nil {
+		return model.StockMovement{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return model.StockMovement{}, err
+	}
+	return moved, nil
 }
 
 func (r *mysqlRepo) ListStockMovements(ctx context.Context, lotID int64) ([]model.StockMovement, error) {
@@ -672,22 +674,32 @@ func (r *mysqlRepo) CreateSale(ctx context.Context, sale model.Sale, lines []mod
 	}
 
 	for _, line := range lines {
-		// Satışa karşılık stok hareketi (çıkış) oluştur ve satış satırına bağla.
-		movement, err := tx.ExecContext(ctx,
-			`INSERT INTO stock_movements (lot_id, movement_type, qty, unit_cost, total_cost, ref_type, ref_id, occurred_at)
-			 VALUES (?, 'sale', ?, ?, ?, 'sale', ?, ?)`,
-			line.LotID, -line.Qty, line.UnitPrice, line.TotalPrice, sale.ID, sale.SoldAt)
-		if err != nil {
+		var blocked bool
+		if err := tx.QueryRowContext(ctx,
+			`SELECT EXISTS(SELECT 1 FROM recall_blocks WHERE lot_id = ?)`, line.LotID).Scan(&blocked); err != nil {
 			return model.Sale{}, err
 		}
-		movementID, err := movement.LastInsertId()
+		if blocked {
+			return model.Sale{}, ErrLotBlocked
+		}
+
+		// Satış fiyatı line.unit_price'ta kalır; stok hareketi lot maliyetini kullanır.
+		refType := "sale"
+		movement, err := applyMovementTx(ctx, tx, model.StockMovement{
+			LotID:        line.LotID,
+			MovementType: "sale",
+			Qty:          -line.Qty,
+			RefType:      &refType,
+			RefID:        &sale.ID,
+			OccurredAt:   sale.SoldAt,
+		})
 		if err != nil {
 			return model.Sale{}, err
 		}
 
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO sale_lines (sale_id, lot_id, qty, unit_price, total_price, stock_movement_id) VALUES (?, ?, ?, ?, ?, ?)`,
-			sale.ID, line.LotID, line.Qty, line.UnitPrice, line.TotalPrice, movementID); err != nil {
+			sale.ID, line.LotID, line.Qty, line.UnitPrice, line.TotalPrice, movement.ID); err != nil {
 			return model.Sale{}, err
 		}
 	}

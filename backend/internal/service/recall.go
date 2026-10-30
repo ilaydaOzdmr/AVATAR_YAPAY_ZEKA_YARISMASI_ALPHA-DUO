@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -11,7 +10,7 @@ import (
 )
 
 // ErrLotBlocked is returned when a sale targets a lot blocked by a recall.
-var ErrLotBlocked = errors.New("lot is blocked by a recall")
+var ErrLotBlocked = repo.ErrLotBlocked
 
 // RecallResult is a recall event plus its affected product lots (with markets).
 type RecallResult struct {
