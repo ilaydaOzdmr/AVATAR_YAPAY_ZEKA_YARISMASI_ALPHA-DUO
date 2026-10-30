@@ -55,6 +55,8 @@ func NewServer(r repo.Repo) http.Handler {
 	s.mux.HandleFunc("POST /recalls", s.handleCreateRecall)
 	s.mux.HandleFunc("GET /recalls/{id}", s.handleGetRecall)
 	s.mux.HandleFunc("GET /markets", s.handleListMarkets)
+	s.mux.HandleFunc("POST /redistributions", s.handleCreateRedistribution)
+	s.mux.HandleFunc("GET /redistributions", s.handleListRedistributions)
 	s.mux.HandleFunc("POST /sales", s.handleCreateSale)
 	s.mux.HandleFunc("GET /sales", s.handleListSales)
 	s.mux.HandleFunc("POST /sync/push", s.handleSyncPush)
@@ -475,4 +477,37 @@ func (s *Server) handleListSales(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, sales)
+}
+
+// redistributionRequest is the payload for POST /redistributions.
+type redistributionRequest struct {
+	model.Redistribution
+}
+
+func (s *Server) handleCreateRedistribution(w http.ResponseWriter, r *http.Request) {
+	var req redistributionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	created, err := s.repo.CreateRedistribution(r.Context(), req.Redistribution)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleListRedistributions(w http.ResponseWriter, r *http.Request) {
+	lotID, err := strconv.ParseInt(r.URL.Query().Get("lot_id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("lot_id query parameter is required"))
+		return
+	}
+	redistributions, err := s.repo.ListRedistributions(r.Context(), lotID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, redistributions)
 }

@@ -114,6 +114,12 @@ func (f *fakeRepo) ListSales(_ context.Context) ([]model.Sale, error) {
 func (f *fakeRepo) ListMarkets(_ context.Context) ([]model.Market, error) {
 	return nil, nil
 }
+func (f *fakeRepo) CreateRedistribution(_ context.Context, red model.Redistribution) (model.Redistribution, error) {
+	return red, nil
+}
+func (f *fakeRepo) ListRedistributions(_ context.Context, _ int64) ([]model.Redistribution, error) {
+	return nil, nil
+}
 
 func TestHealth(t *testing.T) {
 	h := NewServer(&fakeRepo{})

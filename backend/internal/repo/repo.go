@@ -44,6 +44,8 @@ type Repo interface {
 	ListBlockedLotCodes(ctx context.Context) ([]string, error)
 	CreateSale(ctx context.Context, sale model.Sale, lines []model.SaleLine) (model.Sale, error)
 	ListSales(ctx context.Context) ([]model.Sale, error)
+	CreateRedistribution(ctx context.Context, r model.Redistribution) (model.Redistribution, error)
+	ListRedistributions(ctx context.Context, lotID int64) ([]model.Redistribution, error)
 }
 
 // NewMySQLRepo returns a MySQL-backed implementation of Repo.
@@ -734,6 +736,40 @@ func (r *mysqlRepo) ListMarkets(ctx context.Context) ([]model.Market, error) {
 			return nil, err
 		}
 		out = append(out, market)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) CreateRedistribution(ctx context.Context, red model.Redistribution) (model.Redistribution, error) {
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO market_redistributions (market_id, lot_id, sub_buyer, contact, qty) VALUES (?, ?, ?, ?, ?)`,
+		red.MarketID, red.LotID, red.SubBuyer, nullString(red.Contact), red.Qty)
+	if err != nil {
+		return model.Redistribution{}, err
+	}
+	red.ID, err = res.LastInsertId()
+	return red, err
+}
+
+func (r *mysqlRepo) ListRedistributions(ctx context.Context, lotID int64) ([]model.Redistribution, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, market_id, lot_id, sub_buyer, contact, qty FROM market_redistributions WHERE lot_id = ? ORDER BY id`, lotID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.Redistribution
+	for rows.Next() {
+		var red model.Redistribution
+		var contact sql.NullString
+		if err := rows.Scan(&red.ID, &red.MarketID, &red.LotID, &red.SubBuyer, &contact, &red.Qty); err != nil {
+			return nil, err
+		}
+		if contact.Valid {
+			red.Contact = &contact.String
+		}
+		out = append(out, red)
 	}
 	return out, rows.Err()
 }

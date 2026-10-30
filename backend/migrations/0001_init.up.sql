@@ -179,6 +179,19 @@ CREATE TABLE recall_blocks (
   CONSTRAINT fk_rb_lot FOREIGN KEY (lot_id) REFERENCES lots(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE market_redistributions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  market_id BIGINT NOT NULL,
+  lot_id BIGINT NOT NULL,
+  sub_buyer VARCHAR(255) NOT NULL,
+  contact VARCHAR(255) NULL,
+  qty DECIMAL(12,3) NOT NULL,
+  CONSTRAINT fk_mr_market FOREIGN KEY (market_id) REFERENCES markets(id),
+  CONSTRAINT fk_mr_lot FOREIGN KEY (lot_id) REFERENCES lots(id),
+  INDEX idx_mr_market (market_id),
+  INDEX idx_mr_lot (lot_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE sync_outbox (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   client_id VARCHAR(64) NOT NULL,
