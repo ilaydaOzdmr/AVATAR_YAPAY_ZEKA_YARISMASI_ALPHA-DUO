@@ -12,12 +12,16 @@ bir prototip.
 | # | Görev | Durum |
 |---|-------|-------|
 | 1 | Sözleşmeli üretim + gerçek maliyet (**EKP**), VKP, brüt kâr, marj | ✅ |
-| 2 | Bütün kuzu **parçalama** + maliyet dağıtımı + tutarsızlık tespiti | ✅ |
+| 2 | Bütün kuzu **parçalama** + maliyet dağıtımı (**miktar/değer ağırlıklı**) + tutarsızlık tespiti | ✅ |
 | 3 | **Lot izlenebilirliği** (ileri/geri) + **geri çağırma** + satış engeli | ✅ |
 | — | İki zorunlu **KI modeli** (üretim verimi/EKP, parçalama verimi) | ✅ |
 | — | **Android** satış + offline SQLite + senkronizasyon | ✅ |
 | — | **React web** yönetim paneli (Food Intelligence, 10+ ekran, canlı veri, rapor indirme) | ✅ |
 | — | Opsiyonel: fatura **OCR** + **anomali uyarıları** | ✅ |
+
+Lot hareket tipleri (giriş/sevkiyat + **depo transferi, iade, yeniden işleme**) ve
+**ikinci kademe dağıtım** (market → alt alıcı; yalnızca kaydedilmişse gösterilir)
+de destekleniyor.
 
 ### Demo senaryosu (değerlendirme odağı)
 `ET-2026-001` (100 kg et) → üretim emri `URT-2026-045` → `SUC-2026-045` (85 paket sucuk)
@@ -131,6 +135,7 @@ cd web && npm run build          # web
 | POST | `/recalls`, GET `/recalls/{id}` | geri çağırma + bloke |
 | GET/POST | `/sales` | satış listesi/oluşturma (bloklu lot → 409) |
 | GET | `/markets` | market listesi |
+| GET/POST | `/redistributions` | ikinci kademe dağıtım (market → alt alıcı) |
 | POST | `/sync/push`, GET `/sync/pull` | mobil senkronizasyon |
 | GET | `/anomalies` | kural tabanlı anomali uyarıları |
 | POST | `/ocr/invoice` | fatura/irsaliye metninden kalem çıkarma |
