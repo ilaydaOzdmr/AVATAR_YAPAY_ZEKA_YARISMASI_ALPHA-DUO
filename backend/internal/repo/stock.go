@@ -19,6 +19,17 @@ var ErrLotBlocked = errors.New("lot is blocked by a recall")
 // ErrInvalidStockMovement is returned for a zero-quantity movement.
 var ErrInvalidStockMovement = errors.New("stock movement quantity cannot be zero")
 
+// ErrInvalidOrder is returned when a production or butchery document is incomplete.
+var ErrInvalidOrder = errors.New("invalid order: inputs and outputs are required")
+
+func roundMoney(v float64) float64 {
+	return math.Round(v*100) / 100
+}
+
+func roundQty(v float64) float64 {
+	return math.Round(v*1000) / 1000
+}
+
 // applyMovementTx inserts a stock movement and updates lots.qty in the same
 // transaction. Positive qty is inflow, negative qty is outflow. When unitCost
 // is zero, the lot's current unit cost is used.

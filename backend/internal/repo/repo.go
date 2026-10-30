@@ -282,6 +282,26 @@ func nullString(v *string) any {
 }
 
 func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) (model.ProductionOrder, error) {
+	if po.Status == "" {
+		po.Status = "draft"
+	}
+	if po.Status == "completed" && (len(inputs) == 0 || len(outputs) == 0) {
+		return model.ProductionOrder{}, ErrInvalidOrder
+	}
+	if (len(inputs) == 0) != (len(outputs) == 0) {
+		return model.ProductionOrder{}, ErrInvalidOrder
+	}
+	for _, input := range inputs {
+		if input.Qty <= 0 {
+			return model.ProductionOrder{}, ErrInvalidOrder
+		}
+	}
+	for _, output := range outputs {
+		if output.Qty <= 0 {
+			return model.ProductionOrder{}, ErrInvalidOrder
+		}
+	}
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.ProductionOrder{}, err
@@ -301,7 +321,21 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 		return model.ProductionOrder{}, err
 	}
 
+	occurredAt := time.Now().Format("2006-01-02 15:04:05")
+	if po.FinishedAt != nil && *po.FinishedAt != "" {
+		occurredAt = *po.FinishedAt
+	}
+	refType := "production_order"
+
+	var inputCost float64
 	for _, input := range inputs {
+		var lotUnitCost float64
+		if err := tx.QueryRowContext(ctx,
+			`SELECT unit_cost FROM lots WHERE id = ? FOR UPDATE`, input.MaterialLotID).
+			Scan(&lotUnitCost); err != nil {
+			return model.ProductionOrder{}, err
+		}
+		inputCost += input.Qty * lotUnitCost
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO production_order_inputs (production_order_id, material_lot_id, qty) VALUES (?, ?, ?)`,
 			po.ID, input.MaterialLotID, input.Qty); err != nil {
@@ -309,11 +343,66 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 		}
 	}
 
+	var totalOutputQty float64
 	for _, output := range outputs {
+		totalOutputQty += output.Qty
+	}
+	outputUnitCost := 0.0
+	if totalOutputQty > 0 {
+		outputUnitCost = roundMoney((inputCost + po.ServiceUnitCost*po.ServiceQty) / totalOutputQty)
+	}
+
+	for _, output := range outputs {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE lots SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+			outputUnitCost, output.ProductLotID); err != nil {
+			return model.ProductionOrder{}, err
+		}
+		if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+			LotID:        output.ProductLotID,
+			MovementType: "production_output",
+			Qty:          output.Qty,
+			UnitCost:     outputUnitCost,
+			RefType:      &refType,
+			RefID:        &po.ID,
+			OccurredAt:   occurredAt,
+		}); err != nil {
+			return model.ProductionOrder{}, err
+		}
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO production_order_outputs (production_order_id, product_lot_id, qty) VALUES (?, ?, ?)`,
 			po.ID, output.ProductLotID, output.Qty); err != nil {
 			return model.ProductionOrder{}, err
+		}
+	}
+
+	for _, input := range inputs {
+		if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+			LotID:        input.MaterialLotID,
+			MovementType: "production_consume",
+			Qty:          -input.Qty,
+			RefType:      &refType,
+			RefID:        &po.ID,
+			OccurredAt:   occurredAt,
+		}); err != nil {
+			return model.ProductionOrder{}, err
+		}
+
+		remaining := input.Qty
+		for i, output := range outputs {
+			linkQty := roundQty(input.Qty * output.Qty / totalOutputQty)
+			if i == len(outputs)-1 {
+				linkQty = roundQty(remaining)
+			}
+			if linkQty < 0 {
+				linkQty = 0
+			}
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO lot_links (parent_lot_id, child_lot_id, qty, link_type) VALUES (?, ?, ?, 'production')`,
+				input.MaterialLotID, output.ProductLotID, linkQty); err != nil {
+				return model.ProductionOrder{}, err
+			}
+			remaining -= linkQty
 		}
 	}
 
