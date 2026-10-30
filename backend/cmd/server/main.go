@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
@@ -18,6 +19,10 @@ func main() {
 		log.Fatalf("open database: %v", err)
 	}
 	defer database.Close()
+
+	if err := db.EnsureSchema(context.Background(), database); err != nil {
+		log.Fatalf("ensure schema: %v", err)
+	}
 
 	handler := httpapi.NewServer(repo.NewMySQLRepo(database))
 
