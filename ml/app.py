@@ -1,74 +1,84 @@
-import json
+"""FastAPI service.
+
+Models are loaded from versioned artifacts at process start. Missing artifacts
+return HTTP 503 instead of silently training or returning random values.
+"""
+
+from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 
-from ml.model import predict
-from ml.train import (
-    MATERIAL_UNIT_COST,
-    PRODUCT_CODES,
-    REPORT_PATH,
-    SERVICE_PER_PACKAGE,
-    encode_animal_type,
-    train_models,
+from ml.src.schemas import (
+    ButcheryV2Request,
+    HealthResponse,
+    LegacyButcheryRequest,
+    LegacyYieldRequest,
+    ModelInfo,
+    PredictionResponse,
+    YieldV2Request,
 )
+from ml.src.service import MLService, ModelUnavailableError
 
-
-app = FastAPI(title="AVATAR ML Service")
+app = FastAPI(title="AVATAR ML Service", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-MODELS = train_models()
-REPORT = json.loads(REPORT_PATH.read_text(encoding="utf-8"))
+
+SERVICE = MLService()
 
 
-class YieldRequest(BaseModel):
-    raw_material_kg: float
+@app.exception_handler(ModelUnavailableError)
+def model_unavailable_handler(_request, exc: ModelUnavailableError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={"error": str(exc), "model_status": "unavailable"},
+    )
 
 
-class ButcheryRequest(BaseModel):
-    animal_type: str
-    input_weight: float
+@app.exception_handler(ValueError)
+def value_error_handler(_request, exc: ValueError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"error": str(exc)})
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+@app.get("/health", response_model=HealthResponse)
+def health() -> dict:
+    return SERVICE.health()
 
 
-@app.post("/predict/yield")
-def predict_yield(payload: YieldRequest):
-    features = [[payload.raw_material_kg]]
-    predicted_qty = float(predict(MODELS["yield"], features)[0])
-    service_cost = predicted_qty * SERVICE_PER_PACKAGE
-    total_cost = payload.raw_material_kg * MATERIAL_UNIT_COST + service_cost
-    predicted_unit_cost = total_cost / predicted_qty if predicted_qty > 0 else 0.0
-    return {
-        "predicted_qty": round(predicted_qty, 3),
-        "predicted_unit_cost": round(predicted_unit_cost, 3),
-    }
-
-
-@app.post("/predict/butchery")
-def predict_butchery(payload: ButcheryRequest):
-    try:
-        animal_type_code = encode_animal_type(payload.animal_type)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    features = [[animal_type_code, payload.input_weight]]
-    weights = predict(MODELS["butchery"], features)[0]
-    parts = [
-        {"product_code": product_code, "weight": round(float(weight), 3)}
-        for product_code, weight in zip(PRODUCT_CODES, weights)
-    ]
-    return {"parts": parts}
+@app.get("/models", response_model=list[ModelInfo])
+def models() -> list[dict]:
+    return SERVICE.models()
 
 
 @app.get("/report")
-def get_report():
-    return REPORT
+def report() -> dict:
+    try:
+        return SERVICE.report()
+    except ModelUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/predict/v2/yield", response_model=PredictionResponse)
+def predict_yield_v2(payload: YieldV2Request) -> dict:
+    return SERVICE.predict_yield_v2(payload)
+
+
+@app.post("/predict/v2/butchery", response_model=PredictionResponse)
+def predict_butchery_v2(payload: ButcheryV2Request) -> dict:
+    return SERVICE.predict_butchery_v2(payload)
+
+
+# --- v1 compatibility -------------------------------------------------------
+@app.post("/predict/yield")
+def predict_yield(payload: LegacyYieldRequest) -> dict:
+    return SERVICE.predict_yield_legacy(payload)
+
+
+@app.post("/predict/butchery")
+def predict_butchery(payload: LegacyButcheryRequest) -> dict:
+    return SERVICE.predict_butchery_legacy(payload)
