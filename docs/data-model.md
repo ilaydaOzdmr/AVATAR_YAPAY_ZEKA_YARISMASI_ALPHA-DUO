@@ -21,6 +21,7 @@ MySQL 8, InnoDB, utf8mb4. Para `DECIMAL(12,2)`, miktar/ağırlık `DECIMAL(12,3)
 | `stock_movements` | Lot bazlı stok hareketleri (giriş, sevk, satış, fire) |
 | `sales` / `sale_lines` | Satışlar + lot bazlı satırlar |
 | `recall_events` / `recall_blocks` | Geri çağırma + bloke lotlar |
+| `market_redistributions` | İkinci kademe dağıtım (market → alt alıcı) |
 | `sync_outbox` | Mobil senkronizasyon kuyruğu |
 
 ## Anahtarlar ve ilişkiler
@@ -30,6 +31,12 @@ MySQL 8, InnoDB, utf8mb4. Para `DECIMAL(12,2)`, miktar/ağırlık `DECIMAL(12,3)
 - `lot_links(parent_lot_id, child_lot_id, qty)` izlenebilirliğin omurgasıdır.
 - `stock_movements.qty` **işaretlidir**: giriş pozitif, çıkış (sevk/satış) negatif.
 - `sale_lines.lot_id` satışın hangi lottan yapıldığını, `stock_movement_id` ilgili stok hareketini bağlar.
+- `market_redistributions(market_id, lot_id, sub_buyer, contact, qty)` ikinci kademe
+  dağıtımı taşır; izlenebilirlik/geri çağırmada **yalnızca kayıt varsa** gösterilir.
+
+## Hareket tipleri
+`stock_movements.movement_type`: `inbound` (giriş), `shipment` (sevk/satış),
+`transfer` (depo transferi), `return` (iade), `rework` (yeniden işleme).
 
 ## Örnek zincir (ET-2026-001 senaryosu)
 ```

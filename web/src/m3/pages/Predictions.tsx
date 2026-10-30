@@ -20,6 +20,7 @@ interface CostSummary {
 
 interface ForecastRow {
   code: string;
+  predicted: number;
   expected: number;
   actual: number;
   diff: number;
@@ -61,12 +62,26 @@ export default function Predictions() {
       const rows = await Promise.all(
         orders.map(async (order) => {
           try {
-            const summary = await get<CostSummary>(`/production-orders/${order.id}`);
+            const [summary, inputs] = await Promise.all([
+              get<CostSummary>(`/production-orders/${order.id}`),
+              get<{ qty: number }[]>(`/production-orders/${order.id}/inputs`).catch(() => []),
+            ]);
+            const rawKg = inputs.reduce((sum, input) => sum + input.qty, 0);
+            let predicted = 0;
+            if (rawKg > 0) {
+              try {
+                const ml = await mlPost<YieldResult>("/predict/yield", { raw_material_kg: rawKg });
+                predicted = ml.predicted_qty;
+              } catch {
+                predicted = 0;
+              }
+            }
             return {
               code: order.code,
+              predicted,
               expected: summary.expected_qty,
               actual: summary.finished_qty,
-              diff: summary.quantity_diff,
+              diff: predicted - summary.finished_qty,
             };
           } catch {
             return null;
@@ -216,23 +231,25 @@ export default function Predictions() {
         <div className="panel" style={{ marginTop: 16 }}>
           <div className="panel-head">
             <div>
-              <h2>Tahmin vs Gerçek sapma</h2>
-              <p>Üretim emirleri: beklenen (tahmin) ve gerçekleşen miktar karşılaştırması</p>
+              <h2>Model tahmini vs Gerçek</h2>
+              <p>Üretim emirleri: ML model tahmini, plan ve gerçekleşen miktar karşılaştırması</p>
             </div>
           </div>
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Üretim emri</th><th>Beklenen (tahmin)</th><th>Gerçekleşen</th><th>Sapma</th><th>%</th></tr>
+                <tr><th>Üretim emri</th><th>Model tahmini</th><th>Plan</th><th>Gerçekleşen</th><th>Sapma</th></tr>
               </thead>
               <tbody>
                 {forecast.map((row) => (
                   <tr key={row.code}>
                     <td className="id">{row.code}</td>
+                    <td>{row.predicted ? row.predicted.toFixed(1) : "—"}</td>
                     <td>{row.expected}</td>
                     <td>{row.actual}</td>
-                    <td style={{ color: row.diff > 0 ? "var(--amber)" : "var(--green-3)" }}>{row.diff}</td>
-                    <td>{row.expected > 0 ? `${((row.diff / row.expected) * 100).toFixed(1)}%` : "—"}</td>
+                    <td style={{ color: row.predicted > 0 && Math.abs(row.diff) > 0.5 ? "var(--amber)" : "var(--green-3)" }}>
+                      {row.predicted ? `${row.diff >= 0 ? "+" : ""}${row.diff.toFixed(1)}` : "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -24,6 +24,16 @@ interface CostSummary {
   margin: number;
 }
 
+interface Lot {
+  id: number;
+  code: string;
+}
+
+interface OrderLine {
+  lot_id: string;
+  qty: string;
+}
+
 export default function Production() {
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -35,9 +45,15 @@ export default function Production() {
   const [serviceName, setServiceName] = useState("");
   const [serviceUnitCost, setServiceUnitCost] = useState("");
   const [serviceQty, setServiceQty] = useState("");
+  const [materialLots, setMaterialLots] = useState<Lot[]>([]);
+  const [productLots, setProductLots] = useState<Lot[]>([]);
+  const [inputs, setInputs] = useState<OrderLine[]>([]);
+  const [outputs, setOutputs] = useState<OrderLine[]>([]);
 
   const load = useCallback(() => {
     get<ProductionOrder[]>("/production-orders").then(setOrders).catch(() => {});
+    get<Lot[]>("/lots?item_type=material").then(setMaterialLots).catch(() => {});
+    get<Lot[]>("/lots?item_type=product").then(setProductLots).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -62,6 +78,12 @@ export default function Production() {
   async function createOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFeedback(null);
+    const parsedInputs = inputs
+      .map((line) => ({ material_lot_id: Number.parseInt(line.lot_id, 10), qty: Number.parseFloat(line.qty) || 0 }))
+      .filter((line) => !Number.isNaN(line.material_lot_id));
+    const parsedOutputs = outputs
+      .map((line) => ({ product_lot_id: Number.parseInt(line.lot_id, 10), qty: Number.parseFloat(line.qty) || 0 }))
+      .filter((line) => !Number.isNaN(line.product_lot_id));
     try {
       await post("/production-orders", {
         code,
@@ -69,13 +91,15 @@ export default function Production() {
         service_name: serviceName,
         service_unit_cost: Number.parseFloat(serviceUnitCost) || 0,
         service_qty: Number.parseFloat(serviceQty) || 0,
-        inputs: [],
-        outputs: [],
+        inputs: parsedInputs,
+        outputs: parsedOutputs,
       });
       setCode("");
       setServiceName("");
       setServiceUnitCost("");
       setServiceQty("");
+      setInputs([]);
+      setOutputs([]);
       setShowForm(false);
       setFeedback("Üretim emri oluşturuldu.");
       load();
@@ -99,11 +123,41 @@ export default function Production() {
         <div className="panel" style={{ marginBottom: 16 }}>
           <div className="panel-head"><h2>Yeni üretim emri</h2></div>
           <div style={{ padding: 20 }}>
-            <form className="inline-form" onSubmit={createOrder}>
-              <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Kod (URT-...)" required />
-              <input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Hizmet adı" />
-              <input value={serviceUnitCost} onChange={(e) => setServiceUnitCost(e.target.value)} placeholder="Hizmet birim maliyeti" style={{ width: 150 }} />
-              <input value={serviceQty} onChange={(e) => setServiceQty(e.target.value)} placeholder="Hizmet miktarı" style={{ width: 120 }} />
+            <form className="stack-form" onSubmit={createOrder}>
+              <div className="inline-form">
+                <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Kod (URT-...)" required />
+                <input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Hizmet adı" />
+                <input value={serviceUnitCost} onChange={(e) => setServiceUnitCost(e.target.value)} placeholder="Hizmet birim maliyeti" style={{ width: 150 }} />
+                <input value={serviceQty} onChange={(e) => setServiceQty(e.target.value)} placeholder="Hizmet miktarı" style={{ width: 120 }} />
+              </div>
+              <div>
+                <b style={{ fontSize: 13 }}>Hammadde girişleri (inputs)</b>
+                {inputs.map((line, index) => (
+                  <div key={index} className="inline-form" style={{ margin: "8px 0" }}>
+                    <select value={line.lot_id} onChange={(e) => setInputs((prev) => prev.map((l, i) => (i === index ? { ...l, lot_id: e.target.value } : l)))}>
+                      <option value="">Hammadde lotu...</option>
+                      {materialLots.map((lot) => <option key={lot.id} value={lot.id}>{lot.code}</option>)}
+                    </select>
+                    <input value={line.qty} onChange={(e) => setInputs((prev) => prev.map((l, i) => (i === index ? { ...l, qty: e.target.value } : l)))} placeholder="Miktar" style={{ width: 100 }} />
+                    <button className="btn btn-secondary" type="button" onClick={() => setInputs((prev) => prev.filter((_, i) => i !== index))}>✕</button>
+                  </div>
+                ))}
+                <button className="btn btn-secondary" type="button" onClick={() => setInputs((prev) => [...prev, { lot_id: "", qty: "" }])}>＋ Hammadde ekle</button>
+              </div>
+              <div>
+                <b style={{ fontSize: 13 }}>Mamul çıktıları (outputs)</b>
+                {outputs.map((line, index) => (
+                  <div key={index} className="inline-form" style={{ margin: "8px 0" }}>
+                    <select value={line.lot_id} onChange={(e) => setOutputs((prev) => prev.map((l, i) => (i === index ? { ...l, lot_id: e.target.value } : l)))}>
+                      <option value="">Mamul lotu...</option>
+                      {productLots.map((lot) => <option key={lot.id} value={lot.id}>{lot.code}</option>)}
+                    </select>
+                    <input value={line.qty} onChange={(e) => setOutputs((prev) => prev.map((l, i) => (i === index ? { ...l, qty: e.target.value } : l)))} placeholder="Miktar" style={{ width: 100 }} />
+                    <button className="btn btn-secondary" type="button" onClick={() => setOutputs((prev) => prev.filter((_, i) => i !== index))}>✕</button>
+                  </div>
+                ))}
+                <button className="btn btn-secondary" type="button" onClick={() => setOutputs((prev) => [...prev, { lot_id: "", qty: "" }])}>＋ Mamul ekle</button>
+              </div>
               <button className="btn btn-primary" type="submit">Oluştur</button>
             </form>
           </div>

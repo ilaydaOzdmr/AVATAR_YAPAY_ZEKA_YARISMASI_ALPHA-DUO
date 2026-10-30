@@ -135,6 +135,14 @@ INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quanti
   (9, 2, NULL, 4.140, 2, 0), (9, 3, NULL, 2.760, 1, 0), (9, 4, NULL, 3.220, 2, 0),
   (9, 5, NULL, 1.840, 1, 0), (9, 6, NULL, 3.220, 1, 0), (9, 7, NULL, 1.610, 1, 0), (9, 8, NULL, 2.990, 1, 0);
 
+-- PDF tutarsızlık örneği: 25 kg × 11,50 = 287,50 € ama toplam 351,00 €; parçalar 22 kg (10+8+4)
+INSERT INTO butchery_batches (id, code, animal_type, input_weight, unit_cost, total_cost, batch_date, status) VALUES
+  (10, 'KUZ-2026-DEMO', 'kuzu', 25.000, 11.50, 351.00, '2026-10-27', 'completed');
+INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste) VALUES
+  (10, 2, NULL, 10.000, 1, 0),
+  (10, 3, NULL, 8.000, 1, 0),
+  (10, 6, NULL, 4.000, 1, 0);
+
 -- Ek stok hareketleri (girişler + sevkiyatlar)
 INSERT INTO stock_movements (lot_id, movement_type, qty, unit_cost, total_cost, ref_type, ref_id, occurred_at) VALUES
   (5, 'inbound', 120.000, 9.70, 1164.00, 'supplier', 6, '2026-10-21 08:00:00'),
