@@ -8,7 +8,10 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.avatar.app.data.entities.LocalLot
+import com.avatar.app.data.entities.LocalPrediction
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.data.entities.LocalSaleLine
@@ -74,6 +77,15 @@ interface OutboxDao {
     suspend fun clear()
 }
 
+@Dao
+interface PredictionDao {
+    @Query("SELECT * FROM prediction_history ORDER BY created_at DESC LIMIT 20")
+    suspend fun getRecent(): List<LocalPrediction>
+
+    @Insert
+    suspend fun insert(entry: LocalPrediction): Long
+}
+
 @Database(
     entities = [
         LocalProduct::class,
@@ -81,8 +93,9 @@ interface OutboxDao {
         LocalSale::class,
         LocalSaleLine::class,
         Outbox::class,
+        LocalPrediction::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -90,10 +103,30 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun lotDao(): LotDao
     abstract fun saleDao(): SaleDao
     abstract fun outboxDao(): OutboxDao
+    abstract fun predictionDao(): PredictionDao
 
     companion object {
         @Volatile
         private var instance: AppDatabase? = null
+
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS prediction_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        kind TEXT NOT NULL,
+                        input_summary TEXT NOT NULL,
+                        result_summary TEXT NOT NULL,
+                        model_version TEXT NOT NULL,
+                        model_status TEXT NOT NULL,
+                        warnings TEXT NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
 
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
@@ -101,7 +134,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "avatar.db",
-                ).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2).build().also { instance = it }
             }
     }
 }

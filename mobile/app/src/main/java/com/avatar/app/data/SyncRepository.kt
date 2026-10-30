@@ -1,12 +1,14 @@
 package com.avatar.app.data
 
 import com.avatar.app.data.entities.LocalLot
+import com.avatar.app.data.entities.LocalPrediction
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.data.entities.LocalSaleLine
 import com.avatar.app.data.entities.Outbox
 import java.io.IOException
 import java.time.Instant
+import java.time.LocalDateTime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -22,6 +24,31 @@ sealed class PushResult {
     data class Blocked(val message: String) : PushResult()
     data class Failed(val message: String) : PushResult()
 }
+
+data class PredictionView(
+    val rows: List<Pair<String, String>>,
+    val warnings: List<String>,
+    val modelVersion: String,
+    val modelStatus: String,
+    val offline: Boolean = false,
+    val message: String? = null,
+)
+
+private val PREDICTION_LABELS = mapOf(
+    "finished_qty" to "Beklenen mamul (kg)",
+    "yield_pct" to "Verim (%)",
+    "estimated_ekp" to "Tahmini EKP (€)",
+    "leg_weight" to "But (kg)",
+    "loin_weight" to "Sırt (kg)",
+    "shoulder_weight" to "Omuz (kg)",
+    "rib_weight" to "Kaburga (kg)",
+    "mince_weight" to "Kıyma (kg)",
+    "diced_meat_weight" to "Kuşbaşı (kg)",
+    "bone_weight" to "Kemik (kg)",
+    "waste_weight" to "Fire (kg)",
+    "total_saleable_weight" to "Toplam satılabilir (kg)",
+    "cutting_yield_pct" to "Parçalama verimi (%)",
+)
 
 class SyncRepository(
     private val db: AppDatabase,
@@ -47,6 +74,128 @@ class SyncRepository(
 
     suspend fun sales(): List<LocalSale> = withContext(Dispatchers.IO) {
         db.saleDao().getAll()
+    }
+
+    suspend fun predictions(): List<LocalPrediction> = withContext(Dispatchers.IO) {
+        db.predictionDao().getRecent()
+    }
+
+    suspend fun predictYield(
+        rawKg: Double,
+        spiceKg: Double,
+        casingKg: Double,
+        serviceCost: Double,
+        laborCost: Double,
+    ): PredictionView = withContext(Dispatchers.IO) {
+        val payload = JSONObject()
+            .put("raw_material_kg", rawKg)
+            .put("spice_kg", spiceKg)
+            .put("casing_kg", casingKg)
+            .put("service_cost", serviceCost)
+            .put("labor_cost", laborCost)
+        postPrediction(
+            url = "$baseUrl/ml/predict/v2/yield",
+            payload = payload,
+            kind = "yield",
+            inputSummary = "%.1f kg hammadde".format(rawKg),
+        )
+    }
+
+    suspend fun predictButchery(
+        animalType: String,
+        liveWeight: Double,
+        carcassWeight: Double?,
+    ): PredictionView = withContext(Dispatchers.IO) {
+        val payload = JSONObject()
+            .put("animal_type", animalType)
+            .put("live_weight_kg", liveWeight)
+        if (carcassWeight != null) {
+            payload.put("carcass_weight_kg", carcassWeight)
+        }
+        postPrediction(
+            url = "$baseUrl/ml/predict/v2/butchery",
+            payload = payload,
+            kind = "butchery_$animalType",
+            inputSummary = "%.1f kg canlı ağırlık".format(liveWeight),
+        )
+    }
+
+    private suspend fun postPrediction(
+        url: String,
+        payload: JSONObject,
+        kind: String,
+        inputSummary: String,
+    ): PredictionView {
+        return try {
+            post(url, payload.toString()).use { response ->
+                val body = response.body?.string().orEmpty()
+                when {
+                    response.isSuccessful -> {
+                        val view = parsePrediction(body)
+                        if (!view.offline && view.modelStatus != "unavailable") {
+                            db.predictionDao().insert(
+                                LocalPrediction(
+                                    created_at = LocalDateTime.now().toString(),
+                                    kind = kind,
+                                    input_summary = inputSummary,
+                                    result_summary = view.rows.joinToString(" | ") { "${it.first}=${it.second}" },
+                                    model_version = view.modelVersion,
+                                    model_status = view.modelStatus,
+                                    warnings = view.warnings.joinToString(" | "),
+                                ),
+                            )
+                        }
+                        view
+                    }
+                    response.code == 503 -> PredictionView(
+                        rows = emptyList(),
+                        warnings = emptyList(),
+                        modelVersion = "unknown",
+                        modelStatus = "unavailable",
+                        message = "Model hazır değil (503): $body",
+                    )
+                    else -> PredictionView(
+                        rows = emptyList(),
+                        warnings = emptyList(),
+                        modelVersion = "unknown",
+                        modelStatus = "error",
+                        message = "Tahmin başarısız: HTTP ${response.code}",
+                    )
+                }
+            }
+        } catch (error: IOException) {
+            PredictionView(
+                rows = emptyList(),
+                warnings = emptyList(),
+                modelVersion = "unknown",
+                modelStatus = "offline",
+                offline = true,
+                message = "Çevrimdışı: tahmin için sunucuya ulaşılamadı (${error.message}).",
+            )
+        }
+    }
+
+    private fun parsePrediction(body: String): PredictionView {
+        val json = JSONObject(body)
+        val prediction = json.getJSONObject("prediction")
+        val rows = buildList {
+            val keys = prediction.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = prediction.optDouble(key, Double.NaN)
+                if (!value.isNaN()) {
+                    val formatted = if (key.endsWith("_pct")) "%.2f".format(value) else "%.3f".format(value)
+                    add((PREDICTION_LABELS[key] ?: key) to formatted)
+                }
+            }
+        }
+        val warnings = json.optJSONArray("warnings")?.toStringSet()?.toList().orEmpty()
+        return PredictionView(
+            rows = rows,
+            warnings = warnings,
+            modelVersion = json.optString("model_version", "unknown"),
+            modelStatus = json.optString("model_status", "unknown"),
+        )
     }
 
     suspend fun pull(): Unit = withContext(Dispatchers.IO) {

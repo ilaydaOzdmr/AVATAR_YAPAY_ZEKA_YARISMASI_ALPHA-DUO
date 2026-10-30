@@ -21,13 +21,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.avatar.app.data.AppDatabase
+import com.avatar.app.data.PredictionView
 import com.avatar.app.data.PushResult
 import com.avatar.app.data.SyncRepository
 import com.avatar.app.data.entities.LocalLot
+import com.avatar.app.data.entities.LocalPrediction
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.ui.screens.History
 import com.avatar.app.ui.screens.Home
+import com.avatar.app.ui.screens.Prediction
 import com.avatar.app.ui.screens.ProductList
 import com.avatar.app.ui.screens.Sale
 import com.avatar.app.ui.theme.AvatarAppTheme
@@ -45,7 +48,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Home, Products, Sale, History }
+private enum class Screen { Home, Products, Sale, Prediction, History }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,6 +57,9 @@ private fun AvatarApp(repository: SyncRepository) {
     var products by remember { mutableStateOf(emptyList<LocalProduct>()) }
     var lots by remember { mutableStateOf(emptyList<LocalLot>()) }
     var sales by remember { mutableStateOf(emptyList<LocalSale>()) }
+    var predictionHistory by remember { mutableStateOf(emptyList<LocalPrediction>()) }
+    var yieldResult by remember { mutableStateOf<PredictionView?>(null) }
+    var butcheryResult by remember { mutableStateOf<PredictionView?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -61,6 +67,7 @@ private fun AvatarApp(repository: SyncRepository) {
         products = repository.products()
         lots = repository.lots()
         sales = repository.sales()
+        predictionHistory = repository.predictions()
     }
 
     suspend fun pullAndRefresh() {
@@ -101,6 +108,12 @@ private fun AvatarApp(repository: SyncRepository) {
                     onClick = { screen = Screen.Sale },
                     icon = {},
                     label = { Text("Sale") },
+                )
+                NavigationBarItem(
+                    selected = screen == Screen.Prediction,
+                    onClick = { screen = Screen.Prediction },
+                    icon = {},
+                    label = { Text("Tahmin") },
                 )
                 NavigationBarItem(
                     selected = screen == Screen.History,
@@ -146,6 +159,36 @@ private fun AvatarApp(repository: SyncRepository) {
                                 is PushResult.Failed -> "Saved offline: ${result.message}"
                             }
                             refresh()
+                        }
+                    },
+                )
+                Screen.Prediction -> Prediction(
+                    yieldResult = yieldResult,
+                    butcheryResult = butcheryResult,
+                    history = predictionHistory,
+                    message = message,
+                    onPredictYield = { raw, spice, casing, service, labor ->
+                        scope.launch {
+                            val result = repository.predictYield(raw, spice, casing, service, labor)
+                            yieldResult = result
+                            predictionHistory = repository.predictions()
+                            message = if (result.offline || result.modelStatus == "unavailable") {
+                                result.message
+                            } else {
+                                "Üretim tahmini alındı."
+                            }
+                        }
+                    },
+                    onPredictButchery = { animalType, liveWeight, carcassWeight ->
+                        scope.launch {
+                            val result = repository.predictButchery(animalType, liveWeight, carcassWeight)
+                            butcheryResult = result
+                            predictionHistory = repository.predictions()
+                            message = if (result.offline || result.modelStatus == "unavailable") {
+                                result.message
+                            } else {
+                                "Parçalama tahmini alındı."
+                            }
                         }
                     },
                 )
