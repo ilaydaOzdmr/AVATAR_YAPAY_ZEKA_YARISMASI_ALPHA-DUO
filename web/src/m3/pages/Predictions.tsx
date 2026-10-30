@@ -26,6 +26,14 @@ interface ForecastRow {
   diff: number;
 }
 
+interface ButcheryCompare {
+  code: string;
+  animal_type: string;
+  input_weight: number;
+  predicted: number;
+  actual: number;
+}
+
 interface ButcheryPart {
   product_code: string;
   weight: number;
@@ -54,6 +62,7 @@ export default function Predictions() {
 
   const [report, setReport] = useState<MlReport | null>(null);
   const [forecast, setForecast] = useState<ForecastRow[]>([]);
+  const [butcheryCompare, setButcheryCompare] = useState<ButcheryCompare[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -89,6 +98,34 @@ export default function Predictions() {
         }),
       );
       setForecast(rows.filter((row): row is ForecastRow => row !== null));
+    });
+
+    get<{ id: number; code: string; animal_type: string; input_weight: number }[]>("/butchery-batches").then(async (batches) => {
+      const rows = await Promise.all(
+        batches.map(async (batch) => {
+          try {
+            const [result, prediction] = await Promise.all([
+              get<{ items: { weight: number }[] }>(`/butchery-batches/${batch.id}`),
+              mlPost<{ parts: ButcheryPart[] }>("/predict/butchery", {
+                animal_type: batch.animal_type,
+                input_weight: batch.input_weight,
+              }),
+            ]);
+            const actual = result.items.reduce((sum, item) => sum + item.weight, 0);
+            const predicted = prediction.parts.reduce((sum, part) => sum + part.weight, 0);
+            return {
+              code: batch.code,
+              animal_type: batch.animal_type,
+              input_weight: batch.input_weight,
+              predicted,
+              actual,
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      setButcheryCompare(rows.filter((row): row is ButcheryCompare => row !== null));
     });
   }, []);
 
@@ -249,6 +286,38 @@ export default function Predictions() {
                     <td>{row.actual}</td>
                     <td style={{ color: row.predicted > 0 && Math.abs(row.diff) > 0.5 ? "var(--amber)" : "var(--green-3)" }}>
                       {row.predicted ? `${row.diff >= 0 ? "+" : ""}${row.diff.toFixed(1)}` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {butcheryCompare.length > 0 && (
+        <div className="panel" style={{ marginTop: 16 }}>
+          <div className="panel-head">
+            <div>
+              <h2>Parçalama tahmini vs Gerçek</h2>
+              <p>Kuzu/dana parçalama: ML tahmini toplam parça ağırlığı ve gerçek parça ağırlığı karşılaştırması</p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Parti</th><th>Hayvan</th><th>Giriş</th><th>Tahmini (kg)</th><th>Gerçek (kg)</th><th>Sapma</th></tr>
+              </thead>
+              <tbody>
+                {butcheryCompare.map((row) => (
+                  <tr key={row.code}>
+                    <td className="id">{row.code}</td>
+                    <td>{row.animal_type}</td>
+                    <td>{row.input_weight}</td>
+                    <td>{row.predicted.toFixed(2)}</td>
+                    <td>{row.actual.toFixed(2)}</td>
+                    <td style={{ color: Math.abs(row.predicted - row.actual) > 1 ? "var(--amber)" : "var(--green-3)" }}>
+                      {(row.predicted - row.actual).toFixed(2)}
                     </td>
                   </tr>
                 ))}
