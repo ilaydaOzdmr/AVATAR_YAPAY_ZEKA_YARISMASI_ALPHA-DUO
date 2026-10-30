@@ -114,6 +114,7 @@ type ButcheryBatch struct {
 	ID          int64   `json:"id"`
 	Code        string  `json:"code"`
 	AnimalType  string  `json:"animal_type"`
+	InputLotID  *int64  `json:"input_lot_id"`
 	InputWeight float64 `json:"input_weight"`
 	UnitCost    float64 `json:"unit_cost"`
 	TotalCost   float64 `json:"total_cost"`
@@ -123,13 +124,15 @@ type ButcheryBatch struct {
 
 // ButcheryItem is a part (or waste) produced from a butchery batch.
 type ButcheryItem struct {
-	ID           int64   `json:"id"`
-	BatchID      int64   `json:"batch_id"`
-	ProductID    int64   `json:"product_id"`
-	ProductLotID *int64  `json:"product_lot_id"`
-	Weight       float64 `json:"weight"`
-	Quantity     int     `json:"quantity"`
-	IsWaste      bool    `json:"is_waste"`
+	ID            int64   `json:"id"`
+	BatchID       int64   `json:"batch_id"`
+	ProductID     int64   `json:"product_id"`
+	ProductLotID  *int64  `json:"product_lot_id"`
+	LotCode       string  `json:"lot_code,omitempty"`
+	Weight        float64 `json:"weight"`
+	Quantity      int     `json:"quantity"`
+	IsWaste       bool    `json:"is_waste"`
+	AllocatedCost float64 `json:"allocated_cost"`
 }
 
 // RecallEvent is a recall triggered from a source (raw material) lot.

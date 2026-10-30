@@ -90,11 +90,13 @@ CREATE TABLE butchery_batches (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   code VARCHAR(64) NOT NULL UNIQUE,
   animal_type VARCHAR(64) NOT NULL,
+  input_lot_id BIGINT NULL,
   input_weight DECIMAL(12,3) NOT NULL,
   unit_cost DECIMAL(12,2) NOT NULL,
   total_cost DECIMAL(12,2) NOT NULL,
   batch_date DATE NOT NULL,
-  status VARCHAR(32) NOT NULL DEFAULT 'draft'
+  status VARCHAR(32) NOT NULL DEFAULT 'draft',
+  CONSTRAINT fk_bb_input_lot FOREIGN KEY (input_lot_id) REFERENCES lots(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE butchery_items (
@@ -105,6 +107,7 @@ CREATE TABLE butchery_items (
   weight DECIMAL(12,3) NOT NULL,
   quantity INT NOT NULL DEFAULT 1,
   is_waste BOOL NOT NULL DEFAULT FALSE,
+  allocated_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
   CONSTRAINT fk_bi_batch FOREIGN KEY (batch_id) REFERENCES butchery_batches(id),
   CONSTRAINT fk_bi_product FOREIGN KEY (product_id) REFERENCES products(id),
   CONSTRAINT fk_bi_lot FOREIGN KEY (product_lot_id) REFERENCES lots(id)

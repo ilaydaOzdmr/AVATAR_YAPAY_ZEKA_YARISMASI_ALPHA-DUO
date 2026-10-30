@@ -3,6 +3,8 @@ package repo
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 
 	"avatar/backend/internal/model"
@@ -537,17 +539,69 @@ func (r *mysqlRepo) GetSupplier(ctx context.Context, id int64) (model.Supplier, 
 }
 
 func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.ButcheryBatch, items []model.ButcheryItem) (model.ButcheryBatch, error) {
+	if batch.Code == "" || batch.InputWeight <= 0 || batch.UnitCost < 0 {
+		return model.ButcheryBatch{}, ErrInvalidOrder
+	}
+	if batch.Status == "" {
+		batch.Status = "draft"
+	}
+	if batch.BatchDate == "" {
+		batch.BatchDate = time.Now().Format("2006-01-02")
+	}
+
+	hasPart := false
+	var partWeight float64
+	for _, item := range items {
+		if item.Weight < 0 {
+			return model.ButcheryBatch{}, ErrInvalidOrder
+		}
+		if !item.IsWaste && item.Weight > 0 {
+			hasPart = true
+			partWeight += item.Weight
+		}
+	}
+	if batch.Status == "completed" && (batch.InputLotID == nil || !hasPart) {
+		return model.ButcheryBatch{}, ErrInvalidOrder
+	}
+	fire := roundQty(batch.InputWeight - partWeight)
+	if fire < -0.0005 {
+		return model.ButcheryBatch{}, ErrInvalidOrder
+	}
+	if fire < 0 {
+		fire = 0
+	}
+	if batch.TotalCost <= 0 {
+		batch.TotalCost = roundMoney(batch.InputWeight * batch.UnitCost)
+	}
+	allocated := allocateByWeight(batch.TotalCost, items)
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.ButcheryBatch{}, err
 	}
 	defer tx.Rollback()
 
+	if batch.InputLotID != nil {
+		var itemType string
+		var lotQty float64
+		if err := tx.QueryRowContext(ctx,
+			`SELECT item_type, qty FROM lots WHERE id = ? FOR UPDATE`, *batch.InputLotID).
+			Scan(&itemType, &lotQty); err != nil {
+			return model.ButcheryBatch{}, err
+		}
+		if itemType != "material" {
+			return model.ButcheryBatch{}, ErrInvalidOrder
+		}
+		if lotQty+0.0005 < batch.InputWeight {
+			return model.ButcheryBatch{}, ErrInsufficientStock
+		}
+	}
+
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO butchery_batches (code, animal_type, input_weight, unit_cost, total_cost, batch_date, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		batch.Code, batch.AnimalType, batch.InputWeight, batch.UnitCost,
-		batch.TotalCost, batch.BatchDate, batch.Status)
+		`INSERT INTO butchery_batches (code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		batch.Code, batch.AnimalType, nullInt64(batch.InputLotID), batch.InputWeight,
+		batch.UnitCost, batch.TotalCost, batch.BatchDate, batch.Status)
 	if err != nil {
 		return model.ButcheryBatch{}, err
 	}
@@ -556,11 +610,131 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 		return model.ButcheryBatch{}, err
 	}
 
-	for _, item := range items {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste) VALUES (?, ?, ?, ?, ?, ?)`,
-			batch.ID, item.ProductID, nullInt64(item.ProductLotID), item.Weight, item.Quantity, item.IsWaste); err != nil {
+	// A draft without an input lot is a planning record: keep the parts but do
+	// not create stock or lot links until the batch is completed.
+	if batch.InputLotID == nil {
+		for i, item := range items {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
+				 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				batch.ID, item.ProductID, nullInt64(item.ProductLotID), item.Weight,
+				item.Quantity, item.IsWaste, allocated[i]); err != nil {
+				return model.ButcheryBatch{}, err
+			}
+		}
+		if err := tx.Commit(); err != nil {
 			return model.ButcheryBatch{}, err
+		}
+		return batch, nil
+	}
+
+	refType := "butchery_batch"
+	occurredAt := batch.BatchDate + " 00:00:00"
+	for i, item := range items {
+		if item.IsWaste {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
+				 VALUES (?, ?, NULL, ?, ?, TRUE, 0)`,
+				batch.ID, item.ProductID, item.Weight, item.Quantity); err != nil {
+				return model.ButcheryBatch{}, err
+			}
+			continue
+		}
+
+		lotID := int64(0)
+		if item.ProductLotID != nil {
+			lotID = *item.ProductLotID
+			var lotType string
+			if err := tx.QueryRowContext(ctx,
+				`SELECT item_type FROM lots WHERE id = ? FOR UPDATE`, lotID).Scan(&lotType); err != nil {
+				return model.ButcheryBatch{}, err
+			}
+			if lotType != "product" {
+				return model.ButcheryBatch{}, ErrInvalidOrder
+			}
+		} else {
+			var productCode string
+			if err := tx.QueryRowContext(ctx,
+				`SELECT code FROM products WHERE id = ?`, item.ProductID).Scan(&productCode); err != nil {
+				return model.ButcheryBatch{}, err
+			}
+			lotCode, err := uniqueLotCodeTx(ctx, tx, batch.Code+"-"+productCode)
+			if err != nil {
+				return model.ButcheryBatch{}, err
+			}
+			res, err := tx.ExecContext(ctx,
+				`INSERT INTO lots (code, item_type, item_id, qty, unit, unit_cost, status)
+				 VALUES (?, 'product', ?, 0, 'kg', 0, 'active')`,
+				lotCode, item.ProductID)
+			if err != nil {
+				return model.ButcheryBatch{}, err
+			}
+			lotID, err = res.LastInsertId()
+			if err != nil {
+				return model.ButcheryBatch{}, err
+			}
+		}
+
+		unitCost := 0.0
+		if item.Weight > 0 {
+			unitCost = roundMoney(allocated[i] / item.Weight)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE lots SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+			unitCost, lotID); err != nil {
+			return model.ButcheryBatch{}, err
+		}
+		if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+			LotID:        lotID,
+			MovementType: "butchery_output",
+			Qty:          item.Weight,
+			UnitCost:     unitCost,
+			RefType:      &refType,
+			RefID:        &batch.ID,
+			OccurredAt:   occurredAt,
+		}); err != nil {
+			return model.ButcheryBatch{}, err
+		}
+		if batch.InputLotID != nil {
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO lot_links (parent_lot_id, child_lot_id, qty, link_type) VALUES (?, ?, ?, 'butchery')`,
+				*batch.InputLotID, lotID, item.Weight); err != nil {
+				return model.ButcheryBatch{}, err
+			}
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
+			 VALUES (?, ?, ?, ?, ?, FALSE, ?)`,
+			batch.ID, item.ProductID, lotID, item.Weight, item.Quantity, allocated[i]); err != nil {
+			return model.ButcheryBatch{}, err
+		}
+	}
+
+	if batch.InputLotID != nil {
+		consumeQty := roundQty(-(batch.InputWeight - fire))
+		if consumeQty != 0 {
+			if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+				LotID:        *batch.InputLotID,
+				MovementType: "butchery_consume",
+				Qty:          consumeQty,
+				RefType:      &refType,
+				RefID:        &batch.ID,
+				OccurredAt:   occurredAt,
+			}); err != nil {
+				return model.ButcheryBatch{}, err
+			}
+		}
+		if fire > 0 {
+			if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+				LotID:        *batch.InputLotID,
+				MovementType: "waste",
+				Qty:          -fire,
+				RefType:      &refType,
+				RefID:        &batch.ID,
+				OccurredAt:   occurredAt,
+			}); err != nil {
+				return model.ButcheryBatch{}, err
+			}
 		}
 	}
 
@@ -570,23 +744,95 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 	return batch, nil
 }
 
+func allocateByWeight(total float64, items []model.ButcheryItem) []float64 {
+	allocated := make([]float64, len(items))
+	var sum float64
+	lastPart := -1
+	for i, item := range items {
+		if item.IsWaste {
+			continue
+		}
+		sum += item.Weight
+		lastPart = i
+	}
+	if lastPart == -1 {
+		return allocated
+	}
+	if sum <= 0 {
+		allocated[lastPart] = roundMoney(total)
+		return allocated
+	}
+
+	var used float64
+	for i, item := range items {
+		if item.IsWaste {
+			continue
+		}
+		if i == lastPart {
+			allocated[i] = roundMoney(total - used)
+			continue
+		}
+		share := roundMoney(total * item.Weight / sum)
+		allocated[i] = share
+		used += share
+	}
+	return allocated
+}
+
+func uniqueLotCodeTx(ctx context.Context, tx *sql.Tx, base string) (string, error) {
+	base = strings.ToUpper(strings.TrimSpace(base))
+	if base == "" {
+		return "", ErrInvalidOrder
+	}
+	if len(base) > 64 {
+		base = base[:64]
+	}
+	for i := 1; i <= 100; i++ {
+		candidate := base
+		if i > 1 {
+			suffix := fmt.Sprintf("-%d", i)
+			trimmed := base
+			if len(trimmed) > 64-len(suffix) {
+				trimmed = trimmed[:64-len(suffix)]
+			}
+			candidate = trimmed + suffix
+		}
+		var exists bool
+		if err := tx.QueryRowContext(ctx,
+			`SELECT EXISTS(SELECT 1 FROM lots WHERE code = ?)`, candidate).Scan(&exists); err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("could not allocate a unique lot code for %q", base)
+}
+
 func (r *mysqlRepo) GetButcheryBatch(ctx context.Context, id int64) (model.ButcheryBatch, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, code, animal_type, input_weight, unit_cost, total_cost, batch_date, status
+		`SELECT id, code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status
 		 FROM butchery_batches WHERE id = ?`, id)
 
 	var batch model.ButcheryBatch
-	if err := row.Scan(&batch.ID, &batch.Code, &batch.AnimalType, &batch.InputWeight,
+	var inputLotID sql.NullInt64
+	if err := row.Scan(&batch.ID, &batch.Code, &batch.AnimalType, &inputLotID, &batch.InputWeight,
 		&batch.UnitCost, &batch.TotalCost, &batch.BatchDate, &batch.Status); err != nil {
 		return model.ButcheryBatch{}, err
+	}
+	if inputLotID.Valid {
+		batch.InputLotID = &inputLotID.Int64
 	}
 	return batch, nil
 }
 
 func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]model.ButcheryItem, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, batch_id, product_id, product_lot_id, weight, quantity, is_waste
-		 FROM butchery_items WHERE batch_id = ? ORDER BY id`, batchID)
+		`SELECT bi.id, bi.batch_id, bi.product_id, bi.product_lot_id, bi.weight, bi.quantity,
+		        bi.is_waste, bi.allocated_cost, l.code
+		 FROM butchery_items bi
+		 LEFT JOIN lots l ON l.id = bi.product_lot_id
+		 WHERE bi.batch_id = ? ORDER BY bi.id`, batchID)
 	if err != nil {
 		return nil, err
 	}
@@ -596,11 +842,16 @@ func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]mod
 	for rows.Next() {
 		var item model.ButcheryItem
 		var productLotID sql.NullInt64
-		if err := rows.Scan(&item.ID, &item.BatchID, &item.ProductID, &productLotID, &item.Weight, &item.Quantity, &item.IsWaste); err != nil {
+		var lotCode sql.NullString
+		if err := rows.Scan(&item.ID, &item.BatchID, &item.ProductID, &productLotID,
+			&item.Weight, &item.Quantity, &item.IsWaste, &item.AllocatedCost, &lotCode); err != nil {
 			return nil, err
 		}
 		if productLotID.Valid {
 			item.ProductLotID = &productLotID.Int64
+		}
+		if lotCode.Valid {
+			item.LotCode = lotCode.String
 		}
 		out = append(out, item)
 	}
@@ -609,7 +860,7 @@ func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]mod
 
 func (r *mysqlRepo) ListButcheryBatches(ctx context.Context) ([]model.ButcheryBatch, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, code, animal_type, input_weight, unit_cost, total_cost, batch_date, status
+		`SELECT id, code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status
 		 FROM butchery_batches ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -619,9 +870,13 @@ func (r *mysqlRepo) ListButcheryBatches(ctx context.Context) ([]model.ButcheryBa
 	var out []model.ButcheryBatch
 	for rows.Next() {
 		var batch model.ButcheryBatch
-		if err := rows.Scan(&batch.ID, &batch.Code, &batch.AnimalType, &batch.InputWeight,
+		var inputLotID sql.NullInt64
+		if err := rows.Scan(&batch.ID, &batch.Code, &batch.AnimalType, &inputLotID, &batch.InputWeight,
 			&batch.UnitCost, &batch.TotalCost, &batch.BatchDate, &batch.Status); err != nil {
 			return nil, err
+		}
+		if inputLotID.Valid {
+			batch.InputLotID = &inputLotID.Int64
 		}
 		out = append(out, batch)
 	}

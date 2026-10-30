@@ -41,6 +41,15 @@ func unique(prefix string) string {
 
 func stringPtr(v string) *string { return &v }
 
+// approx reports whether a and b are equal within a cent/milligram tolerance.
+func approx(a, b float64) bool {
+	d := a - b
+	if d < 0 {
+		d = -d
+	}
+	return d < 0.001
+}
+
 func insertMaterial(t *testing.T, db *sql.DB, code string, price float64) int64 {
 	t.Helper()
 	res, err := db.Exec(
@@ -316,6 +325,121 @@ func TestCreateCompletedProductionOrderRequiresInputsAndOutputs(t *testing.T) {
 	}, nil, nil)
 	if !errors.Is(err, ErrInvalidOrder) {
 		t.Fatalf("error = %v, want ErrInvalidOrder", err)
+	}
+}
+
+func TestCreateButcheryBatchCreatesLotsLinksAndMovements(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+
+	materialID := insertMaterial(t, db, unique("MAT"), 11.50)
+	inputLotID := insertLot(t, db, unique("KUZU"), "material", materialID, 25, 11.50)
+
+	productIDs := []int64{
+		insertProduct(t, db, unique("BUT"), 30),
+		insertProduct(t, db, unique("SIRT"), 28),
+		insertProduct(t, db, unique("OMUZ"), 24),
+		insertProduct(t, db, unique("KABURGA"), 20),
+		insertProduct(t, db, unique("KIYMA"), 18),
+		insertProduct(t, db, unique("KUSBASI"), 26),
+		insertProduct(t, db, unique("KEMIK"), 5),
+	}
+	weights := []float64{4.5, 3.0, 3.5, 2.0, 3.5, 3.5, 2.0}
+	items := make([]model.ButcheryItem, 0, len(productIDs))
+	for i, productID := range productIDs {
+		items = append(items, model.ButcheryItem{
+			ProductID: productID,
+			Weight:    weights[i],
+			Quantity:  1,
+		})
+	}
+
+	created, err := r.CreateButcheryBatch(ctx, model.ButcheryBatch{
+		Code:        unique("PRC"),
+		AnimalType:  "kuzu",
+		InputLotID:  &inputLotID,
+		InputWeight: 25,
+		UnitCost:    11.50,
+		TotalCost:   351,
+		BatchDate:   "2026-10-30",
+		Status:      "completed",
+	}, items)
+	if err != nil {
+		t.Fatalf("CreateButcheryBatch: %v", err)
+	}
+
+	storedItems, err := r.ListButcheryItems(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("ListButcheryItems: %v", err)
+	}
+	if len(storedItems) != len(items) {
+		t.Fatalf("stored items = %d, want %d", len(storedItems), len(items))
+	}
+	var allocatedTotal float64
+	for _, item := range storedItems {
+		if item.ProductLotID == nil || *item.ProductLotID == 0 {
+			t.Fatalf("item %d has no product lot: %+v", item.ProductID, item)
+		}
+		if item.LotCode == "" {
+			t.Fatalf("item %d has no lot code: %+v", item.ProductID, item)
+		}
+		allocatedTotal += item.AllocatedCost
+	}
+	if !approx(allocatedTotal, 351) {
+		t.Fatalf("allocated total = %v, want 351", allocatedTotal)
+	}
+
+	links, err := r.ListLotLinksByParent(ctx, inputLotID)
+	if err != nil {
+		t.Fatalf("ListLotLinksByParent: %v", err)
+	}
+	if len(links) != len(items) {
+		t.Fatalf("links = %d, want %d", len(links), len(items))
+	}
+	var linkedWeight float64
+	for _, link := range links {
+		if link.LinkType != "butchery" {
+			t.Fatalf("link type = %q, want butchery", link.LinkType)
+		}
+		linkedWeight += link.Qty
+	}
+	if !approx(linkedWeight, 22) {
+		t.Fatalf("linked weight = %v, want 22", linkedWeight)
+	}
+
+	inputLot, err := r.GetLot(ctx, inputLotID)
+	if err != nil {
+		t.Fatalf("GetLot input: %v", err)
+	}
+	if inputLot.Qty != 0 {
+		t.Fatalf("input lot qty = %v, want 0", inputLot.Qty)
+	}
+
+	movements, err := r.ListStockMovements(ctx, inputLotID)
+	if err != nil {
+		t.Fatalf("input movements: %v", err)
+	}
+	var consume, waste float64
+	for _, movement := range movements {
+		switch movement.MovementType {
+		case "butchery_consume":
+			consume += movement.Qty
+		case "waste":
+			waste += movement.Qty
+		}
+	}
+	if !approx(consume, -22) || !approx(waste, -3) {
+		t.Fatalf("consume/waste = %v/%v, want -22/-3", consume, waste)
+	}
+
+	for i, item := range storedItems {
+		lot, err := r.GetLot(ctx, *item.ProductLotID)
+		if err != nil {
+			t.Fatalf("GetLot output %d: %v", i, err)
+		}
+		if !approx(lot.Qty, weights[i]) {
+			t.Fatalf("output lot %d qty = %v, want %v", i, lot.Qty, weights[i])
+		}
 	}
 }
 
