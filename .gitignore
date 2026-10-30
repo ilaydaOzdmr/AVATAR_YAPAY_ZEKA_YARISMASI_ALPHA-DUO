@@ -26,6 +26,8 @@ __pycache__/
 ml/.venv/
 ml/venv/
 ml/*.egg-info/
+# ML raw downloads are reproducible via ml/scripts/download_usda.py
+ml/data/raw/
 
 # IDE / OS
 .idea/

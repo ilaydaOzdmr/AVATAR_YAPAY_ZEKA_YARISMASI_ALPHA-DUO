@@ -1,0 +1,59 @@
+{
+  "provider": "USDA Economic Research Service",
+  "license": "U.S. Government work; public domain",
+  "products": [
+    "https://www.ers.usda.gov/data-products/meat-price-spreads",
+    "https://www.ers.usda.gov/data-products/livestock-and-meat-domestic-data"
+  ],
+  "files": [
+    {
+      "name": "historical_monthly_price_spreads.csv",
+      "url": "https://www.ers.usda.gov/media/5028/historical-monthly-price-spread-data-for-beef-pork-broilers.csv?v=98757",
+      "product": "Meat Price Spreads",
+      "bytes": 1170589,
+      "sha256": "5ce104c88f3ee808cb36072254164f2dccb7fb78c2116d78338a60ab1ea39f2a"
+    },
+    {
+      "name": "retail_prices.csv",
+      "url": "https://www.ers.usda.gov/media/5024/retail-prices-for-beef-pork-poultry-cuts-eggs-and-dairy-products.csv?v=25627",
+      "product": "Meat Price Spreads",
+      "bytes": 65977,
+      "sha256": "cdcff03c189c2984d9e9374ff8a36260fec21f8eec90854215035b0b0b1d9655"
+    },
+    {
+      "name": "choice_beef_values.csv",
+      "url": "https://www.ers.usda.gov/media/5020/choice-beef-values-and-spreads-and-the-all-fresh-retail-value.csv?v=29592",
+      "product": "Meat Price Spreads",
+      "bytes": 50639,
+      "sha256": "e77b417e726734e514b9700eaf044acf64fe4d84514892765a2fee226c3aa84f"
+    },
+    {
+      "name": "summary_retail_spreads.csv",
+      "url": "https://www.ers.usda.gov/media/5025/summary-of-retail-prices-and-price-spreads.csv?v=31589",
+      "product": "Meat Price Spreads",
+      "bytes": 41001,
+      "sha256": "584ec8f404cf152dab29706a052846b0e71264fbfb84bd54df5b3291a884640d"
+    },
+    {
+      "name": "livestock_prices.xlsx",
+      "url": "https://www.ers.usda.gov/media/5536/livestock-prices.xlsx?v=37005",
+      "product": "Livestock and Meat Domestic Data",
+      "bytes": 107382,
+      "sha256": "1cae9ed5aacd6edf8abafe7a6abcc0a6aabe28538074032289e108646d51ffcd"
+    },
+    {
+      "name": "wholesale_prices.xlsx",
+      "url": "https://www.ers.usda.gov/media/5538/wholesale-prices.xlsx?v=79003",
+      "product": "Livestock and Meat Domestic Data",
+      "bytes": 104281,
+      "sha256": "f4c7a544fcaa508da44a8f54d2f12f051ecfe4310c4a65a66325fc677de248b7"
+    },
+    {
+      "name": "livestock_domestic_data.zip",
+      "url": "https://www.ers.usda.gov/media/5539/livestock-domestic-data-machine-readable-files.zip?v=88464",
+      "product": "Livestock and Meat Domestic Data",
+      "bytes": 925643,
+      "sha256": "bdbd441c3c59a2a1cc085e747c8af3866825a4ab809f9a79d87b595198bc9a8b"
+    }
+  ]
+}

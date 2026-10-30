@@ -1,0 +1,15 @@
+{
+  "processed_rows": {
+    "production_orders_synthetic": 480,
+    "butchery_lamb_synthetic": 800,
+    "butchery_cattle_synthetic": 800
+  },
+  "usda_price_file_used": "data/raw/usda/livestock_domestic_data/livestock-data-machine-readable-files/WholesalePrices.csv",
+  "price_index_available": true,
+  "data_origin": {
+    "production_orders_synthetic": "synthetic_calibrated",
+    "butchery_lamb_synthetic": "synthetic_calibrated",
+    "butchery_cattle_synthetic": "synthetic_calibrated"
+  },
+  "warning": "Synthetic rows are not real business records and must not be reported as real validation data."
+}
