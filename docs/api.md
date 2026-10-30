@@ -5,6 +5,7 @@ Hata yanıtı: `{"error":"..."}` ve uygun HTTP kodu.
 
 ## Endpoint'ler
 
+### Katalog ve lotlar
 | Metot | Yol | Başarı | Açıklama |
 |-------|-----|--------|----------|
 | GET | `/health` | 200 | `{"status":"ok"}` |
@@ -12,36 +13,78 @@ Hata yanıtı: `{"error":"..."}` ve uygun HTTP kodu.
 | POST | `/materials` | 201 | Hammadde ekle |
 | GET | `/products` | 200 | Ürün listesi |
 | POST | `/products` | 201 | Ürün ekle |
-| GET | `/lots` | 200 | Lot listesi (`?item_type=material\|product` opsiyonel) |
+| GET | `/lots` | 200 | Lot listesi (`?item_type=material\|product`) |
 | POST | `/lots` | 201 | Lot ekle |
 | GET | `/lots/{code}` | 200 | Lot detayı |
 | GET | `/lots/{code}/movements` | 200 | Lot stok hareketleri |
-| POST | `/stock-movements` | 201 | Stok hareketi ekle |
+| POST | `/stock-movements` | 201 | Stok hareketi ekle (`inbound/transfer/return/rework/shipment`) |
+| GET | `/markets` | 200 | Market listesi |
+
+### Üretim ve parçalama
+| Metot | Yol | Başarı | Açıklama |
+|-------|-----|--------|----------|
+| GET | `/production-orders` | 200 | Üretim emri listesi |
+| POST | `/production-orders` | 201 | Üretim emri ekle (inputs[]/outputs[]) |
+| GET | `/production-orders/{id}` | 200 | Maliyet özeti (EKP/VKP/brüt kâr/marj) |
+| GET | `/production-orders/{id}/inputs` | 200 | Emrin hammadde girdileri |
+| GET | `/butchery-batches` | 200 | Parçalama kaydı listesi |
+| POST | `/butchery-batches` | 201 | Parçalama kaydı ekle (batch + items[]) |
+| GET | `/butchery-batches/{id}` | 200 | Parça + maliyet dağıtımı (ağırlık/değer) |
+
+### İzlenebilirlik, geri çağırma, satış
+| Metot | Yol | Başarı | Açıklama |
+|-------|-----|--------|----------|
+| GET | `/trace/forward?lot=` | 200 | İleriye izleme |
+| GET | `/trace/backward?lot=` | 200 | Geriye izleme |
+| POST | `/recalls` | 201 | Geri çağırma başlat (bloke) |
+| GET | `/recalls/{id}` | 200 | Geri çağırma sonucu |
+| GET | `/sales` | 200 | Satış listesi |
+| POST | `/sales` | 201 | Satış ekle (bloklu lot → 409) |
+| GET | `/redistributions?lot_id=` | 200 | İkinci kademe dağıtım |
+| POST | `/redistributions` | 201 | Market → alt alıcı dağıtımı ekle |
+
+### Senkronizasyon, anomali, OCR
+| Metot | Yol | Başarı | Açıklama |
+|-------|-----|--------|----------|
+| GET | `/sync/pull` | 200 | Bloklu lot kodları + ürünler |
+| POST | `/sync/push` | 200 | Mobil satışları toplu gönder (bloklu → 409) |
+| GET | `/anomalies` | 200 | Kural tabanlı anomali uyarıları |
+| POST | `/ocr/invoice` | 200 | Fatura/irsaliye metninden kalem çıkar |
+
+### ML servisi (ayrı servis, `http://localhost:8000`)
+| Metot | Yol | Açıklama |
+|-------|-----|----------|
+| POST | `/predict/yield` | Üretim verimi + EKP tahmini (`raw_material_kg`) |
+| POST | `/predict/butchery` | Parçalama parça ağırlıkları (`animal_type`,`input_weight`) |
+| GET | `/report` | Model vs baseline MAE/RMSE |
 
 ## Örnek istekler
 
-### Hammadde ekle
+### Üretim emri ekle
 ```json
-POST /materials
-{"code":"MAT-009","name":"Tuz","unit":"kg","is_raw":true,"default_purchase_price":3.50}
+POST /production-orders
+{"code":"URT-2026-050","status":"draft","service_name":"Sucuk üretim",
+ "service_unit_cost":5.50,"service_qty":85,
+ "inputs":[{"material_lot_id":1,"qty":100}],
+ "outputs":[{"product_lot_id":4,"qty":85}]}
 ```
 
-### Lot ekle
+### Parçalama kaydı ekle
 ```json
-POST /lots
-{"code":"ET-2026-002","item_type":"material","item_id":1,"qty":100,"unit":"kg",
- "supplier_id":1,"purchase_price":9.70,"unit_cost":9.70,
- "received_at":"2026-10-20 08:00:00","status":"active"}
+POST /butchery-batches
+{"batch":{"code":"KUZ-2026-032","animal_type":"kuzu","input_weight":25,
+  "unit_cost":11.50,"total_cost":287.50,"batch_date":"2026-10-27","status":"draft"},
+ "items":[{"product_id":2,"weight":10,"quantity":1,"is_waste":false}]}
 ```
 
-### Stok hareketi ekle
+### Geri çağırma başlat
 ```json
-POST /stock-movements
-{"lot_id":4,"movement_type":"shipment","qty":-30,"unit_cost":18.16,"total_cost":544.80,
- "ref_type":"market","ref_id":1,"occurred_at":"2026-10-20 10:00:00"}
+POST /recalls
+{"source_lot_code":"ET-2026-001","reason":"Kalite sorunu"}
 ```
 
 ## Notlar
 - `stock_movements.qty` işaretli: giriş `+`, çıkış `-`.
+- Hareket tipleri: `inbound`, `shipment`, `transfer`, `return`, `rework`.
 - Para `DECIMAL(12,2)`, JSON'da sayı olarak döner.
 - Tüm SQL parametreli.
