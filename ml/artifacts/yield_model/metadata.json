@@ -1,0 +1,269 @@
+{
+  "model_version": "1.0.0",
+  "training_date": "2026-10-30T21:19:47.848410+00:00",
+  "dataset_name": "yield",
+  "dataset_version": "739f08bb18473dde",
+  "dataset_source": "synthetic_calibrated (see ml/data/README.md)",
+  "data_origin": "synthetic_calibrated",
+  "model_status": "synthetic_only",
+  "feature_names": [
+    "raw_material_kg",
+    "spice_kg",
+    "casing_kg",
+    "other_material_kg",
+    "material_unit_price_meat",
+    "material_unit_price_spice",
+    "material_unit_price_casing",
+    "material_unit_price_other",
+    "service_cost",
+    "labor_cost",
+    "product_type"
+  ],
+  "target_names": [
+    "finished_qty",
+    "yield_pct"
+  ],
+  "training_sample_count": 394,
+  "test_sample_count": 86,
+  "validation_method": "GroupShuffleSplit(test_size=0.2, seed=42) + GroupKFold(5)",
+  "group_column": "production_batch",
+  "targets": {
+    "finished_qty": {
+      "selected_model": "lasso",
+      "selected": {
+        "model": "lasso",
+        "ok": true,
+        "cv_mae_mean": 1.4014,
+        "cv_mae_std": 0.1683,
+        "test_mae": 1.4535,
+        "test_rmse": 1.9975,
+        "test_r2": 0.9945,
+        "test_medae": 1.1096,
+        "test_mape": 1.5966
+      },
+      "candidates": [
+        {
+          "model": "dummy_mean",
+          "ok": true,
+          "cv_mae_mean": 20.8155,
+          "cv_mae_std": 1.1728,
+          "test_mae": 23.8134,
+          "test_rmse": 27.0126,
+          "test_r2": -0.0026,
+          "test_medae": 24.8384,
+          "test_mape": 28.4853
+        },
+        {
+          "model": "linear",
+          "ok": true,
+          "cv_mae_mean": 1.4071,
+          "cv_mae_std": 0.1637,
+          "test_mae": 1.4603,
+          "test_rmse": 1.9981,
+          "test_r2": 0.9945,
+          "test_medae": 1.1553,
+          "test_mape": 1.6083
+        },
+        {
+          "model": "ridge",
+          "ok": true,
+          "cv_mae_mean": 1.4088,
+          "cv_mae_std": 0.1618,
+          "test_mae": 1.4644,
+          "test_rmse": 2.0041,
+          "test_r2": 0.9945,
+          "test_medae": 1.1743,
+          "test_mape": 1.612
+        },
+        {
+          "model": "lasso",
+          "ok": true,
+          "cv_mae_mean": 1.4014,
+          "cv_mae_std": 0.1683,
+          "test_mae": 1.4535,
+          "test_rmse": 1.9975,
+          "test_r2": 0.9945,
+          "test_medae": 1.1096,
+          "test_mape": 1.5966
+        },
+        {
+          "model": "random_forest",
+          "ok": true,
+          "cv_mae_mean": 1.8573,
+          "cv_mae_std": 0.2605,
+          "test_mae": 2.1323,
+          "test_rmse": 2.8724,
+          "test_r2": 0.9887,
+          "test_medae": 1.3956,
+          "test_mape": 2.3228
+        },
+        {
+          "model": "extra_trees",
+          "ok": true,
+          "cv_mae_mean": 1.5007,
+          "cv_mae_std": 0.2418,
+          "test_mae": 1.6556,
+          "test_rmse": 2.1945,
+          "test_r2": 0.9934,
+          "test_medae": 1.2204,
+          "test_mape": 1.7963
+        },
+        {
+          "model": "hist_gradient_boosting",
+          "ok": true,
+          "cv_mae_mean": 1.7526,
+          "cv_mae_std": 0.1864,
+          "test_mae": 1.7752,
+          "test_rmse": 2.3075,
+          "test_r2": 0.9927,
+          "test_medae": 1.497,
+          "test_mape": 1.9473
+        },
+        {
+          "model": "xgboost",
+          "ok": true,
+          "cv_mae_mean": 1.6098,
+          "cv_mae_std": 0.2751,
+          "test_mae": 1.7073,
+          "test_rmse": 2.2933,
+          "test_r2": 0.9928,
+          "test_medae": 1.2316,
+          "test_mape": 1.8907
+        },
+        {
+          "model": "catboost",
+          "ok": true,
+          "cv_mae_mean": 1.9682,
+          "cv_mae_std": 0.1668,
+          "test_mae": 1.8492,
+          "test_rmse": 2.4785,
+          "test_r2": 0.9916,
+          "test_medae": 1.5769,
+          "test_mape": 2.0518
+        }
+      ],
+      "beats_baseline": true
+    },
+    "yield_pct": {
+      "selected_model": "linear",
+      "selected": {
+        "model": "linear",
+        "ok": true,
+        "cv_mae_mean": 0.0118,
+        "cv_mae_std": 0.0016,
+        "test_mae": 0.0131,
+        "test_rmse": 0.0166,
+        "test_r2": 0.6882,
+        "test_medae": 0.0112,
+        "test_mape": 1.5246
+      },
+      "candidates": [
+        {
+          "model": "dummy_mean",
+          "ok": true,
+          "cv_mae_mean": 0.02,
+          "cv_mae_std": 0.0021,
+          "test_mae": 0.0235,
+          "test_rmse": 0.0298,
+          "test_r2": -0.0039,
+          "test_medae": 0.0204,
+          "test_mape": 2.7128
+        },
+        {
+          "model": "linear",
+          "ok": true,
+          "cv_mae_mean": 0.0118,
+          "cv_mae_std": 0.0016,
+          "test_mae": 0.0131,
+          "test_rmse": 0.0166,
+          "test_r2": 0.6882,
+          "test_medae": 0.0112,
+          "test_mape": 1.5246
+        },
+        {
+          "model": "ridge",
+          "ok": true,
+          "cv_mae_mean": 0.0118,
+          "cv_mae_std": 0.0016,
+          "test_mae": 0.0131,
+          "test_rmse": 0.0166,
+          "test_r2": 0.6882,
+          "test_medae": 0.011,
+          "test_mape": 1.523
+        },
+        {
+          "model": "lasso",
+          "ok": true,
+          "cv_mae_mean": 0.0123,
+          "cv_mae_std": 0.002,
+          "test_mae": 0.0131,
+          "test_rmse": 0.0171,
+          "test_r2": 0.667,
+          "test_medae": 0.0104,
+          "test_mape": 1.529
+        },
+        {
+          "model": "random_forest",
+          "ok": true,
+          "cv_mae_mean": 0.0123,
+          "cv_mae_std": 0.0016,
+          "test_mae": 0.0137,
+          "test_rmse": 0.0175,
+          "test_r2": 0.6529,
+          "test_medae": 0.012,
+          "test_mape": 1.5919
+        },
+        {
+          "model": "extra_trees",
+          "ok": true,
+          "cv_mae_mean": 0.0123,
+          "cv_mae_std": 0.0017,
+          "test_mae": 0.0135,
+          "test_rmse": 0.017,
+          "test_r2": 0.6744,
+          "test_medae": 0.0111,
+          "test_mape": 1.5682
+        },
+        {
+          "model": "hist_gradient_boosting",
+          "ok": true,
+          "cv_mae_mean": 0.0129,
+          "cv_mae_std": 0.0015,
+          "test_mae": 0.0145,
+          "test_rmse": 0.0184,
+          "test_r2": 0.6148,
+          "test_medae": 0.0125,
+          "test_mape": 1.6974
+        },
+        {
+          "model": "xgboost",
+          "ok": true,
+          "cv_mae_mean": 0.0128,
+          "cv_mae_std": 0.0017,
+          "test_mae": 0.0135,
+          "test_rmse": 0.0175,
+          "test_r2": 0.6536,
+          "test_medae": 0.0109,
+          "test_mape": 1.5727
+        },
+        {
+          "model": "catboost",
+          "ok": true,
+          "cv_mae_mean": 0.0125,
+          "cv_mae_std": 0.0019,
+          "test_mae": 0.0136,
+          "test_rmse": 0.0173,
+          "test_r2": 0.6612,
+          "test_medae": 0.011,
+          "test_mape": 1.581
+        }
+      ],
+      "beats_baseline": true
+    }
+  },
+  "warnings": [
+    "Trained on calibrated synthetic data, not real business records.",
+    "Metrics are not evidence of field performance.",
+    "Production EKP is an accounting identity, not a model target."
+  ]
+}

@@ -1,0 +1,180 @@
+{
+  "yield": {
+    "model_version": "1.0.0",
+    "model_status": "synthetic_only",
+    "dataset_version": "739f08bb18473dde",
+    "test_sample_count": 86,
+    "targets": {
+      "finished_qty": {
+        "mae": 1.4535,
+        "rmse": 1.9975,
+        "r2": 0.9945,
+        "medae": 1.1096,
+        "mape": 1.5966
+      },
+      "yield_pct": {
+        "mae": 0.0131,
+        "rmse": 0.0166,
+        "r2": 0.6882,
+        "medae": 0.0112,
+        "mape": 1.5246
+      }
+    }
+  },
+  "butchery_lamb": {
+    "model_version": "1.0.0",
+    "model_status": "synthetic_only",
+    "dataset_version": "fbb39aadba03adc5",
+    "test_sample_count": 208,
+    "targets": {
+      "leg_weight": {
+        "mae": 0.1038,
+        "rmse": 0.1291,
+        "r2": 0.949,
+        "medae": 0.0936,
+        "mape": 2.6556
+      },
+      "loin_weight": {
+        "mae": 0.1082,
+        "rmse": 0.1411,
+        "r2": 0.8767,
+        "medae": 0.0839,
+        "mape": 4.1476
+      },
+      "shoulder_weight": {
+        "mae": 0.0986,
+        "rmse": 0.1251,
+        "r2": 0.9221,
+        "medae": 0.0783,
+        "mape": 3.3152
+      },
+      "rib_weight": {
+        "mae": 0.1038,
+        "rmse": 0.1293,
+        "r2": 0.8123,
+        "medae": 0.0866,
+        "mape": 6.0179
+      },
+      "mince_weight": {
+        "mae": 0.0985,
+        "rmse": 0.1232,
+        "r2": 0.9073,
+        "medae": 0.0833,
+        "mape": 3.8384
+      },
+      "diced_meat_weight": {
+        "mae": 0.1038,
+        "rmse": 0.1284,
+        "r2": 0.7712,
+        "medae": 0.0921,
+        "mape": 6.9946
+      },
+      "bone_weight": {
+        "mae": 0.1047,
+        "rmse": 0.1337,
+        "r2": 0.9211,
+        "medae": 0.0904,
+        "mape": 3.701
+      },
+      "waste_weight": {
+        "mae": 0.101,
+        "rmse": 0.1279,
+        "r2": 0.9489,
+        "medae": 0.0851,
+        "mape": 2.9531
+      },
+      "total_saleable_weight": {
+        "mae": 0.1433,
+        "rmse": 0.179,
+        "r2": 0.9936,
+        "medae": 0.1253,
+        "mape": 0.9418
+      },
+      "cutting_yield_pct": {
+        "mae": 0.5985,
+        "rmse": 0.7387,
+        "r2": 0.9088,
+        "medae": 0.5099,
+        "mape": 0.8454
+      }
+    }
+  },
+  "butchery_cattle": {
+    "model_version": "1.0.0",
+    "model_status": "synthetic_only",
+    "dataset_version": "02709f84c182554c",
+    "test_sample_count": 200,
+    "targets": {
+      "leg_weight": {
+        "mae": 1.5241,
+        "rmse": 1.8879,
+        "r2": 0.8914,
+        "medae": 1.3748,
+        "mape": 2.9054
+      },
+      "loin_weight": {
+        "mae": 1.3024,
+        "rmse": 1.6477,
+        "r2": 0.8731,
+        "medae": 1.1087,
+        "mape": 3.0373
+      },
+      "shoulder_weight": {
+        "mae": 1.5651,
+        "rmse": 2.0009,
+        "r2": 0.8496,
+        "medae": 1.3803,
+        "mape": 3.667
+      },
+      "rib_weight": {
+        "mae": 1.3753,
+        "rmse": 1.8072,
+        "r2": 0.7966,
+        "medae": 1.1022,
+        "mape": 4.766
+      },
+      "mince_weight": {
+        "mae": 1.5134,
+        "rmse": 1.8583,
+        "r2": 0.8426,
+        "medae": 1.2942,
+        "mape": 3.9208
+      },
+      "diced_meat_weight": {
+        "mae": 1.4101,
+        "rmse": 1.7761,
+        "r2": 0.7653,
+        "medae": 1.2755,
+        "mape": 5.4786
+      },
+      "bone_weight": {
+        "mae": 1.6183,
+        "rmse": 2.0461,
+        "r2": 0.8735,
+        "medae": 1.3155,
+        "mape": 4.1332
+      },
+      "waste_weight": {
+        "mae": 1.4996,
+        "rmse": 1.886,
+        "r2": 0.9215,
+        "medae": 1.2541,
+        "mape": 2.7415
+      },
+      "total_saleable_weight": {
+        "mae": 2.1227,
+        "rmse": 2.6721,
+        "r2": 0.9891,
+        "medae": 1.7089,
+        "mape": 0.915
+      },
+      "cutting_yield_pct": {
+        "mae": 0.6244,
+        "rmse": 0.76,
+        "r2": 0.9129,
+        "medae": 0.5006,
+        "mape": 0.8789
+      }
+    }
+  }
+}
