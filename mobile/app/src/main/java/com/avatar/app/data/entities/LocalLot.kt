@@ -8,6 +8,7 @@ data class LocalLot(
     @PrimaryKey val id: Long,
     val code: String,
     val item_type: String,
+    val item_id: Long,
     val qty: Double,
     val unit: String,
     val blocked: Boolean,

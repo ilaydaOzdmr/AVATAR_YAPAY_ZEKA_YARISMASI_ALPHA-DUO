@@ -43,6 +43,8 @@ type RawMaterialSource struct {
 	SupplierName     string   `json:"supplier_name"`
 	ProductionOrders []string `json:"production_orders"`
 	Qty              float64  `json:"qty"`
+	ReceivedAt       string   `json:"received_at"`
+	ExpiryDate       string   `json:"expiry_date"`
 }
 
 // TraceRepository is the data access contract required for traceability.
@@ -143,6 +145,12 @@ func (t *Traceability) Backward(ctx context.Context, productLotCode string) ([]R
 			source := RawMaterialSource{
 				LotCode: lot.Code,
 				Qty:     lot.Qty,
+			}
+			if lot.ReceivedAt != nil {
+				source.ReceivedAt = *lot.ReceivedAt
+			}
+			if lot.ExpiryDate != nil {
+				source.ExpiryDate = *lot.ExpiryDate
 			}
 			if lot.SupplierID != nil {
 				supplier, err := t.repo.GetSupplier(ctx, *lot.SupplierID)

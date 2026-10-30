@@ -11,6 +11,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.avatar.app.data.entities.LocalLot
+import com.avatar.app.data.entities.LocalMarket
 import com.avatar.app.data.entities.LocalPrediction
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
@@ -38,6 +39,21 @@ interface LotDao {
     suspend fun upsertAll(lots: List<LocalLot>)
 
     @Query("DELETE FROM local_lots")
+    suspend fun clear()
+
+    @Query("UPDATE local_lots SET qty = qty + :delta WHERE id = :lotId")
+    suspend fun adjustQty(lotId: Long, delta: Double)
+}
+
+@Dao
+interface MarketDao {
+    @Query("SELECT * FROM local_markets ORDER BY name")
+    suspend fun getAll(): List<LocalMarket>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(markets: List<LocalMarket>)
+
+    @Query("DELETE FROM local_markets")
     suspend fun clear()
 }
 
@@ -90,6 +106,7 @@ interface PredictionDao {
     entities = [
         LocalProduct::class,
         LocalLot::class,
+        LocalMarket::class,
         LocalSale::class,
         LocalSaleLine::class,
         Outbox::class,
@@ -101,6 +118,7 @@ interface PredictionDao {
 abstract class AppDatabase : RoomDatabase() {
     abstract fun productDao(): ProductDao
     abstract fun lotDao(): LotDao
+    abstract fun marketDao(): MarketDao
     abstract fun saleDao(): SaleDao
     abstract fun outboxDao(): OutboxDao
     abstract fun predictionDao(): PredictionDao
@@ -122,6 +140,15 @@ abstract class AppDatabase : RoomDatabase() {
                         model_version TEXT NOT NULL,
                         model_status TEXT NOT NULL,
                         warnings TEXT NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS local_markets (
+                        id INTEGER PRIMARY KEY NOT NULL,
+                        code TEXT NOT NULL,
+                        name TEXT NOT NULL
                     )
                     """.trimIndent(),
                 )

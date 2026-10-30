@@ -1,15 +1,7 @@
 {
-  "yield": {
-    "model_mae": 1.3588,
-    "model_rmse": 1.7965,
-    "baseline_mae": 17.8184,
-    "baseline_rmse": 19.8893
-  },
-  "butchery": {
-    "model_mae": 0.0454,
-    "model_rmse": 0.0557,
-    "baseline_mae": 1.2719,
-    "baseline_rmse": 1.3879
-  },
-  "note": "Veri seti gerçekçi üretim/parçalama oranlarından üretilmiş 200'er örnekten oluşur (anonymize); metrikler ayrı test kümesi (%20) üzerinden raporlanır."
+  "deprecated": true,
+  "model_status": "synthetic_only",
+  "data_origin": "synthetic_calibrated",
+  "message": "This legacy file is kept for compatibility. Current model metrics and metadata live in ml/reports/model_comparison.json, ml/reports/model_report.md and ml/artifacts/*/metadata.json.",
+  "note": "Seed/demo records are not real business data and are not used to claim real validation."
 }
