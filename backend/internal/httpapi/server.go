@@ -1,12 +1,16 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
+	"avatar/backend/internal/config"
+	"avatar/backend/internal/ml"
 	"avatar/backend/internal/model"
 	"avatar/backend/internal/repo"
 	"avatar/backend/internal/service"
@@ -15,6 +19,7 @@ import (
 // Server exposes the REST API over the configured repo.
 type Server struct {
 	repo     repo.Repo
+	ml       *ml.Client
 	cost     *service.CostEngine
 	trace    *service.Traceability
 	butchery *service.ButcheryService
@@ -23,10 +28,17 @@ type Server struct {
 	mux      *http.ServeMux
 }
 
-// NewServer builds the HTTP handler with all routes registered.
+// NewServer builds the HTTP handler with all routes registered and the ML
+// service address taken from configuration.
 func NewServer(r repo.Repo) http.Handler {
+	return NewServerWithML(r, ml.NewClient(config.Load().MLBaseURL))
+}
+
+// NewServerWithML is used by tests and by deployments that inject a client.
+func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s := &Server{
 		repo:     r,
+		ml:       mlClient,
 		cost:     service.NewCostEngine(r),
 		trace:    service.NewTraceability(r),
 		butchery: service.NewButcheryService(r),
@@ -63,6 +75,13 @@ func NewServer(r repo.Repo) http.Handler {
 	s.mux.HandleFunc("GET /sync/pull", s.handleSyncPull)
 	s.mux.HandleFunc("GET /anomalies", s.handleAnomalies)
 	s.mux.HandleFunc("POST /ocr/invoice", s.handleOCRInvoice)
+	s.mux.HandleFunc("GET /ml/health", s.handleMLHealth)
+	s.mux.HandleFunc("GET /ml/models", s.handleMLModels)
+	s.mux.HandleFunc("GET /ml/report", s.handleMLReport)
+	s.mux.HandleFunc("POST /ml/predict/yield", s.handleMLYieldLegacy)
+	s.mux.HandleFunc("POST /ml/predict/butchery", s.handleMLButcheryLegacy)
+	s.mux.HandleFunc("POST /ml/predict/v2/yield", s.handleMLYieldV2)
+	s.mux.HandleFunc("POST /ml/predict/v2/butchery", s.handleMLButcheryV2)
 	return s
 }
 
@@ -510,4 +529,88 @@ func (s *Server) handleListRedistributions(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, redistributions)
+}
+
+// --- ML service proxy -------------------------------------------------------
+
+func (s *Server) requireML(w http.ResponseWriter) bool {
+	if s.ml == nil {
+		writeError(w, http.StatusServiceUnavailable, errors.New("ml client not configured"))
+		return false
+	}
+	return true
+}
+
+func (s *Server) handleMLHealth(w http.ResponseWriter, r *http.Request) {
+	if !s.requireML(w) {
+		return
+	}
+	raw, err := s.ml.Health(r.Context())
+	writeMLResult(w, raw, err)
+}
+
+func (s *Server) handleMLModels(w http.ResponseWriter, r *http.Request) {
+	if !s.requireML(w) {
+		return
+	}
+	raw, err := s.ml.Models(r.Context())
+	writeMLResult(w, raw, err)
+}
+
+func (s *Server) handleMLReport(w http.ResponseWriter, r *http.Request) {
+	if !s.requireML(w) {
+		return
+	}
+	raw, err := s.ml.Report(r.Context())
+	writeMLResult(w, raw, err)
+}
+
+func (s *Server) handleMLYieldLegacy(w http.ResponseWriter, r *http.Request) {
+	s.handleMLPredict(w, r, "/predict/yield")
+}
+
+func (s *Server) handleMLButcheryLegacy(w http.ResponseWriter, r *http.Request) {
+	s.handleMLPredict(w, r, "/predict/butchery")
+}
+
+func (s *Server) handleMLYieldV2(w http.ResponseWriter, r *http.Request) {
+	s.handleMLPredict(w, r, "/predict/v2/yield")
+}
+
+func (s *Server) handleMLButcheryV2(w http.ResponseWriter, r *http.Request) {
+	s.handleMLPredict(w, r, "/predict/v2/butchery")
+}
+
+func (s *Server) handleMLPredict(w http.ResponseWriter, r *http.Request, path string) {
+	if !s.requireML(w) {
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	raw, err := s.ml.Predict(r.Context(), path, body)
+	writeMLResult(w, raw, err)
+}
+
+func writeMLResult(w http.ResponseWriter, raw []byte, err error) {
+	if err == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(raw)
+		return
+	}
+	var statusErr *ml.StatusError
+	if errors.As(err, &statusErr) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(statusErr.Status)
+		_, _ = w.Write(statusErr.Body)
+		return
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		writeError(w, http.StatusGatewayTimeout, err)
+		return
+	}
+	writeError(w, http.StatusBadGateway, err)
 }
