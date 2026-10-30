@@ -38,6 +38,32 @@ interface MlReport {
   note: string;
 }
 
+interface Material {
+  id: number;
+  name: string;
+}
+
+interface ButcheryBatch {
+  id: number;
+  code: string;
+  animal_type: string;
+  input_weight: number;
+  total_cost: number;
+}
+
+interface Sale {
+  id: number;
+  code: string;
+  market_id: number;
+  sold_at: string;
+  status: string;
+}
+
+interface Market {
+  id: number;
+  name: string;
+}
+
 export default function Reports({ onNavigate }: { onNavigate: (view: string) => void }) {
   const [productionCount, setProductionCount] = useState(0);
   const [saleCount, setSaleCount] = useState(0);
@@ -129,8 +155,68 @@ export default function Reports({ onNavigate }: { onNavigate: (view: string) => 
     }
   }
 
+  async function exportPurchaseReport() {
+    setFeedback(null);
+    try {
+      const [lots, materials] = await Promise.all([
+        get<{ id: number; code: string; item_id: number; qty: number; unit_cost: number }[]>("/lots?item_type=material"),
+        get<Material[]>("/materials"),
+      ]);
+      const nameById = new Map(materials.map((m) => [m.id, m.name]));
+      const rows: (string | number)[][] = lots.map((lot) => [
+        lot.code,
+        nameById.get(lot.item_id) ?? "—",
+        lot.qty,
+        lot.unit_cost.toFixed(2),
+        (lot.qty * lot.unit_cost).toFixed(2),
+      ]);
+      downloadCsv("alis-raporu.csv", ["Lot", "Hammadde", "Miktar", "Birim maliyet", "Toplam"], rows);
+      setFeedback("Alış raporu indirildi.");
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function exportButcheryReport() {
+    setFeedback(null);
+    try {
+      const batches = await get<ButcheryBatch[]>("/butchery-batches");
+      const rows: (string | number)[][] = batches.map((batch) => [
+        batch.code,
+        batch.animal_type,
+        batch.input_weight,
+        batch.total_cost.toFixed(2),
+      ]);
+      downloadCsv("parcalama-raporu.csv", ["Parti", "Hayvan", "Giriş ağırlığı", "Toplam maliyet"], rows);
+      setFeedback("Parçalama raporu indirildi.");
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function exportSalesReport() {
+    setFeedback(null);
+    try {
+      const [sales, markets] = await Promise.all([get<Sale[]>("/sales"), get<Market[]>("/markets")]);
+      const nameById = new Map(markets.map((m) => [m.id, m.name]));
+      const rows: (string | number)[][] = sales.map((sale) => [
+        sale.code,
+        nameById.get(sale.market_id) ?? `Market #${sale.market_id}`,
+        sale.sold_at,
+        sale.status,
+      ]);
+      downloadCsv("satis-raporu.csv", ["Satış", "Market", "Tarih", "Durum"], rows);
+      setFeedback("Satış raporu indirildi.");
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   const catalog = [
     { name: "Gerçek üretim maliyeti", scope: "Hammadde + hizmet + EKP", format: "CSV", action: exportCostReport },
+    { name: "Alış raporu", scope: "Hammadde lotları ve maliyet", format: "CSV", action: exportPurchaseReport },
+    { name: "Parçalama raporu", scope: "Kuzu parçalama kayıtları", format: "CSV", action: exportButcheryReport },
+    { name: "Satış raporu", scope: "Satış ve sevkiyat kayıtları", format: "CSV", action: exportSalesReport },
     { name: "Lot hareket geçmişi", scope: "Giriş, transfer, üretim, satış", format: "CSV", action: exportLotHistory },
     { name: "Geri çağırma alıcı listesi", scope: "Market ve miktar bazında", format: "CSV", action: () => onNavigate("recall") },
     { name: "AI tahmin hata raporu", scope: "Gerçek / tahmin / MAE / RMSE", format: "CSV", action: exportAiReport },
