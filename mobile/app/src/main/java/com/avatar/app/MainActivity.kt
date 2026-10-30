@@ -25,6 +25,7 @@ import com.avatar.app.data.PredictionView
 import com.avatar.app.data.PushResult
 import com.avatar.app.data.SyncRepository
 import com.avatar.app.data.entities.LocalLot
+import com.avatar.app.data.entities.LocalMarket
 import com.avatar.app.data.entities.LocalPrediction
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
@@ -56,6 +57,7 @@ private fun AvatarApp(repository: SyncRepository) {
     var screen by remember { mutableStateOf(Screen.Home) }
     var products by remember { mutableStateOf(emptyList<LocalProduct>()) }
     var lots by remember { mutableStateOf(emptyList<LocalLot>()) }
+    var markets by remember { mutableStateOf(emptyList<LocalMarket>()) }
     var sales by remember { mutableStateOf(emptyList<LocalSale>()) }
     var predictionHistory by remember { mutableStateOf(emptyList<LocalPrediction>()) }
     var yieldResult by remember { mutableStateOf<PredictionView?>(null) }
@@ -66,6 +68,7 @@ private fun AvatarApp(repository: SyncRepository) {
     suspend fun refresh() {
         products = repository.products()
         lots = repository.lots()
+        markets = repository.markets()
         sales = repository.sales()
         predictionHistory = repository.predictions()
     }
@@ -149,14 +152,15 @@ private fun AvatarApp(repository: SyncRepository) {
                 Screen.Sale -> Sale(
                     products = products,
                     lots = lots,
+                    markets = markets,
                     message = message,
                     onCreateSale = { sale, line ->
                         scope.launch {
                             val saleId = repository.saveSale(sale, listOf(line))
-                            message = when (val result = repository.submitSale(saleId)) {
-                                is PushResult.Success -> "Sale synced."
-                                is PushResult.Blocked -> "Blocked lot: sale rejected."
-                                is PushResult.Failed -> "Saved offline: ${result.message}"
+                            message = when (repository.submitSale(saleId)) {
+                                is PushResult.Success -> "Satış senkronize edildi."
+                                is PushResult.Blocked -> "Bloklu lot: satış reddedildi."
+                                is PushResult.Failed -> "Yerel kaydedildi (çevrimdışı)."
                             }
                             refresh()
                         }
