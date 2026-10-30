@@ -37,6 +37,7 @@ export default function Inventory() {
 
   const [stockLotId, setStockLotId] = useState("");
   const [stockQty, setStockQty] = useState("");
+  const [stockMovementType, setStockMovementType] = useState("inbound");
 
   const load = useCallback(() => {
     get<Material[]>("/materials").then(setMaterials).catch(() => {});
@@ -93,7 +94,7 @@ export default function Inventory() {
     try {
       await post("/stock-movements", {
         lot_id: lot.id,
-        movement_type: "inbound",
+        movement_type: stockMovementType,
         qty,
         unit_cost: lot.unit_cost,
         total_cost: qty * lot.unit_cost,
@@ -146,6 +147,13 @@ export default function Inventory() {
                 {lots.map((lot) => (
                   <option key={lot.id} value={lot.id}>{lot.code} — {nameById.get(lot.item_id) ?? ""}</option>
                 ))}
+              </select>
+              <select value={stockMovementType} onChange={(e) => setStockMovementType(e.target.value)}>
+                <option value="inbound">Giriş (inbound)</option>
+                <option value="transfer">Depo transferi</option>
+                <option value="return">İade</option>
+                <option value="rework">Yeniden işleme</option>
+                <option value="shipment">Sevkiyat</option>
               </select>
               <input value={stockQty} onChange={(e) => setStockQty(e.target.value)} placeholder="Miktar (kg)" style={{ width: 120 }} />
               <button className="btn btn-primary" type="submit">Giriş yap</button>
