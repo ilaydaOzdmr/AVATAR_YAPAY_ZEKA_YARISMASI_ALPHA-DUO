@@ -24,6 +24,28 @@ interface RawMaterialSource {
   qty: number;
 }
 
+interface Redistribution {
+  id: number;
+  market_id: number;
+  lot_id: number;
+  sub_buyer: string;
+  contact: string | null;
+  qty: number;
+}
+
+interface Market {
+  id: number;
+  name: string;
+}
+
+interface RedistributionView {
+  lot_code: string;
+  market_name: string;
+  sub_buyer: string;
+  contact: string | null;
+  qty: number;
+}
+
 type Mode = "forward" | "backward";
 
 export default function Traceability() {
@@ -33,6 +55,37 @@ export default function Traceability() {
   const [sources, setSources] = useState<RawMaterialSource[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
+  const [redistributions, setRedistributions] = useState<RedistributionView[]>([]);
+
+  async function loadRedistributions(affectedLots: AffectedLot[]) {
+    setRedistributions([]);
+    try {
+      const [lots, markets] = await Promise.all([
+        get<{ id: number; code: string }[]>("/lots"),
+        get<Market[]>("/markets"),
+      ]);
+      const lotIdByCode = new Map(lots.map((lot) => [lot.code, lot.id]));
+      const marketName = new Map(markets.map((m) => [m.id, m.name]));
+      const views: RedistributionView[] = [];
+      for (const lot of affectedLots) {
+        const lotId = lotIdByCode.get(lot.lot_code);
+        if (!lotId) continue;
+        const reds = await get<Redistribution[]>(`/redistributions?lot_id=${lotId}`);
+        for (const red of reds) {
+          views.push({
+            lot_code: lot.lot_code,
+            market_name: marketName.get(red.market_id) ?? `Market #${red.market_id}`,
+            sub_buyer: red.sub_buyer,
+            contact: red.contact,
+            qty: red.qty,
+          });
+        }
+      }
+      setRedistributions(views);
+    } catch {
+      setRedistributions([]);
+    }
+  }
 
   async function trace(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,6 +93,7 @@ export default function Traceability() {
     setAffected([]);
     setSources([]);
     setSearched(false);
+    setRedistributions([]);
     const code = lotCode.trim();
     if (!code) {
       setError("Lütfen bir lot numarası girin.");
@@ -47,7 +101,9 @@ export default function Traceability() {
     }
     try {
       if (mode === "forward") {
-        setAffected(await get<AffectedLot[]>(`/trace/forward?lot=${encodeURIComponent(code)}`));
+        const lots = await get<AffectedLot[]>(`/trace/forward?lot=${encodeURIComponent(code)}`);
+        setAffected(lots);
+        void loadRedistributions(lots);
       } else {
         setSources(await get<RawMaterialSource[]>(`/trace/backward?lot=${encodeURIComponent(code)}`));
       }
@@ -158,6 +214,33 @@ export default function Traceability() {
               </div>
             ))}
             {affected.length === 0 && <p className="muted">Etkilenen mamul bulunamadı.</p>}
+          </div>
+        </div>
+      )}
+
+      {searched && mode === "forward" && redistributions.length > 0 && (
+        <div className="panel" style={{ marginTop: 16 }}>
+          <div className="panel-head">
+            <h2>İkinci kademe dağıtım</h2>
+            <span className="status ok">Kaydedilmiş</span>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Mamul lotu</th><th>Market</th><th>Alt alıcı</th><th>Miktar</th><th>İletişim</th></tr>
+              </thead>
+              <tbody>
+                {redistributions.map((red, index) => (
+                  <tr key={`${red.lot_code}-${index}`}>
+                    <td className="id">{red.lot_code}</td>
+                    <td>{red.market_name}</td>
+                    <td><b>{red.sub_buyer}</b></td>
+                    <td>{red.qty} paket</td>
+                    <td>{red.contact ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

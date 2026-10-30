@@ -23,6 +23,7 @@ interface ButcheryItemCost {
   quantity: number;
   is_waste: boolean;
   allocated_cost: number;
+  allocated_cost_value: number;
 }
 
 interface ButcheryResult {
@@ -47,6 +48,7 @@ export default function Butchery() {
   const [result, setResult] = useState<ButcheryResult | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [allocationKey, setAllocationKey] = useState<"weight" | "value">("weight");
 
   const [code, setCode] = useState("");
   const [animalType, setAnimalType] = useState("kuzu");
@@ -201,7 +203,13 @@ export default function Butchery() {
         </div>
 
         <div className="panel">
-          <div className="panel-head"><h2>Parça ve maliyet dağıtımı</h2></div>
+          <div className="panel-head">
+            <h2>Parça ve maliyet dağıtımı</h2>
+            <select className="tiny-select" value={allocationKey} onChange={(e) => setAllocationKey(e.target.value as "weight" | "value")}>
+              <option value="weight">Miktar (ağırlık) bazlı</option>
+              <option value="value">Değer ağırlıklı</option>
+            </select>
+          </div>
           {result ? (
             <>
               {!result.weight_balance_ok && (
@@ -234,7 +242,7 @@ export default function Butchery() {
                         <td>{item.quantity}</td>
                         <td>{item.weight} kg</td>
                         <td>{item.is_waste ? "Evet" : "Hayır"}</td>
-                        <td>€ {item.allocated_cost.toFixed(2)}</td>
+                        <td>€ {(allocationKey === "value" ? item.allocated_cost_value : item.allocated_cost).toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>

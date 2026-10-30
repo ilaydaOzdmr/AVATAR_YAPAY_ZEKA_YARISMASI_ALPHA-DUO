@@ -169,3 +169,14 @@ type SaleLine struct {
 	TotalPrice      float64 `json:"total_price"`
 	StockMovementID *int64  `json:"stock_movement_id"`
 }
+
+// Redistribution is a second-level distribution from a market to a sub-buyer.
+// It is shown in traceability/recall only when such a record exists.
+type Redistribution struct {
+	ID       int64   `json:"id"`
+	MarketID int64   `json:"market_id"`
+	LotID    int64   `json:"lot_id"`
+	SubBuyer string  `json:"sub_buyer"`
+	Contact  *string `json:"contact"`
+	Qty      float64 `json:"qty"`
+}

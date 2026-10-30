@@ -52,6 +52,32 @@ func (f *fakeButcheryRepository) ListButcheryItems(_ context.Context, _ int64) (
 	return f.items, nil
 }
 
+func (f *fakeButcheryRepository) GetProduct(_ context.Context, id int64) (model.Product, error) {
+	return model.Product{ID: id, ListPrice: 10}, nil
+}
+
+func TestDistributeValueSumEqualsTotal(t *testing.T) {
+	items := []DistItem{
+		{ProductID: 1, Weight: 10, Value: 100},
+		{ProductID: 2, Weight: 8, Value: 80},
+		{ProductID: 3, Weight: 4, Value: 40},
+	}
+
+	got := DistributeByValue(287.50, items)
+
+	var sum float64
+	for _, item := range got {
+		sum += item.AllocatedCost
+	}
+	if sum != 287.50 {
+		t.Fatalf("value sum = %v, want 287.50", sum)
+	}
+	// Highest-value item (ProductID 1) should get the largest share.
+	if got[0].AllocatedCost <= got[2].AllocatedCost {
+		t.Fatalf("value-weighted: highest value item should get the largest share, got %v vs %v", got[0].AllocatedCost, got[2].AllocatedCost)
+	}
+}
+
 func TestCostMismatchFlag(t *testing.T) {
 	repo := &fakeButcheryRepository{
 		batch: model.ButcheryBatch{

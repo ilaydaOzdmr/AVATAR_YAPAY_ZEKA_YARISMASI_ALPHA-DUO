@@ -67,4 +67,13 @@ INSERT INTO stock_movements (lot_id, movement_type, qty, unit_cost, total_cost, 
   (3, 'inbound', 5.000, 11.60, 58.00, 'supplier', 3, '2026-10-19 08:00:00'),
   (4, 'shipment', -30.000, 18.16, 544.80, 'market', 1, '2026-10-20 10:00:00'),
   (4, 'shipment', -25.000, 18.16, 454.00, 'market', 2, '2026-10-20 11:00:00'),
-  (4, 'shipment', -30.000, 18.16, 544.80, 'market', 3, '2026-10-20 12:00:00');
+  (4, 'shipment', -30.000, 18.16, 544.80, 'market', 3, '2026-10-20 12:00:00'),
+  -- Diğer hareket tipleri (depo transferi / iade / yeniden işleme)
+  (4, 'transfer', -5.000, 18.16, 90.80, 'warehouse', NULL, '2026-10-21 09:00:00'),
+  (4, 'return', 2.000, 18.16, 36.32, 'market', 1, '2026-10-21 14:00:00'),
+  (1, 'rework', -3.000, 9.70, 29.10, NULL, NULL, '2026-10-22 10:00:00');
+
+-- Second-level distribution (market -> sub-buyer), shown only when recorded
+INSERT INTO market_redistributions (market_id, lot_id, sub_buyer, contact, qty) VALUES
+  (1, 4, 'Restoran X', '0212 222 22 01', 10.000),
+  (1, 4, 'Kasap Y', '0212 222 22 02', 5.000);
