@@ -128,6 +128,7 @@ class MLService:
             "butchery_lamb": legacy_metrics(lamb, "total_saleable_weight"),
             "butchery_cattle": legacy_metrics(cattle, "total_saleable_weight"),
             "note": WARNING_SYNTHETIC,
+            "model_version": yield_bundle.model_version,
             "model_status": "synthetic_only",
             "data_origin": DATA_ORIGIN,
             "groups": {

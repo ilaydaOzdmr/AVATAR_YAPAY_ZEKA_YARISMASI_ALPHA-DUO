@@ -1,9 +1,28 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { get, mlGet, mlPost } from "../../api";
 
-interface YieldResult {
-  predicted_qty: number;
-  predicted_unit_cost: number;
+interface PredictionMeta {
+  model_version: string;
+  model_status: string;
+  warnings: string[];
+  uncertainty?: Record<string, unknown>;
+}
+
+interface YieldResponse extends PredictionMeta {
+  prediction: { finished_qty: number; yield_pct: number; estimated_ekp: number };
+  cost_breakdown?: Record<string, number>;
+  ekp_kind?: string;
+  accounting_ekp?: number;
+}
+
+interface ButcheryResponse extends PredictionMeta {
+  prediction: Record<string, number>;
+  physical_check?: {
+    carcass_weight_kg: number;
+    parts_sum_kg: number;
+    saleable_sum_kg: number;
+    parts_over_carcass: boolean;
+  };
 }
 
 interface ProductionOrder {
@@ -25,14 +44,10 @@ interface ForecastRow {
   diff: number;
 }
 
-interface ButcheryPart {
-  product_code: string;
-  weight: number;
-}
-
 interface ModelMetrics {
   model_mae: number;
   model_rmse: number;
+  model_r2?: number;
   baseline_mae: number;
   baseline_rmse: number;
 }
@@ -41,15 +56,71 @@ interface MlReport {
   yield: ModelMetrics;
   butchery: ModelMetrics;
   note: string;
+  model_version?: string;
+  model_status?: string;
+}
+
+const PART_LABELS: Record<string, string> = {
+  leg_weight: "But",
+  loin_weight: "Sırt",
+  shoulder_weight: "Omuz",
+  rib_weight: "Kaburga",
+  mince_weight: "Kıyma",
+  diced_meat_weight: "Kuşbaşı",
+  bone_weight: "Kemik",
+  waste_weight: "Fire",
+  total_saleable_weight: "Toplam satılabilir",
+  cutting_yield_pct: "Verim %",
+};
+
+function WarningList({ items }: { items: string[] }) {
+  if (items.length === 0) return null;
+  return (
+    <ul className="mt-2 space-y-1 text-sm" style={{ paddingLeft: 18, color: "#8A5A1B" }}>
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+function ForecastChart({ rows }: { rows: ForecastRow[] }) {
+  const width = Math.max(360, rows.length * 90);
+  const height = 180;
+  const max = Math.max(...rows.flatMap((row) => [row.expected, row.actual]), 1);
+  const barWidth = 22;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Tahmin ve gerçek karşılaştırması" style={{ width: "100%", height: "auto" }}>
+      <line x1="30" y1={height - 30} x2={width - 10} y2={height - 30} stroke="#c8d1ca" />
+      {rows.map((row, index) => {
+        const groupX = 30 + index * 90;
+        const expectedHeight = ((height - 55) * row.expected) / max;
+        const actualHeight = ((height - 55) * row.actual) / max;
+        return (
+          <g key={row.code}>
+            <rect x={groupX} y={height - 30 - expectedHeight} width={barWidth} height={expectedHeight} fill="#B97722" />
+            <rect x={groupX + barWidth + 4} y={height - 30 - actualHeight} width={barWidth} height={actualHeight} fill="#2C7058" />
+            <text x={groupX} y={height - 12} fontSize="9" fill="#59645c">{row.code.slice(-6)}</text>
+          </g>
+        );
+      })}
+      <text x={30} y={14} fontSize="11" fill="#59645c">■ Beklenen (turuncu) · ■ Gerçekleşen (yeşil)</text>
+    </svg>
+  );
 }
 
 export default function Predictions() {
   const [rawKg, setRawKg] = useState("100");
-  const [yieldResult, setYieldResult] = useState<YieldResult | null>(null);
+  const [spiceKg, setSpiceKg] = useState("2");
+  const [casingKg, setCasingKg] = useState("3");
+  const [serviceCost, setServiceCost] = useState("400");
+  const [laborCost, setLaborCost] = useState("80");
+  const [yieldResult, setYieldResult] = useState<YieldResponse | null>(null);
 
-  const [animalType, setAnimalType] = useState("kuzu");
-  const [inputWeight, setInputWeight] = useState("25");
-  const [parts, setParts] = useState<ButcheryPart[]>([]);
+  const [animalType, setAnimalType] = useState("lamb");
+  const [liveWeight, setLiveWeight] = useState("45");
+  const [carcassWeight, setCarcassWeight] = useState("21");
+  const [butcheryResult, setButcheryResult] = useState<ButcheryResponse | null>(null);
 
   const [report, setReport] = useState<MlReport | null>(null);
   const [forecast, setForecast] = useState<ForecastRow[]>([]);
@@ -81,8 +152,12 @@ export default function Predictions() {
     setError(null);
     try {
       setYieldResult(
-        await mlPost<YieldResult>("/predict/yield", {
+        await mlPost<YieldResponse>("/predict/v2/yield", {
           raw_material_kg: Number.parseFloat(rawKg),
+          spice_kg: Number.parseFloat(spiceKg) || 0,
+          casing_kg: Number.parseFloat(casingKg) || 0,
+          service_cost: Number.parseFloat(serviceCost) || 0,
+          labor_cost: Number.parseFloat(laborCost) || 0,
         }),
       );
     } catch (err) {
@@ -93,11 +168,13 @@ export default function Predictions() {
   async function runButchery() {
     setError(null);
     try {
-      const result = await mlPost<{ parts: ButcheryPart[] }>("/predict/butchery", {
-        animal_type: animalType.trim(),
-        input_weight: Number.parseFloat(inputWeight),
-      });
-      setParts(result.parts);
+      setButcheryResult(
+        await mlPost<ButcheryResponse>("/predict/v2/butchery", {
+          animal_type: animalType,
+          live_weight_kg: Number.parseFloat(liveWeight),
+          carcass_weight_kg: carcassWeight.trim() ? Number.parseFloat(carcassWeight) : null,
+        }),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -123,15 +200,12 @@ export default function Predictions() {
     return (
       <table>
         <thead>
-          <tr>
-            <th>Metrik</th>
-            <th>Model</th>
-            <th>Referans</th>
-          </tr>
+          <tr><th>Metrik</th><th>Model</th><th>Baseline</th></tr>
         </thead>
         <tbody>
           <tr><td>MAE</td><td>{metrics.model_mae}</td><td>{metrics.baseline_mae}</td></tr>
           <tr><td>RMSE</td><td>{metrics.model_rmse}</td><td>{metrics.baseline_rmse}</td></tr>
+          <tr><td>R²</td><td>{metrics.model_r2 ?? "—"}</td><td>—</td></tr>
         </tbody>
       </table>
     );
@@ -143,7 +217,7 @@ export default function Predictions() {
         <div>
           <div className="eyebrow">KARAR DESTEK SİSTEMİ</div>
           <h1>Yapay Zekâ Merkezi</h1>
-          <p>Tahminleri gerçek sonuçlarla karşılaştırın. Operasyon kararlarını kesin kayıtlarla verin.</p>
+          <p>Tahminler Go backend üzerinden alınır. Model durumu ve belirsizlik her cevapta gösterilir.</p>
         </div>
         <button className="btn btn-primary" type="button" onClick={refreshAll}>↻ Tahminleri güncelle</button>
       </div>
@@ -155,25 +229,41 @@ export default function Predictions() {
           <div className="panel-head">
             <div>
               <h2>Üretim verimi &amp; EKP tahmini</h2>
-              <p>Model A · Üretim emirleri</p>
+              <p>Model A · Üretim öncesi tahmin</p>
             </div>
           </div>
           <div style={{ padding: 20 }}>
-            <form className="inline-form" onSubmit={predictYield}>
-              <input value={rawKg} onChange={(e) => setRawKg(e.target.value)} placeholder="Hammadde kg" style={{ width: 140 }} />
+            <form className="inline-form" onSubmit={predictYield} style={{ flexWrap: "wrap", gap: 8 }}>
+              <input value={rawKg} onChange={(e) => setRawKg(e.target.value)} placeholder="Hammadde kg" style={{ width: 120 }} />
+              <input value={spiceKg} onChange={(e) => setSpiceKg(e.target.value)} placeholder="Baharat kg" style={{ width: 110 }} />
+              <input value={casingKg} onChange={(e) => setCasingKg(e.target.value)} placeholder="Bağırsak kg" style={{ width: 115 }} />
+              <input value={serviceCost} onChange={(e) => setServiceCost(e.target.value)} placeholder="Hizmet €" style={{ width: 100 }} />
+              <input value={laborCost} onChange={(e) => setLaborCost(e.target.value)} placeholder="İşçilik €" style={{ width: 100 }} />
               <button className="btn btn-secondary" type="submit">Tahmin et</button>
             </form>
             {yieldResult && (
-              <div className="metrics" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 16, marginBottom: 0 }}>
-                <div className="metric">
-                  <div className="metric-top">Beklenen mamul miktarı</div>
-                  <strong>{yieldResult.predicted_qty} paket</strong>
+              <>
+                <div className="metrics" style={{ gridTemplateColumns: "1fr 1fr 1fr", marginTop: 16, marginBottom: 0 }}>
+                  <div className="metric">
+                    <div className="metric-top">Beklenen mamul</div>
+                    <strong>{yieldResult.prediction.finished_qty} kg</strong>
+                  </div>
+                  <div className="metric">
+                    <div className="metric-top">Verim</div>
+                    <strong>{(yieldResult.prediction.yield_pct * 100).toFixed(1)}%</strong>
+                  </div>
+                  <div className="metric">
+                    <div className="metric-top">Tahmini EKP</div>
+                    <strong style={{ color: "var(--green-3)" }}>€ {yieldResult.prediction.estimated_ekp.toFixed(3)}</strong>
+                  </div>
                 </div>
-                <div className="metric">
-                  <div className="metric-top">Tahmini EKP</div>
-                  <strong style={{ color: "var(--green-3)" }}>€ {yieldResult.predicted_unit_cost.toFixed(3)}</strong>
-                </div>
-              </div>
+                <p className="muted" style={{ marginTop: 10 }}>
+                  Model sürümü: <b>{yieldResult.model_version}</b> · Durum: <b>{yieldResult.model_status}</b>
+                  {yieldResult.cost_breakdown ? ` · Toplam maliyet: € ${yieldResult.cost_breakdown.total_cost}` : ""}
+                  {yieldResult.ekp_kind ? ` · EKP türü: ${yieldResult.ekp_kind}` : ""}
+                </p>
+                <WarningList items={yieldResult.warnings} />
+              </>
             )}
           </div>
         </div>
@@ -181,63 +271,86 @@ export default function Predictions() {
         <div className="panel">
           <div className="panel-head">
             <div>
-              <h2>Kuzu parçalama verimi</h2>
-              <p>Model B · Giriş özellikleri ve parça ağırlıkları</p>
+              <h2>Parçalama tahmini</h2>
+              <p>Model B · Kuzu ve sığır ayrı modeller</p>
             </div>
           </div>
           <div style={{ padding: 20 }}>
-            <form className="inline-form" onSubmit={predictButchery}>
-              <input value={animalType} onChange={(e) => setAnimalType(e.target.value)} placeholder="Hayvan türü" style={{ width: 110 }} />
-              <input value={inputWeight} onChange={(e) => setInputWeight(e.target.value)} placeholder="Giriş ağırlığı" style={{ width: 120 }} />
+            <form className="inline-form" onSubmit={predictButchery} style={{ flexWrap: "wrap", gap: 8 }}>
+              <select value={animalType} onChange={(e) => setAnimalType(e.target.value)} style={{ width: 110 }}>
+                <option value="lamb">Kuzu</option>
+                <option value="cattle">Sığır</option>
+              </select>
+              <input value={liveWeight} onChange={(e) => setLiveWeight(e.target.value)} placeholder="Canlı kg" style={{ width: 110 }} />
+              <input value={carcassWeight} onChange={(e) => setCarcassWeight(e.target.value)} placeholder="Karkas kg (ops.)" style={{ width: 135 }} />
               <button className="btn btn-secondary" type="submit">Tahmin et</button>
             </form>
-            {parts.length > 0 && (
-              <div className="table-wrap" style={{ marginTop: 12 }}>
-                <table>
-                  <thead>
-                    <tr><th>Ürün kodu</th><th>Tahmini ağırlık</th></tr>
-                  </thead>
-                  <tbody>
-                    {parts.map((part) => (
-                      <tr key={part.product_code}>
-                        <td className="id">{part.product_code}</td>
-                        <td>{part.weight} kg</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {butcheryResult && (
+              <>
+                <div className="table-wrap" style={{ marginTop: 12 }}>
+                  <table>
+                    <thead>
+                      <tr><th>Parça</th><th>Tahmini değer</th></tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(butcheryResult.prediction).map(([key, value]) => (
+                        <tr key={key}>
+                          <td>{PART_LABELS[key] ?? key}</td>
+                          <td>{key === "cutting_yield_pct" ? `${value.toFixed(2)}%` : `${value.toFixed(3)} kg`}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {butcheryResult.physical_check && (
+                  <p className="muted" style={{ marginTop: 10 }}>
+                    Karkas: {butcheryResult.physical_check.carcass_weight_kg} kg · Parça toplamı:{" "}
+                    {butcheryResult.physical_check.parts_sum_kg} kg ·{" "}
+                    {butcheryResult.physical_check.parts_over_carcass ? "Uyarı: parça toplamı karkası aşıyor." : "Fiziksel kontrol tutarlı."}
+                  </p>
+                )}
+                <p className="muted">
+                  Model sürümü: <b>{butcheryResult.model_version}</b> · Durum: <b>{butcheryResult.model_status}</b>
+                </p>
+                <WarningList items={butcheryResult.warnings} />
+              </>
             )}
           </div>
         </div>
       </div>
 
-      {forecast.length > 0 && (
+      {forecast.length > 0 ? (
         <div className="panel" style={{ marginTop: 16 }}>
           <div className="panel-head">
             <div>
-              <h2>Tahmin vs Gerçek sapma</h2>
-              <p>Üretim emirleri: beklenen (tahmin) ve gerçekleşen miktar karşılaştırması</p>
+              <h2>Tahmin vs gerçek</h2>
+              <p>Yalnızca gerçek üretim emirleri varsa gösterilir; veri yoksa grafik üretilmez.</p>
             </div>
           </div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr><th>Üretim emri</th><th>Beklenen (tahmin)</th><th>Gerçekleşen</th><th>Sapma</th><th>%</th></tr>
-              </thead>
-              <tbody>
-                {forecast.map((row) => (
-                  <tr key={row.code}>
-                    <td className="id">{row.code}</td>
-                    <td>{row.expected}</td>
-                    <td>{row.actual}</td>
-                    <td style={{ color: row.diff > 0 ? "var(--amber)" : "var(--green-3)" }}>{row.diff}</td>
-                    <td>{row.expected > 0 ? `${((row.diff / row.expected) * 100).toFixed(1)}%` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ padding: 16 }}>
+            <ForecastChart rows={forecast} />
+            <div className="table-wrap" style={{ marginTop: 12 }}>
+              <table>
+                <thead>
+                  <tr><th>Üretim emri</th><th>Beklenen</th><th>Gerçekleşen</th><th>Sapma</th></tr>
+                </thead>
+                <tbody>
+                  {forecast.map((row) => (
+                    <tr key={row.code}>
+                      <td className="id">{row.code}</td>
+                      <td>{row.expected}</td>
+                      <td>{row.actual}</td>
+                      <td>{row.diff}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+        </div>
+      ) : (
+        <div className="panel" style={{ marginTop: 16, padding: 20 }}>
+          <p className="muted">Gerçek üretim kaydı bulunamadı; tahmin–gerçek grafiği gösterilmiyor.</p>
         </div>
       )}
 
@@ -260,7 +373,7 @@ export default function Predictions() {
               <div className="alert" style={{ borderBottom: 0 }}>
                 <div className="alert-symbol amber">↗</div>
                 <div>
-                  <b>Model notu</b>
+                  <b>Model durumu: {report.model_status ?? "synthetic_only"} · Sürüm {report.model_version ?? "—"}</b>
                   <p>{report.note}</p>
                 </div>
               </div>
