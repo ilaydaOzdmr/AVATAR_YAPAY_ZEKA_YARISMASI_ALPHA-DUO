@@ -152,6 +152,7 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
+                db.execSQL("ALTER TABLE local_lots ADD COLUMN item_id INTEGER NOT NULL DEFAULT 0")
             }
         }
 
