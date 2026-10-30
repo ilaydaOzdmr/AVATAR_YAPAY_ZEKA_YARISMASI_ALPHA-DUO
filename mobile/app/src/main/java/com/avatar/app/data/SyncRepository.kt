@@ -105,6 +105,8 @@ class SyncRepository(
                 created_at = Instant.now().toString(),
             ),
         )
+        // Yerel stok hareketi: satılan miktar lot bakiyesinden düşülür.
+        savedLines.forEach { line -> db.lotDao().adjustQty(line.lot_id, -line.qty) }
         saleId
     }
 

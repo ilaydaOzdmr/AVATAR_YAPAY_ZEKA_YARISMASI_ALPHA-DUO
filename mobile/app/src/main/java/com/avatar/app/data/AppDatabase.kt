@@ -37,6 +37,9 @@ interface LotDao {
 
     @Query("DELETE FROM local_lots")
     suspend fun clear()
+
+    @Query("UPDATE local_lots SET qty = qty + :delta WHERE id = :lotId")
+    suspend fun adjustQty(lotId: Long, delta: Double)
 }
 
 @Dao
