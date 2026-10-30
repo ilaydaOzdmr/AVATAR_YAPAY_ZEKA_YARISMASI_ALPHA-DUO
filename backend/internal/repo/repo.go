@@ -38,6 +38,7 @@ type Repo interface {
 	ListButcheryItems(ctx context.Context, batchID int64) ([]model.ButcheryItem, error)
 	ListButcheryBatches(ctx context.Context) ([]model.ButcheryBatch, error)
 	ListProductionOrders(ctx context.Context) ([]model.ProductionOrder, error)
+	CreateRecall(ctx context.Context, event model.RecallEvent, blocks []model.RecallBlock) (model.RecallEvent, error)
 	CreateRecallEvent(ctx context.Context, event model.RecallEvent) (model.RecallEvent, error)
 	GetRecallEvent(ctx context.Context, id int64) (model.RecallEvent, error)
 	CreateRecallBlock(ctx context.Context, block model.RecallBlock) (model.RecallBlock, error)
@@ -916,6 +917,80 @@ func (r *mysqlRepo) ListProductionOrders(ctx context.Context) ([]model.Productio
 	return out, rows.Err()
 }
 
+func (r *mysqlRepo) CreateRecall(ctx context.Context, event model.RecallEvent, blocks []model.RecallBlock) (model.RecallEvent, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.RecallEvent{}, err
+	}
+	defer tx.Rollback()
+
+	code, err := uniqueRecallCodeTx(ctx, tx, event.Code)
+	if err != nil {
+		return model.RecallEvent{}, err
+	}
+
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO recall_events (code, reason, source_lot_id) VALUES (?, ?, ?)`,
+		code, event.Reason, event.SourceLotID)
+	if err != nil {
+		return model.RecallEvent{}, err
+	}
+	event.ID, err = res.LastInsertId()
+	if err != nil {
+		return model.RecallEvent{}, err
+	}
+	event.Code = code
+
+	blockedAt := time.Now().Format("2006-01-02 15:04:05")
+	for _, block := range blocks {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO recall_blocks (recall_event_id, lot_id, blocked_at) VALUES (?, ?, ?)`,
+			event.ID, block.LotID, blockedAt); err != nil {
+			return model.RecallEvent{}, err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE lots SET status = 'blocked', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+			block.LotID); err != nil {
+			return model.RecallEvent{}, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.RecallEvent{}, err
+	}
+	return event, nil
+}
+
+func uniqueRecallCodeTx(ctx context.Context, tx *sql.Tx, base string) (string, error) {
+	base = strings.ToUpper(strings.TrimSpace(base))
+	if base == "" {
+		base = "REC-" + time.Now().Format("20060102-150405")
+	}
+	if len(base) > 64 {
+		base = base[:64]
+	}
+	for i := 1; i <= 100; i++ {
+		candidate := base
+		if i > 1 {
+			suffix := fmt.Sprintf("-%d", i)
+			trimmed := base
+			if len(trimmed) > 64-len(suffix) {
+				trimmed = trimmed[:64-len(suffix)]
+			}
+			candidate = trimmed + suffix
+		}
+		var exists bool
+		if err := tx.QueryRowContext(ctx,
+			`SELECT EXISTS(SELECT 1 FROM recall_events WHERE code = ?)`, candidate).Scan(&exists); err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("could not allocate a unique recall code for %q", base)
+}
+
 func (r *mysqlRepo) CreateRecallEvent(ctx context.Context, event model.RecallEvent) (model.RecallEvent, error) {
 	res, err := r.db.ExecContext(ctx,
 		`INSERT INTO recall_events (code, reason, source_lot_id) VALUES (?, ?, ?)`,
@@ -973,13 +1048,17 @@ func (r *mysqlRepo) ListRecallBlocks(ctx context.Context, recallEventID int64) (
 func (r *mysqlRepo) IsLotBlocked(ctx context.Context, lotID int64) (bool, error) {
 	var exists bool
 	err := r.db.QueryRowContext(ctx,
-		`SELECT EXISTS(SELECT 1 FROM recall_blocks WHERE lot_id = ?)`, lotID).Scan(&exists)
+		`SELECT EXISTS(SELECT 1 FROM lots WHERE id = ? AND status = 'blocked')
+		    OR EXISTS(SELECT 1 FROM recall_blocks WHERE lot_id = ?)`, lotID, lotID).Scan(&exists)
 	return exists, err
 }
 
 func (r *mysqlRepo) ListBlockedLotCodes(ctx context.Context) ([]string, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT DISTINCT l.code FROM recall_blocks rb JOIN lots l ON l.id = rb.lot_id ORDER BY l.code`)
+		`SELECT l.code FROM lots l
+		 WHERE l.status = 'blocked'
+		    OR EXISTS(SELECT 1 FROM recall_blocks rb WHERE rb.lot_id = l.id)
+		 ORDER BY l.code`)
 	if err != nil {
 		return nil, err
 	}
@@ -1020,7 +1099,9 @@ func (r *mysqlRepo) CreateSale(ctx context.Context, sale model.Sale, lines []mod
 	for _, line := range lines {
 		var blocked bool
 		if err := tx.QueryRowContext(ctx,
-			`SELECT EXISTS(SELECT 1 FROM recall_blocks WHERE lot_id = ?)`, line.LotID).Scan(&blocked); err != nil {
+			`SELECT EXISTS(SELECT 1 FROM lots WHERE id = ? AND status = 'blocked')
+			    OR EXISTS(SELECT 1 FROM recall_blocks WHERE lot_id = ?)`,
+			line.LotID, line.LotID).Scan(&blocked); err != nil {
 			return model.Sale{}, err
 		}
 		if blocked {

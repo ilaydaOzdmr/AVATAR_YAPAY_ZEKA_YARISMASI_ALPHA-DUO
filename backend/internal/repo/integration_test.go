@@ -495,3 +495,113 @@ func TestCreateSaleUsesLotCostAndUpdatesStock(t *testing.T) {
 		t.Fatalf("sale line stock_movement_id = %+v, want %d", stockMovementID, movements[0].ID)
 	}
 }
+
+func TestCreateRecallBlocksLotsAndHandlesCodeCollision(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+
+	materialID := insertMaterial(t, db, unique("MAT"), 10)
+	sourceLotID := insertLot(t, db, unique("SRC"), "material", materialID, 100, 10)
+	productID := insertProduct(t, db, unique("PRD"), 25)
+	productLotID := insertLot(t, db, unique("PRC"), "product", productID, 50, 18)
+	marketID := insertMarket(t, db, unique("MKT"))
+
+	if _, err := db.Exec(
+		`INSERT INTO lot_links (parent_lot_id, child_lot_id, qty, link_type) VALUES (?, ?, 50, 'production')`,
+		sourceLotID, productLotID); err != nil {
+		t.Fatalf("insert lot link: %v", err)
+	}
+
+	code := unique("REC")
+	event, err := r.CreateRecall(ctx, model.RecallEvent{
+		Code:        code,
+		Reason:      "test recall",
+		SourceLotID: sourceLotID,
+	}, []model.RecallBlock{{LotID: sourceLotID}, {LotID: productLotID}})
+	if err != nil {
+		t.Fatalf("CreateRecall: %v", err)
+	}
+	if event.ID == 0 || event.Code != code {
+		t.Fatalf("event = %+v, want id>0 code %q", event, code)
+	}
+
+	for _, lotID := range []int64{sourceLotID, productLotID} {
+		var status string
+		if err := db.QueryRow(`SELECT status FROM lots WHERE id = ?`, lotID).Scan(&status); err != nil {
+			t.Fatalf("lot %d status: %v", lotID, err)
+		}
+		if status != "blocked" {
+			t.Fatalf("lot %d status = %q, want blocked", lotID, status)
+		}
+	}
+
+	blocked, err := r.IsLotBlocked(ctx, productLotID)
+	if err != nil {
+		t.Fatalf("IsLotBlocked: %v", err)
+	}
+	if !blocked {
+		t.Fatal("IsLotBlocked = false, want true")
+	}
+
+	// Same requested code must get a unique suffix instead of failing.
+	event2, err := r.CreateRecall(ctx, model.RecallEvent{
+		Code:        code,
+		Reason:      "second recall",
+		SourceLotID: sourceLotID,
+	}, []model.RecallBlock{{LotID: productLotID}})
+	if err != nil {
+		t.Fatalf("CreateRecall collision: %v", err)
+	}
+	if event2.Code != code+"-2" {
+		t.Fatalf("collision code = %q, want %q", event2.Code, code+"-2")
+	}
+
+	if _, err := r.CreateSale(ctx, model.Sale{
+		Code:     unique("SALE"),
+		MarketID: marketID,
+		Status:   "completed",
+	}, []model.SaleLine{{
+		LotID:      productLotID,
+		Qty:        1,
+		UnitPrice:  25,
+		TotalPrice: 25,
+	}}); !errors.Is(err, ErrLotBlocked) {
+		t.Fatalf("sale error = %v, want ErrLotBlocked", err)
+	}
+
+	codes, err := r.ListBlockedLotCodes(ctx)
+	if err != nil {
+		t.Fatalf("ListBlockedLotCodes: %v", err)
+	}
+	var productLotCode string
+	if err := db.QueryRow(`SELECT code FROM lots WHERE id = ?`, productLotID).Scan(&productLotCode); err != nil {
+		t.Fatalf("product lot code: %v", err)
+	}
+	found := false
+	for _, c := range codes {
+		if c == productLotCode {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("blocked codes = %v, want to include %q", codes, productLotCode)
+	}
+
+	// An invalid block must roll the whole recall back.
+	badCode := unique("RECBAD")
+	if _, err := r.CreateRecall(ctx, model.RecallEvent{
+		Code:        badCode,
+		Reason:      "bad",
+		SourceLotID: sourceLotID,
+	}, []model.RecallBlock{{LotID: 999999999}}); err == nil {
+		t.Fatal("CreateRecall with invalid lot: want error")
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM recall_events WHERE code = ?`, badCode).Scan(&count); err != nil {
+		t.Fatalf("count events: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("recall events = %d, want 0 after rollback", count)
+	}
+}

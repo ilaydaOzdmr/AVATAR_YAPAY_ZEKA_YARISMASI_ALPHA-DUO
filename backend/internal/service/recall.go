@@ -31,7 +31,7 @@ func NewRecallService(r repo.Repo) *RecallService {
 	return &RecallService{repo: r, trace: NewTraceability(r)}
 }
 
-// Create blocks every product lot affected by sourceLotCode and returns the result.
+// Create blocks every lot affected by sourceLotCode and returns the result.
 func (s *RecallService) Create(ctx context.Context, sourceLotCode, reason string) (*RecallResult, error) {
 	sourceLot, err := s.repo.GetLotByCode(ctx, sourceLotCode)
 	if err != nil {
@@ -43,26 +43,28 @@ func (s *RecallService) Create(ctx context.Context, sourceLotCode, reason string
 		return nil, err
 	}
 
-	event, err := s.repo.CreateRecallEvent(ctx, model.RecallEvent{
-		Code:        fmt.Sprintf("REC-%s", time.Now().Format("20060102-150405")),
-		Reason:      reason,
-		SourceLotID: sourceLot.ID,
-	})
-	if err != nil {
-		return nil, err
-	}
-
+	blocks := []model.RecallBlock{{LotID: sourceLot.ID}}
+	seen := map[int64]bool{sourceLot.ID: true}
 	for _, lot := range affected {
 		blockedLot, err := s.repo.GetLotByCode(ctx, lot.LotCode)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := s.repo.CreateRecallBlock(ctx, model.RecallBlock{
-			RecallEventID: event.ID,
-			LotID:         blockedLot.ID,
-		}); err != nil {
-			return nil, err
+		if seen[blockedLot.ID] {
+			continue
 		}
+		seen[blockedLot.ID] = true
+		blocks = append(blocks, model.RecallBlock{LotID: blockedLot.ID})
+	}
+
+	// One transaction writes the event, the blocks and lots.status='blocked'.
+	event, err := s.repo.CreateRecall(ctx, model.RecallEvent{
+		Code:        fmt.Sprintf("REC-%s", time.Now().Format("20060102-150405")),
+		Reason:      reason,
+		SourceLotID: sourceLot.ID,
+	}, blocks)
+	if err != nil {
+		return nil, err
 	}
 
 	return s.buildResult(ctx, event, sourceLotCode, affected)
@@ -92,12 +94,14 @@ func (s *RecallService) buildResult(ctx context.Context, event model.RecallEvent
 		AffectedLots:  affected,
 	}
 	marketCount := 0
+	subBuyerCount := 0
 	for _, lot := range affected {
 		marketCount += len(lot.Markets)
+		subBuyerCount += len(lot.SubBuyers)
 	}
 	result.Message = fmt.Sprintf(
-		"Geri çağırma: %s lotundan etkilenen ürünler %d mamul lotunda tespit edildi ve satışı engellendi. Etkilenen market sayısı: %d.",
-		sourceLotCode, len(affected), marketCount)
+		"Geri çağırma: %s lotundan etkilenen ürünler %d mamul lotunda tespit edildi ve satışı engellendi. Etkilenen market sayısı: %d, ikinci kademe alıcı sayısı: %d.",
+		sourceLotCode, len(affected), marketCount, subBuyerCount)
 	return result, nil
 }
 

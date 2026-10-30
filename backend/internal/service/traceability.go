@@ -17,22 +17,32 @@ type MarketImpact struct {
 
 // AffectedLot is a product lot reachable from a source lot, with its shipments.
 type AffectedLot struct {
-	LotCode     string         `json:"lot_code"`
-	ProductCode string         `json:"product_code"`
-	ProductName string         `json:"product_name"`
-	ItemType    string         `json:"item_type"`
-	Qty         float64        `json:"qty"`
-	Unit        string         `json:"unit"`
-	Markets     []MarketImpact `json:"markets"`
+	LotCode     string           `json:"lot_code"`
+	ProductCode string           `json:"product_code"`
+	ProductName string           `json:"product_name"`
+	ItemType    string           `json:"item_type"`
+	Qty         float64          `json:"qty"`
+	Unit        string           `json:"unit"`
+	Markets     []MarketImpact   `json:"markets"`
+	SubBuyers   []SubBuyerImpact `json:"sub_buyers"`
+}
+
+// SubBuyerImpact is a second-level distribution from a market to a sub-buyer.
+type SubBuyerImpact struct {
+	MarketCode string  `json:"market_code"`
+	MarketName string  `json:"market_name"`
+	SubBuyer   string  `json:"sub_buyer"`
+	Contact    string  `json:"contact"`
+	Qty        float64 `json:"qty"`
 }
 
 // RawMaterialSource is a material lot, its supplier and production orders behind a product lot.
 type RawMaterialSource struct {
-	LotCode         string   `json:"lot_code"`
-	SupplierCode    string   `json:"supplier_code"`
-	SupplierName    string   `json:"supplier_name"`
+	LotCode          string   `json:"lot_code"`
+	SupplierCode     string   `json:"supplier_code"`
+	SupplierName     string   `json:"supplier_name"`
 	ProductionOrders []string `json:"production_orders"`
-	Qty             float64  `json:"qty"`
+	Qty              float64  `json:"qty"`
 }
 
 // TraceRepository is the data access contract required for traceability.
@@ -42,6 +52,7 @@ type TraceRepository interface {
 	ListLotLinksByParent(ctx context.Context, parentID int64) ([]model.LotLink, error)
 	ListLotLinksByChild(ctx context.Context, childID int64) ([]model.LotLink, error)
 	ListStockMovements(ctx context.Context, lotID int64) ([]model.StockMovement, error)
+	ListRedistributions(ctx context.Context, lotID int64) ([]model.Redistribution, error)
 	GetMarket(ctx context.Context, id int64) (model.Market, error)
 	GetSupplier(ctx context.Context, id int64) (model.Supplier, error)
 	GetProduct(ctx context.Context, id int64) (model.Product, error)
@@ -74,12 +85,17 @@ func (t *Traceability) Forward(ctx context.Context, sourceLotCode string) ([]Aff
 			if err != nil {
 				return nil, err
 			}
+			subBuyers, err := t.subBuyerImpacts(ctx, lot.ID)
+			if err != nil {
+				return nil, err
+			}
 			affectedLot := AffectedLot{
-				LotCode:  lot.Code,
-				ItemType: lot.ItemType,
-				Qty:      lot.Qty,
-				Unit:     lot.Unit,
-				Markets:  markets,
+				LotCode:   lot.Code,
+				ItemType:  lot.ItemType,
+				Qty:       lot.Qty,
+				Unit:      lot.Unit,
+				Markets:   markets,
+				SubBuyers: subBuyers,
 			}
 			if product, err := t.repo.GetProduct(ctx, lot.ItemID); err == nil {
 				affectedLot.ProductCode = product.Code
@@ -168,15 +184,33 @@ func (t *Traceability) marketImpacts(ctx context.Context, lotID int64) ([]Market
 		return nil, err
 	}
 
-	markets := make([]MarketImpact, 0)
+	shipped := make(map[int64]float64)
+	returned := make(map[int64]float64)
+	seen := make(map[int64]bool)
+	var order []int64
 	for _, movement := range movements {
-		if movement.MovementType != "shipment" ||
-			movement.RefType == nil || *movement.RefType != "market" ||
-			movement.RefID == nil {
+		if movement.RefType == nil || *movement.RefType != "market" || movement.RefID == nil {
 			continue
 		}
+		if !seen[*movement.RefID] {
+			seen[*movement.RefID] = true
+			order = append(order, *movement.RefID)
+		}
+		switch movement.MovementType {
+		case "shipment":
+			shipped[*movement.RefID] += math.Abs(movement.Qty)
+		case "return":
+			returned[*movement.RefID] += math.Abs(movement.Qty)
+		}
+	}
 
-		market, err := t.repo.GetMarket(ctx, *movement.RefID)
+	markets := make([]MarketImpact, 0, len(order))
+	for _, marketID := range order {
+		net := shipped[marketID] - returned[marketID]
+		if net <= 0 {
+			continue
+		}
+		market, err := t.repo.GetMarket(ctx, marketID)
 		if err != nil {
 			return nil, err
 		}
@@ -184,9 +218,36 @@ func (t *Traceability) marketImpacts(ctx context.Context, lotID int64) ([]Market
 			MarketCode: market.Code,
 			MarketName: market.Name,
 			Contact:    market.Contact,
-			Qty:        math.Abs(movement.Qty),
+			Qty:        net,
 		})
 	}
 
 	return markets, nil
+}
+
+func (t *Traceability) subBuyerImpacts(ctx context.Context, lotID int64) ([]SubBuyerImpact, error) {
+	redistributions, err := t.repo.ListRedistributions(ctx, lotID)
+	if err != nil {
+		return nil, err
+	}
+
+	subBuyers := make([]SubBuyerImpact, 0, len(redistributions))
+	for _, red := range redistributions {
+		market, err := t.repo.GetMarket(ctx, red.MarketID)
+		if err != nil {
+			return nil, err
+		}
+		contact := ""
+		if red.Contact != nil {
+			contact = *red.Contact
+		}
+		subBuyers = append(subBuyers, SubBuyerImpact{
+			MarketCode: market.Code,
+			MarketName: market.Name,
+			SubBuyer:   red.SubBuyer,
+			Contact:    contact,
+			Qty:        red.Qty,
+		})
+	}
+	return subBuyers, nil
 }

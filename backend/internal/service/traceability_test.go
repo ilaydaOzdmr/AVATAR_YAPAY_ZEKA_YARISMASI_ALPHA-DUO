@@ -9,14 +9,15 @@ import (
 
 // fakeTraceRepository is an in-memory TraceRepository for traceability tests.
 type fakeTraceRepository struct {
-	lotsByCode     map[string]model.Lot
-	lotsByID       map[int64]model.Lot
-	linksByParent  map[int64][]model.LotLink
-	linksByChild   map[int64][]model.LotLink
-	movementsByLot map[int64][]model.StockMovement
-	marketsByID    map[int64]model.Market
-	suppliersByID  map[int64]model.Supplier
-	productsByID   map[int64]model.Product
+	lotsByCode           map[string]model.Lot
+	lotsByID             map[int64]model.Lot
+	linksByParent        map[int64][]model.LotLink
+	linksByChild         map[int64][]model.LotLink
+	movementsByLot       map[int64][]model.StockMovement
+	redistributionsByLot map[int64][]model.Redistribution
+	marketsByID          map[int64]model.Market
+	suppliersByID        map[int64]model.Supplier
+	productsByID         map[int64]model.Product
 }
 
 func (f *fakeTraceRepository) GetLotByCode(_ context.Context, code string) (model.Lot, error) {
@@ -37,6 +38,10 @@ func (f *fakeTraceRepository) ListLotLinksByChild(_ context.Context, childID int
 
 func (f *fakeTraceRepository) ListStockMovements(_ context.Context, lotID int64) ([]model.StockMovement, error) {
 	return f.movementsByLot[lotID], nil
+}
+
+func (f *fakeTraceRepository) ListRedistributions(_ context.Context, lotID int64) ([]model.Redistribution, error) {
+	return f.redistributionsByLot[lotID], nil
 }
 
 func (f *fakeTraceRepository) GetMarket(_ context.Context, id int64) (model.Market, error) {
@@ -63,6 +68,7 @@ func seededTraceRepository() *fakeTraceRepository {
 	marketID1 := int64(1)
 	marketID2 := int64(2)
 	marketID3 := int64(3)
+	subContact := "0532 000 00 01"
 
 	lots := []model.Lot{
 		{ID: 1, Code: "ET-2026-001", ItemType: "material", Qty: 100, Unit: "kg", SupplierID: &supplierID1},
@@ -99,7 +105,11 @@ func seededTraceRepository() *fakeTraceRepository {
 				{ID: 1, LotID: 4, MovementType: "shipment", Qty: -30, RefType: &refTypeMarket, RefID: &marketID1},
 				{ID: 2, LotID: 4, MovementType: "shipment", Qty: -25, RefType: &refTypeMarket, RefID: &marketID2},
 				{ID: 3, LotID: 4, MovementType: "shipment", Qty: -30, RefType: &refTypeMarket, RefID: &marketID3},
+				{ID: 4, LotID: 4, MovementType: "return", Qty: 2, RefType: &refTypeMarket, RefID: &marketID1},
 			},
+		},
+		redistributionsByLot: map[int64][]model.Redistribution{
+			4: {{ID: 1, MarketID: 1, LotID: 4, SubBuyer: "Kebapçı Ali", Contact: &subContact, Qty: 10}},
 		},
 		marketsByID: map[int64]model.Market{
 			1: {ID: 1, Code: "MKT-A", Name: "Market A", Contact: "0212 111 11 01"},
@@ -139,7 +149,7 @@ func TestForwardET2026001(t *testing.T) {
 	}
 
 	wantMarkets := []MarketImpact{
-		{MarketCode: "MKT-A", MarketName: "Market A", Contact: "0212 111 11 01", Qty: 30},
+		{MarketCode: "MKT-A", MarketName: "Market A", Contact: "0212 111 11 01", Qty: 28},
 		{MarketCode: "MKT-B", MarketName: "Market B", Contact: "0212 111 11 02", Qty: 25},
 		{MarketCode: "MKT-C", MarketName: "Market C", Contact: "0212 111 11 03", Qty: 30},
 	}
@@ -147,6 +157,20 @@ func TestForwardET2026001(t *testing.T) {
 		if got.Markets[i] != want {
 			t.Fatalf("markets[%d] = %+v, want %+v", i, got.Markets[i], want)
 		}
+	}
+
+	if len(got.SubBuyers) != 1 {
+		t.Fatalf("len(sub_buyers) = %d, want 1: %+v", len(got.SubBuyers), got.SubBuyers)
+	}
+	wantSub := SubBuyerImpact{
+		MarketCode: "MKT-A",
+		MarketName: "Market A",
+		SubBuyer:   "Kebapçı Ali",
+		Contact:    "0532 000 00 01",
+		Qty:        10,
+	}
+	if got.SubBuyers[0] != wantSub {
+		t.Fatalf("sub_buyers[0] = %+v, want %+v", got.SubBuyers[0], wantSub)
 	}
 }
 

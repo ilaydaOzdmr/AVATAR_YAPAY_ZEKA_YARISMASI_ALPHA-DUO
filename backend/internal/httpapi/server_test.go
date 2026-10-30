@@ -87,6 +87,9 @@ func (f *fakeRepo) ListButcheryBatches(_ context.Context) ([]model.ButcheryBatch
 func (f *fakeRepo) ListProductionOrders(_ context.Context) ([]model.ProductionOrder, error) {
 	return nil, nil
 }
+func (f *fakeRepo) CreateRecall(_ context.Context, e model.RecallEvent, _ []model.RecallBlock) (model.RecallEvent, error) {
+	return e, nil
+}
 func (f *fakeRepo) CreateRecallEvent(_ context.Context, e model.RecallEvent) (model.RecallEvent, error) {
 	return e, nil
 }
