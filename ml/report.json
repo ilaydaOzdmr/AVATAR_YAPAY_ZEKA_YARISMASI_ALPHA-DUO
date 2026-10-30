@@ -1,15 +1,15 @@
 {
   "yield": {
-    "model_mae": 1.3588,
-    "model_rmse": 1.7965,
-    "baseline_mae": 17.8184,
-    "baseline_rmse": 19.8893
+    "model_mae": 2.8289,
+    "model_rmse": 2.8486,
+    "baseline_mae": 14.0,
+    "baseline_rmse": 16.1959
   },
   "butchery": {
-    "model_mae": 0.0454,
-    "model_rmse": 0.0557,
-    "baseline_mae": 1.2719,
-    "baseline_rmse": 1.3879
+    "model_mae": 0.0316,
+    "model_rmse": 0.0365,
+    "baseline_mae": 1.4743,
+    "baseline_rmse": 1.9212
   },
-  "note": "Veri seti gerçekçi üretim/parçalama oranlarından üretilmiş 200'er örnekten oluşur (anonymize); metrikler ayrı test kümesi (%20) üzerinden raporlanır."
+  "note": "Veri seti MySQL seed'indeki gerçek üretim (9 emir) ve parçalama (9 kayıt) kayıtlarından oluşur; örnek sayısı küçüktür, metrikler ayrı test kümesi (%20) üzerinden raporlanır ve gösterim amaçlıdır."
 }

@@ -6,8 +6,10 @@ import pandas as pd
 
 if __package__:
     from .model import baseline_mean, evaluate, predict, train_yield
+    from .seed_data import BUTCHERY_SAMPLES, PRODUCTION_SAMPLES
 else:
     from model import baseline_mean, evaluate, predict, train_yield
+    from seed_data import BUTCHERY_SAMPLES, PRODUCTION_SAMPLES
 
 
 # --- Realistic domain constants -------------------------------------------------
@@ -42,8 +44,9 @@ TEST_FRACTION = 0.2
 SEED = 42
 
 REPORT_NOTE = (
-    "Veri seti gerçekçi üretim/parçalama oranlarından üretilmiş 200'er örnekten oluşur "
-    "(anonymize); metrikler ayrı test kümesi (%20) üzerinden raporlanır."
+    "Veri seti MySQL seed'indeki gerçek üretim (9 emir) ve parçalama (9 kayıt) "
+    "kayıtlarından oluşur; örnek sayısı küçüktür, metrikler ayrı test kümesi (%20) "
+    "üzerinden raporlanır ve gösterim amaçlıdır."
 )
 REPORT_PATH = Path(__file__).with_name("report.json")
 
@@ -51,39 +54,33 @@ RNG = np.random.default_rng(SEED)
 
 
 def build_production_dataframe():
-    raw_material_kg = RNG.uniform(70.0, 150.0, N_SAMPLES)
-    yield_ratio = RNG.normal(YIELD_RATIO_MEAN, YIELD_RATIO_STD, N_SAMPLES)
-    finished_qty = np.round(raw_material_kg * yield_ratio, 1)
-    service_cost = np.round(finished_qty * SERVICE_PER_PACKAGE, 2)
-    material_cost = raw_material_kg * MATERIAL_UNIT_COST
-    unit_cost = np.round((material_cost + service_cost) / finished_qty, 2)
-
-    frame = pd.DataFrame(
-        {
-            "raw_material_kg": np.round(raw_material_kg, 1),
-            "service_cost": service_cost,
-            "finished_qty": finished_qty,
-            "unit_cost": unit_cost,
-        }
-    )
-    return frame[["raw_material_kg", "service_cost", "finished_qty", "unit_cost"]]
+    records = []
+    for raw_material_kg, finished_qty in PRODUCTION_SAMPLES:
+        service_cost = round(finished_qty * SERVICE_PER_PACKAGE, 2)
+        material_cost = raw_material_kg * MATERIAL_UNIT_COST
+        unit_cost = round((material_cost + service_cost) / finished_qty, 2)
+        records.append(
+            {
+                "raw_material_kg": raw_material_kg,
+                "service_cost": service_cost,
+                "finished_qty": finished_qty,
+                "unit_cost": unit_cost,
+            }
+        )
+    return pd.DataFrame(records)[["raw_material_kg", "service_cost", "finished_qty", "unit_cost"]]
 
 
 def build_butchery_dataframe():
     records = []
-    for animal_type, (lo, hi) in BUTCHERY_INPUT_RANGES.items():
-        ratios = BUTCHERY_RATIOS[animal_type]
-        input_weights = RNG.uniform(lo, hi, N_SAMPLES // 2)
-        for input_weight in input_weights:
-            record = {
-                "animal_type": animal_type,
-                "animal_type_code": ANIMAL_TYPE_CODES[animal_type],
-                "input_weight": round(float(input_weight), 1),
-            }
-            for product_code, ratio in zip(PRODUCT_CODES, ratios):
-                weight = input_weight * ratio + RNG.normal(0.0, 0.05)
-                record[product_code] = round(float(max(weight, 0.0)), 3)
-            records.append(record)
+    for animal_type, input_weight, weights in BUTCHERY_SAMPLES:
+        record = {
+            "animal_type": animal_type,
+            "animal_type_code": ANIMAL_TYPE_CODES[animal_type],
+            "input_weight": input_weight,
+        }
+        for product_code, weight in zip(PRODUCT_CODES, weights):
+            record[product_code] = round(float(weight), 3)
+        records.append(record)
     return pd.DataFrame(records)
 
 
