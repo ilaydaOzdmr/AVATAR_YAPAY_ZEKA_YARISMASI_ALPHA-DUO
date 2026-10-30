@@ -9,6 +9,7 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.avatar.app.data.entities.LocalLot
+import com.avatar.app.data.entities.LocalMarket
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.data.entities.LocalSaleLine
@@ -35,6 +36,18 @@ interface LotDao {
     suspend fun upsertAll(lots: List<LocalLot>)
 
     @Query("DELETE FROM local_lots")
+    suspend fun clear()
+}
+
+@Dao
+interface MarketDao {
+    @Query("SELECT * FROM local_markets ORDER BY name")
+    suspend fun getAll(): List<LocalMarket>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(markets: List<LocalMarket>)
+
+    @Query("DELETE FROM local_markets")
     suspend fun clear()
 }
 
@@ -78,16 +91,18 @@ interface OutboxDao {
     entities = [
         LocalProduct::class,
         LocalLot::class,
+        LocalMarket::class,
         LocalSale::class,
         LocalSaleLine::class,
         Outbox::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun productDao(): ProductDao
     abstract fun lotDao(): LotDao
+    abstract fun marketDao(): MarketDao
     abstract fun saleDao(): SaleDao
     abstract fun outboxDao(): OutboxDao
 
@@ -101,7 +116,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "avatar.db",
-                ).build().also { instance = it }
+                ).fallbackToDestructiveMigration().build().also { instance = it }
             }
     }
 }

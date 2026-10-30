@@ -1,6 +1,7 @@
 package com.avatar.app.data
 
 import com.avatar.app.data.entities.LocalLot
+import com.avatar.app.data.entities.LocalMarket
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.data.entities.LocalSaleLine
@@ -45,6 +46,10 @@ class SyncRepository(
         db.lotDao().getAll()
     }
 
+    suspend fun markets(): List<LocalMarket> = withContext(Dispatchers.IO) {
+        db.marketDao().getAll()
+    }
+
     suspend fun sales(): List<LocalSale> = withContext(Dispatchers.IO) {
         db.saleDao().getAll()
     }
@@ -71,10 +76,20 @@ class SyncRepository(
         }
         val lots = parseLots(lotsBody, blockedCodes)
 
+        val marketsBody = get("$baseUrl/markets").use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("markets failed: HTTP ${response.code}")
+            }
+            JSONArray(response.body?.string().orEmpty())
+        }
+        val markets = parseMarkets(marketsBody)
+
         db.productDao().clear()
         db.productDao().upsertAll(products)
         db.lotDao().clear()
         db.lotDao().upsertAll(lots)
+        db.marketDao().clear()
+        db.marketDao().upsertAll(markets)
     }
 
     suspend fun saveSale(sale: LocalSale, lines: List<LocalSaleLine>): Long = withContext(Dispatchers.IO) {
@@ -96,19 +111,24 @@ class SyncRepository(
     suspend fun submitSale(saleId: Long): PushResult = withContext(Dispatchers.IO) {
         val sale = db.saleDao().getById(saleId) ?: return@withContext PushResult.Failed("sale not found")
         val lines = db.saleDao().getLines(saleId)
-        post("$baseUrl/sales", salePayload(sale, lines).toString()).use { response ->
-            when {
-                response.code == 409 -> {
-                    db.saleDao().setSynced(saleId, false)
-                    PushResult.Blocked("blocked lot: sale rejected")
+        try {
+            post("$baseUrl/sales", salePayload(sale, lines).toString()).use { response ->
+                when {
+                    response.code == 409 -> {
+                        db.saleDao().setSynced(saleId, false)
+                        PushResult.Blocked("blocked lot: sale rejected")
+                    }
+                    response.isSuccessful -> {
+                        db.saleDao().setSynced(saleId, true)
+                        db.outboxDao().deleteByEntity("sale", saleId)
+                        PushResult.Success
+                    }
+                    else -> PushResult.Failed("HTTP ${response.code}")
                 }
-                response.isSuccessful -> {
-                    db.saleDao().setSynced(saleId, true)
-                    db.outboxDao().deleteByEntity("sale", saleId)
-                    PushResult.Success
-                }
-                else -> PushResult.Failed("HTTP ${response.code}")
             }
+        } catch (error: IOException) {
+            // Çevrimdışı: satış yerelde kalır, push() ile sonra gönderilir.
+            PushResult.Failed("offline")
         }
     }
 
@@ -122,19 +142,23 @@ class SyncRepository(
         outbox.forEach { sales.put(JSONObject(it.payload)) }
         val body = JSONObject().put("sales", sales).toString()
 
-        post("$baseUrl/sync/push", body).use { response ->
-            when {
-                response.code == 409 -> {
-                    outbox.forEach { db.saleDao().setSynced(it.entity_id, false) }
-                    PushResult.Blocked("blocked lot: sale rejected")
+        try {
+            post("$baseUrl/sync/push", body).use { response ->
+                when {
+                    response.code == 409 -> {
+                        outbox.forEach { db.saleDao().setSynced(it.entity_id, false) }
+                        PushResult.Blocked("blocked lot: sale rejected")
+                    }
+                    response.isSuccessful -> {
+                        outbox.forEach { db.saleDao().setSynced(it.entity_id, true) }
+                        db.outboxDao().clear()
+                        PushResult.Success
+                    }
+                    else -> PushResult.Failed("HTTP ${response.code}")
                 }
-                response.isSuccessful -> {
-                    outbox.forEach { db.saleDao().setSynced(it.entity_id, true) }
-                    db.outboxDao().clear()
-                    PushResult.Success
-                }
-                else -> PushResult.Failed("HTTP ${response.code}")
             }
+        } catch (error: IOException) {
+            PushResult.Failed("offline")
         }
     }
 
@@ -182,9 +206,23 @@ class SyncRepository(
                     id = item.getLong("id"),
                     code = code,
                     item_type = item.getString("item_type"),
+                    item_id = item.getLong("item_id"),
                     qty = item.getDouble("qty"),
                     unit = item.getString("unit"),
                     blocked = blockedCodes.contains(code),
+                ),
+            )
+        }
+    }
+
+    private fun parseMarkets(array: JSONArray): List<LocalMarket> = buildList {
+        for (index in 0 until array.length()) {
+            val item = array.getJSONObject(index)
+            add(
+                LocalMarket(
+                    id = item.getLong("id"),
+                    code = item.getString("code"),
+                    name = item.getString("name"),
                 ),
             )
         }

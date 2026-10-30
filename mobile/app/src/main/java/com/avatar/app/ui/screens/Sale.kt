@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.avatar.app.data.entities.LocalLot
+import com.avatar.app.data.entities.LocalMarket
 import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.data.entities.LocalSaleLine
@@ -42,14 +43,23 @@ private val SOLD_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 fun Sale(
     products: List<LocalProduct>,
     lots: List<LocalLot>,
+    markets: List<LocalMarket>,
     message: String?,
     onCreateSale: (LocalSale, LocalSaleLine) -> Unit,
 ) {
     var selectedProduct by remember { mutableStateOf<LocalProduct?>(null) }
     var selectedLot by remember { mutableStateOf<LocalLot?>(null) }
+    var selectedMarket by remember { mutableStateOf<LocalMarket?>(null) }
     var quantity by remember { mutableStateOf("1") }
     var productMenu by remember { mutableStateOf(false) }
     var lotMenu by remember { mutableStateOf(false) }
+    var marketMenu by remember { mutableStateOf(false) }
+
+    // Yalnızca seçilen ürünle eşleşen (item_id) mamul lotları satılabilir.
+    val sellableLots = lots.filter { lot ->
+        val currentProduct = selectedProduct
+        lot.item_type == "product" && (currentProduct == null || lot.item_id == currentProduct.id)
+    }
 
     Column(
         modifier = Modifier
@@ -77,12 +87,16 @@ fun Sale(
                     products.forEach { product ->
                         DropdownMenuItem(
                             text = { Text("${product.code} — ${product.name}") },
-                            onClick = { selectedProduct = product; productMenu = false },
+                            onClick = {
+                                selectedProduct = product
+                                selectedLot = null
+                                productMenu = false
+                            },
                         )
                     }
                 }
 
-                // Lot seçimi
+                // Lot seçimi (yalnızca ürünle eşleşen mamul lotları)
                 Button(
                     onClick = { lotMenu = true },
                     modifier = Modifier.fillMaxWidth(),
@@ -91,11 +105,28 @@ fun Sale(
                     Text(selectedLot?.let { if (it.blocked) "${it.code} (bloke)" else it.code } ?: "Lot seç")
                 }
                 DropdownMenu(expanded = lotMenu, onDismissRequest = { lotMenu = false }) {
-                    lots.forEach { lot ->
+                    sellableLots.forEach { lot ->
                         DropdownMenuItem(
-                            text = { Text("${lot.code} (${lot.item_type})") },
+                            text = { Text("${lot.code} (${lot.qty} ${lot.unit})") },
                             enabled = !lot.blocked,
                             onClick = { selectedLot = lot; lotMenu = false },
+                        )
+                    }
+                }
+
+                // Market seçimi
+                Button(
+                    onClick = { marketMenu = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow, contentColor = MaterialTheme.colorScheme.onSurface),
+                ) {
+                    Text(selectedMarket?.let { "${it.code} — ${it.name}" } ?: "Market seç")
+                }
+                DropdownMenu(expanded = marketMenu, onDismissRequest = { marketMenu = false }) {
+                    markets.forEach { market ->
+                        DropdownMenuItem(
+                            text = { Text("${market.code} — ${market.name}") },
+                            onClick = { selectedMarket = market; marketMenu = false },
                         )
                     }
                 }
@@ -111,15 +142,16 @@ fun Sale(
 
                 val product = selectedProduct
                 val lot = selectedLot
+                val market = selectedMarket
                 val qty = quantity.toDoubleOrNull()
-                val canSell = product != null && lot != null && !lot.blocked && qty != null && qty > 0
+                val canSell = product != null && lot != null && market != null && !lot.blocked && qty != null && qty > 0
 
                 Button(
                     onClick = {
-                        if (product != null && lot != null && qty != null) {
+                        if (product != null && lot != null && market != null && qty != null) {
                             val sale = LocalSale(
                                 code = "AND-${System.currentTimeMillis()}",
-                                market_id = 1L,
+                                market_id = market.id,
                                 sold_at = LocalDateTime.now().format(SOLD_AT_FORMAT),
                                 status = "completed",
                                 synced = false,
@@ -142,7 +174,7 @@ fun Sale(
                 }
 
                 if (message != null) {
-                    Text(message, style = MaterialTheme.typography.labelMedium, color = Green)
+                    Text(message, style = MaterialTheme.typography.labelMedium, color = if (message.contains("offline") || message.contains("yerel")) Red else Green)
                 }
             }
         }
