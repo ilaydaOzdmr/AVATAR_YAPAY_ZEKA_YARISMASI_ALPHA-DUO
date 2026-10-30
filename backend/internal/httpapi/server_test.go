@@ -3,17 +3,26 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"avatar/backend/internal/model"
+	"avatar/backend/internal/repo"
 )
 
 // fakeRepo is an in-memory Repo used to test handlers without MySQL.
 type fakeRepo struct {
 	materials []model.Material
+
+	addStockErr         error
+	createProductionErr error
+	createButcheryErr   error
+	createSaleErr       error
+	createRecallErr     error
+	getLotByCodeErr     error
 }
 
 func (f *fakeRepo) CreateMaterial(_ context.Context, m model.Material) (model.Material, error) {
@@ -31,7 +40,7 @@ func (f *fakeRepo) ListProducts(_ context.Context) ([]model.Product, error)     
 func (f *fakeRepo) CreateLot(_ context.Context, l model.Lot) (model.Lot, error) { return l, nil }
 func (f *fakeRepo) ListLots(_ context.Context, _ string) ([]model.Lot, error)   { return nil, nil }
 func (f *fakeRepo) GetLotByCode(_ context.Context, _ string) (model.Lot, error) {
-	return model.Lot{}, nil
+	return model.Lot{}, f.getLotByCodeErr
 }
 func (f *fakeRepo) ListLotLinksByParent(_ context.Context, _ int64) ([]model.LotLink, error) {
 	return nil, nil
@@ -40,13 +49,13 @@ func (f *fakeRepo) ListLotLinksByChild(_ context.Context, _ int64) ([]model.LotL
 	return nil, nil
 }
 func (f *fakeRepo) AddStockMovement(_ context.Context, m model.StockMovement) (model.StockMovement, error) {
-	return m, nil
+	return m, f.addStockErr
 }
 func (f *fakeRepo) ListStockMovements(_ context.Context, _ int64) ([]model.StockMovement, error) {
 	return nil, nil
 }
 func (f *fakeRepo) CreateProductionOrder(_ context.Context, po model.ProductionOrder, _ []model.ProductionOrderInput, _ []model.ProductionOrderOutput) (model.ProductionOrder, error) {
-	return po, nil
+	return po, f.createProductionErr
 }
 func (f *fakeRepo) GetProductionOrder(_ context.Context, _ int64) (model.ProductionOrder, error) {
 	return model.ProductionOrder{}, nil
@@ -73,7 +82,7 @@ func (f *fakeRepo) GetSupplier(_ context.Context, _ int64) (model.Supplier, erro
 	return model.Supplier{}, nil
 }
 func (f *fakeRepo) CreateButcheryBatch(_ context.Context, batch model.ButcheryBatch, _ []model.ButcheryItem) (model.ButcheryBatch, error) {
-	return batch, nil
+	return batch, f.createButcheryErr
 }
 func (f *fakeRepo) GetButcheryBatch(_ context.Context, _ int64) (model.ButcheryBatch, error) {
 	return model.ButcheryBatch{}, nil
@@ -88,7 +97,7 @@ func (f *fakeRepo) ListProductionOrders(_ context.Context) ([]model.ProductionOr
 	return nil, nil
 }
 func (f *fakeRepo) CreateRecall(_ context.Context, e model.RecallEvent, _ []model.RecallBlock) (model.RecallEvent, error) {
-	return e, nil
+	return e, f.createRecallErr
 }
 func (f *fakeRepo) CreateRecallEvent(_ context.Context, e model.RecallEvent) (model.RecallEvent, error) {
 	return e, nil
@@ -109,7 +118,7 @@ func (f *fakeRepo) ListBlockedLotCodes(_ context.Context) ([]string, error) {
 	return nil, nil
 }
 func (f *fakeRepo) CreateSale(_ context.Context, sale model.Sale, _ []model.SaleLine) (model.Sale, error) {
-	return sale, nil
+	return sale, f.createSaleErr
 }
 func (f *fakeRepo) ListSales(_ context.Context) ([]model.Sale, error) {
 	return nil, nil
@@ -166,5 +175,115 @@ func TestCreateMaterialThenList(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].Code != "MAT-009" {
 		t.Fatalf("unexpected materials: %+v", items)
+	}
+}
+
+func TestErrorStatusMapping(t *testing.T) {
+	cases := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+		repo   *fakeRepo
+		want   int
+	}{
+		{
+			name:   "stock insufficient is conflict",
+			method: http.MethodPost,
+			path:   "/stock-movements",
+			body:   `{"lot_id":1,"movement_type":"sale","qty":-1}`,
+			repo:   &fakeRepo{addStockErr: repo.ErrInsufficientStock},
+			want:   http.StatusConflict,
+		},
+		{
+			name:   "stock invalid movement is bad request",
+			method: http.MethodPost,
+			path:   "/stock-movements",
+			body:   `{"lot_id":1,"movement_type":"sale","qty":0}`,
+			repo:   &fakeRepo{addStockErr: repo.ErrInvalidStockMovement},
+			want:   http.StatusBadRequest,
+		},
+		{
+			name:   "production invalid order is bad request",
+			method: http.MethodPost,
+			path:   "/production-orders",
+			body:   `{}`,
+			repo:   &fakeRepo{createProductionErr: repo.ErrInvalidOrder},
+			want:   http.StatusBadRequest,
+		},
+		{
+			name:   "production insufficient stock is conflict",
+			method: http.MethodPost,
+			path:   "/production-orders",
+			body:   `{}`,
+			repo:   &fakeRepo{createProductionErr: repo.ErrInsufficientStock},
+			want:   http.StatusConflict,
+		},
+		{
+			name:   "butchery invalid order is bad request",
+			method: http.MethodPost,
+			path:   "/butchery-batches",
+			body:   `{"batch":{},"items":[]}`,
+			repo:   &fakeRepo{createButcheryErr: repo.ErrInvalidOrder},
+			want:   http.StatusBadRequest,
+		},
+		{
+			name:   "butchery insufficient stock is conflict",
+			method: http.MethodPost,
+			path:   "/butchery-batches",
+			body:   `{"batch":{},"items":[]}`,
+			repo:   &fakeRepo{createButcheryErr: repo.ErrInsufficientStock},
+			want:   http.StatusConflict,
+		},
+		{
+			name:   "blocked sale is conflict",
+			method: http.MethodPost,
+			path:   "/sales",
+			body:   `{"code":"S-1","market_id":1,"status":"completed","lines":[]}`,
+			repo:   &fakeRepo{createSaleErr: repo.ErrLotBlocked},
+			want:   http.StatusConflict,
+		},
+		{
+			name:   "recall invalid order is bad request",
+			method: http.MethodPost,
+			path:   "/recalls",
+			body:   `{"source_lot_code":"X"}`,
+			repo:   &fakeRepo{createRecallErr: repo.ErrInvalidOrder},
+			want:   http.StatusBadRequest,
+		},
+		{
+			name:   "recall unknown lot is not found",
+			method: http.MethodPost,
+			path:   "/recalls",
+			body:   `{"source_lot_code":"UNKNOWN"}`,
+			repo:   &fakeRepo{getLotByCodeErr: sql.ErrNoRows},
+			want:   http.StatusNotFound,
+		},
+		{
+			name:   "unknown lot is not found",
+			method: http.MethodGet,
+			path:   "/lots/UNKNOWN",
+			repo:   &fakeRepo{getLotByCodeErr: sql.ErrNoRows},
+			want:   http.StatusNotFound,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewServer(tc.repo)
+			var body *bytes.Buffer
+			if tc.body != "" {
+				body = bytes.NewBufferString(tc.body)
+			} else {
+				body = bytes.NewBuffer(nil)
+			}
+			req := httptest.NewRequest(tc.method, tc.path, body)
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tc.want, rec.Body.String())
+			}
+		})
 	}
 }

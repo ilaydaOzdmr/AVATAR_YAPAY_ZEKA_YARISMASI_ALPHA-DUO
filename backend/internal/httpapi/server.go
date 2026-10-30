@@ -84,7 +84,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListMaterials(w http.ResponseWriter, r *http.Request) {
 	items, err := s.repo.ListMaterials(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -98,7 +98,7 @@ func (s *Server) handleCreateMaterial(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.repo.CreateMaterial(r.Context(), m)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -107,7 +107,7 @@ func (s *Server) handleCreateMaterial(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListProducts(w http.ResponseWriter, r *http.Request) {
 	items, err := s.repo.ListProducts(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -121,7 +121,7 @@ func (s *Server) handleCreateProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.repo.CreateProduct(r.Context(), p)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -130,7 +130,7 @@ func (s *Server) handleCreateProduct(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListLots(w http.ResponseWriter, r *http.Request) {
 	items, err := s.repo.ListLots(r.Context(), r.URL.Query().Get("item_type"))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -144,7 +144,7 @@ func (s *Server) handleCreateLot(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.repo.CreateLot(r.Context(), l)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -157,7 +157,7 @@ func (s *Server) handleGetLot(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, l)
@@ -170,12 +170,12 @@ func (s *Server) handleListMovements(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	movements, err := s.repo.ListStockMovements(r.Context(), l.ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, movements)
@@ -189,7 +189,7 @@ func (s *Server) handleAddStockMovement(w http.ResponseWriter, r *http.Request) 
 	}
 	created, err := s.repo.AddStockMovement(r.Context(), m)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -210,7 +210,7 @@ func (s *Server) handleCreateProductionOrder(w http.ResponseWriter, r *http.Requ
 	}
 	created, err := s.repo.CreateProductionOrder(r.Context(), req.ProductionOrder, req.Inputs, req.Outputs)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -228,7 +228,7 @@ func (s *Server) handleGetProductionOrder(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
@@ -246,7 +246,7 @@ func (s *Server) handleTraceForward(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, affected)
@@ -264,7 +264,7 @@ func (s *Server) handleTraceBackward(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, sources)
@@ -284,7 +284,7 @@ func (s *Server) handleCreateButcheryBatch(w http.ResponseWriter, r *http.Reques
 	}
 	result, err := s.butchery.CreateBatch(r.Context(), req.Batch, req.Items)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, result)
@@ -302,7 +302,7 @@ func (s *Server) handleGetButcheryBatch(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -330,7 +330,7 @@ func (s *Server) handleCreateRecall(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, result)
@@ -348,7 +348,7 @@ func (s *Server) handleGetRecall(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -372,7 +372,7 @@ func (s *Server) handleCreateSale(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, err)
 			return
 		}
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -394,7 +394,7 @@ func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusConflict, err)
 				return
 			}
-			writeError(w, http.StatusInternalServerError, err)
+			writeRepoError(w, err)
 			return
 		}
 		created = append(created, sale)
@@ -405,12 +405,12 @@ func (s *Server) handleSyncPush(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 	blocked, err := s.repo.ListBlockedLotCodes(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	products, err := s.repo.ListProducts(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -422,7 +422,7 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAnomalies(w http.ResponseWriter, r *http.Request) {
 	anomalies, err := s.anomaly.Detect(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, anomalies)
@@ -446,7 +446,7 @@ func (s *Server) handleOCRInvoice(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListProductionOrders(w http.ResponseWriter, r *http.Request) {
 	orders, err := s.repo.ListProductionOrders(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, orders)
@@ -455,7 +455,7 @@ func (s *Server) handleListProductionOrders(w http.ResponseWriter, r *http.Reque
 func (s *Server) handleListButcheryBatches(w http.ResponseWriter, r *http.Request) {
 	batches, err := s.repo.ListButcheryBatches(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, batches)
@@ -464,7 +464,7 @@ func (s *Server) handleListButcheryBatches(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleListMarkets(w http.ResponseWriter, r *http.Request) {
 	markets, err := s.repo.ListMarkets(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, markets)
@@ -473,7 +473,7 @@ func (s *Server) handleListMarkets(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListSales(w http.ResponseWriter, r *http.Request) {
 	sales, err := s.repo.ListSales(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, sales)
@@ -492,7 +492,7 @@ func (s *Server) handleCreateRedistribution(w http.ResponseWriter, r *http.Reque
 	}
 	created, err := s.repo.CreateRedistribution(r.Context(), req.Redistribution)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -506,7 +506,7 @@ func (s *Server) handleListRedistributions(w http.ResponseWriter, r *http.Reques
 	}
 	redistributions, err := s.repo.ListRedistributions(r.Context(), lotID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+		writeRepoError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, redistributions)
