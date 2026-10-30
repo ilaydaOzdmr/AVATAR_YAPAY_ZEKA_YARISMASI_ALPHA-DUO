@@ -53,7 +53,7 @@ bulur, lotları bloke eder ve satışı engeller.
 - **React web** — Food Intelligence yönetim paneli (`:5174`): genel bakış, stok, üretim,
   parçalama, satış, lot izlenebilirliği, geri çağırma, yapay zekâ, raporlar (CSV indirme),
   fatura OCR ve anomali uyarıları. Tüm ekranlar canlı backend verisi kullanır.
-- **Kotlin Android** — satış, offline SQLite, senkronizasyon (outbox + LWW).
+- **Kotlin Android** — satış, offline SQLite, senkronizasyon (outbox + pull/push).
 - **Python ML** — iki lineer regresyon modeli + baseline karşılaştırma + MAE/RMSE.
 
 ---
@@ -104,7 +104,7 @@ docker compose -f infra/docker-compose.yml up -d --build
 ```bash
 cd backend && go run ./cmd/server                    # Go 1.23+ (API :8080)
 cd web && npm install && npm run dev                 # Node 18+ (web :5173)
-cd ml && pip install -r requirements.txt && uvicorn ml.app:app --reload   # Python 3.11+ (ML :8000)
+pip install -r ml/requirements.txt && uvicorn ml.app:app --reload   # Python 3.11+ (ML :8000, repo kökünden)
 cd mobile && gradlew assembleDebug                   # JDK 17 + Android SDK 34 (APK)
 ```
 

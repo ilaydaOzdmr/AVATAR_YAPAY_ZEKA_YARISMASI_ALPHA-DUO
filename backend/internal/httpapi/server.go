@@ -59,6 +59,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s.mux.HandleFunc("POST /production-orders", s.handleCreateProductionOrder)
 	s.mux.HandleFunc("GET /production-orders", s.handleListProductionOrders)
 	s.mux.HandleFunc("GET /production-orders/{id}", s.handleGetProductionOrder)
+	s.mux.HandleFunc("GET /production-orders/{id}/inputs", s.handleListProductionOrderInputs)
 	s.mux.HandleFunc("GET /trace/forward", s.handleTraceForward)
 	s.mux.HandleFunc("GET /trace/backward", s.handleTraceBackward)
 	s.mux.HandleFunc("POST /butchery-batches", s.handleCreateButcheryBatch)
@@ -469,6 +470,20 @@ func (s *Server) handleListProductionOrders(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, orders)
+}
+
+func (s *Server) handleListProductionOrderInputs(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	inputs, err := s.repo.ListProductionOrderInputs(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, inputs)
 }
 
 func (s *Server) handleListButcheryBatches(w http.ResponseWriter, r *http.Request) {

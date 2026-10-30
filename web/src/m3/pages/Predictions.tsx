@@ -15,6 +15,11 @@ interface YieldResponse extends PredictionMeta {
   accounting_ekp?: number;
 }
 
+interface LegacyYieldResult {
+  predicted_qty: number;
+  predicted_unit_cost: number;
+}
+
 interface ButcheryResponse extends PredictionMeta {
   prediction: Record<string, number>;
   physical_check?: {
@@ -39,6 +44,7 @@ interface CostSummary {
 
 interface ForecastRow {
   code: string;
+  predicted: number;
   expected: number;
   actual: number;
   diff: number;
@@ -85,26 +91,28 @@ function WarningList({ items }: { items: string[] }) {
 }
 
 function ForecastChart({ rows }: { rows: ForecastRow[] }) {
-  const width = Math.max(360, rows.length * 90);
-  const height = 180;
-  const max = Math.max(...rows.flatMap((row) => [row.expected, row.actual]), 1);
-  const barWidth = 22;
+  const width = Math.max(420, rows.length * 110);
+  const height = 190;
+  const max = Math.max(...rows.flatMap((row) => [row.expected, row.actual, row.predicted]), 1);
+  const barWidth = 20;
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Tahmin ve gerçek karşılaştırması" style={{ width: "100%", height: "auto" }}>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Model tahmini, plan ve gerçek karşılaştırması" style={{ width: "100%", height: "auto" }}>
       <line x1="30" y1={height - 30} x2={width - 10} y2={height - 30} stroke="#c8d1ca" />
       {rows.map((row, index) => {
-        const groupX = 30 + index * 90;
-        const expectedHeight = ((height - 55) * row.expected) / max;
-        const actualHeight = ((height - 55) * row.actual) / max;
+        const groupX = 30 + index * 110;
+        const predictedHeight = ((height - 60) * row.predicted) / max;
+        const expectedHeight = ((height - 60) * row.expected) / max;
+        const actualHeight = ((height - 60) * row.actual) / max;
         return (
           <g key={row.code}>
-            <rect x={groupX} y={height - 30 - expectedHeight} width={barWidth} height={expectedHeight} fill="#B97722" />
-            <rect x={groupX + barWidth + 4} y={height - 30 - actualHeight} width={barWidth} height={actualHeight} fill="#2C7058" />
+            <rect x={groupX} y={height - 30 - predictedHeight} width={barWidth} height={predictedHeight} fill="#3B6EA5" />
+            <rect x={groupX + barWidth + 3} y={height - 30 - expectedHeight} width={barWidth} height={expectedHeight} fill="#B97722" />
+            <rect x={groupX + (barWidth + 3) * 2} y={height - 30 - actualHeight} width={barWidth} height={actualHeight} fill="#2C7058" />
             <text x={groupX} y={height - 12} fontSize="9" fill="#59645c">{row.code.slice(-6)}</text>
           </g>
         );
       })}
-      <text x={30} y={14} fontSize="11" fill="#59645c">■ Beklenen (turuncu) · ■ Gerçekleşen (yeşil)</text>
+      <text x={30} y={14} fontSize="11" fill="#59645c">■ Model (mavi) · ■ Plan (turuncu) · ■ Gerçek (yeşil)</text>
     </svg>
   );
 }
@@ -132,12 +140,26 @@ export default function Predictions() {
       const rows = await Promise.all(
         orders.map(async (order) => {
           try {
-            const summary = await get<CostSummary>(`/production-orders/${order.id}`);
+            const [summary, inputs] = await Promise.all([
+              get<CostSummary>(`/production-orders/${order.id}`),
+              get<{ qty: number }[]>(`/production-orders/${order.id}/inputs`).catch(() => []),
+            ]);
+            const rawKg = inputs.reduce((sum, input) => sum + input.qty, 0);
+            let predicted = 0;
+            if (rawKg > 0) {
+              try {
+                const ml = await mlPost<LegacyYieldResult>("/predict/yield", { raw_material_kg: rawKg });
+                predicted = ml.predicted_qty;
+              } catch {
+                predicted = 0;
+              }
+            }
             return {
               code: order.code,
+              predicted,
               expected: summary.expected_qty,
               actual: summary.finished_qty,
-              diff: summary.quantity_diff,
+              diff: predicted - summary.finished_qty,
             };
           } catch {
             return null;
@@ -323,8 +345,8 @@ export default function Predictions() {
         <div className="panel" style={{ marginTop: 16 }}>
           <div className="panel-head">
             <div>
-              <h2>Tahmin vs gerçek</h2>
-              <p>Yalnızca gerçek üretim emirleri varsa gösterilir; veri yoksa grafik üretilmez.</p>
+              <h2>Model tahmini vs Gerçek</h2>
+              <p>Üretim emirleri: ML model tahmini, plan ve gerçekleşen miktar karşılaştırması. Grafik yalnızca gerçek kayıt varsa gösterilir.</p>
             </div>
           </div>
           <div style={{ padding: 16 }}>
@@ -332,15 +354,18 @@ export default function Predictions() {
             <div className="table-wrap" style={{ marginTop: 12 }}>
               <table>
                 <thead>
-                  <tr><th>Üretim emri</th><th>Beklenen</th><th>Gerçekleşen</th><th>Sapma</th></tr>
+                  <tr><th>Üretim emri</th><th>Model tahmini</th><th>Plan</th><th>Gerçekleşen</th><th>Sapma</th></tr>
                 </thead>
                 <tbody>
                   {forecast.map((row) => (
                     <tr key={row.code}>
                       <td className="id">{row.code}</td>
+                      <td>{row.predicted ? row.predicted.toFixed(1) : "—"}</td>
                       <td>{row.expected}</td>
                       <td>{row.actual}</td>
-                      <td>{row.diff}</td>
+                      <td style={{ color: row.predicted > 0 && Math.abs(row.diff) > 0.5 ? "var(--amber)" : "var(--green-3)" }}>
+                        {row.predicted ? `${row.diff >= 0 ? "+" : ""}${row.diff.toFixed(1)}` : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
