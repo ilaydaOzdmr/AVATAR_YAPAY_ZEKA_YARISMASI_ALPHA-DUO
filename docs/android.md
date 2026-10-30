@@ -32,8 +32,19 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ## 4) Uygulamada gösterilecekler
 - **Products** sekmesi → ürünler (bloklu lotlar devre dışı).
 - **Sale** sekmesi → ürün + lot + miktar seç → satış oluştur (senkronize).
+- **Tahmin** sekmesi → üretim girdileri, verim/EKP; kuzu/sığır parçalama
+  tahmini; model sürümü, uyarılar ve tahmin geçmişi.
 - **History** sekmesi → yerel satışlar + senkron durumu.
 - Geri çağrılan (bloklu) lotu satmaya çalışınca → **"Blocked lot: sale rejected"** (409).
+
+## 5) Tahmin ekranı
+- Tahminler Go backend üzerinden alınır: `http://localhost:8080/ml/predict/v2/...`.
+- ML servisine doğrudan bağlanılmaz.
+- Sunucuya ulaşılamazsa ekranda açık **“Çevrimdışı: tahmin için sunucuya
+  ulaşılamadı”** mesajı gösterilir; sessizce eski/rastgele tahmin üretilmez.
+- Model hazır değilse (503) **“Model hazır değil”** gösterilir.
+- Başarılı tahminler Room `prediction_history` tablosuna yazılır; model sürümü
+  ve `synthetic_only` durumu geçmişte de görünür.
 
 ## Not
 - Backend `docker compose` ile veya lokal `go run` ile çalışıyor olmalı (port 8080).

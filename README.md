@@ -146,15 +146,25 @@ Tam referans: `docs/api.md`. Veri modeli: `docs/data-model.md`.
 
 ## KI (ML) servisi
 
-| Endpoint | Açıklama |
-|----------|----------|
-| `POST /predict/yield` | üretim verimi + EKP tahmini |
-| `POST /predict/butchery` | parçalama parça ağırlıkları tahmini |
-| `GET /report` | model vs baseline MAE/RMSE |
+Ayrıntılı model kartı: **`docs/ml.md`**.
 
-Modeller **basit lineer regresyon**; her biri **ortalama (baseline)** ile karşılaştırılır.
-Veri seti örnek/anonymize ve küçük olduğu için sonuçlar gösterim amaçlıdır (raporda belirtilir).
-Lot izlenebilirliği ve geri çağırma **KI tahminine değil**, kesin kayıt ilişkilerine dayanır.
+| Endpoint (Go proxy) | Açıklama |
+|----------|----------|
+| `GET /ml/health` | ML sağlık durumu + yüklü modeller |
+| `GET /ml/models` | Model sürümü, durumu, hedefleri |
+| `GET /ml/report` | Model vs baseline metrikleri |
+| `POST /ml/predict/v2/yield` | Üretim verimi, mamul ve tahmini EKP |
+| `POST /ml/predict/v2/butchery` | Kuzu/sığır parça ağırlıkları |
+| `POST /ml/predict/yield` | Eski sözleşme (uyumluluk) |
+| `POST /ml/predict/butchery` | Eski sözleşme (uyumluluk) |
+
+Modeller **sürümlü artefaktlardan yüklenir**; API açılışında yeniden eğitim
+yapılmaz. Eğitim verisi `synthetic_calibrated` olduğu için model durumu
+`synthetic_only`’dır ve metrikler gerçek saha başarısı olarak sunulmaz.
+Gerçek kamu verisi olarak yalnız USDA fiyat serileri kullanılmıştır.
+
+Lot izlenebilirliği ve geri çağırma **KI tahminine değil**, kesin kayıt
+ilişkilerine dayanır.
 
 ---
 

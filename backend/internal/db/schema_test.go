@@ -47,6 +47,7 @@ func TestEnsureSchemaUpgradesOldButcheryTables(t *testing.T) {
 	// Old schema: no input_lot_id and no allocated_cost.
 	stmts := []string{
 		`CREATE TABLE lots (id BIGINT AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB`,
+		`CREATE TABLE markets (id BIGINT AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB`,
 		`CREATE TABLE butchery_batches (
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			code VARCHAR(64) NOT NULL UNIQUE,
@@ -107,5 +108,15 @@ func TestEnsureSchemaUpgradesOldButcheryTables(t *testing.T) {
 	}
 	if !constraint {
 		t.Fatal("constraint fk_bb_input_lot missing after EnsureSchema")
+	}
+
+	var redistributionTable bool
+	if err := database.QueryRow(
+		`SELECT EXISTS(SELECT 1 FROM information_schema.tables
+		 WHERE table_schema = DATABASE() AND table_name = 'market_redistributions')`).Scan(&redistributionTable); err != nil {
+		t.Fatalf("check table: %v", err)
+	}
+	if !redistributionTable {
+		t.Fatal("market_redistributions missing after EnsureSchema")
 	}
 }

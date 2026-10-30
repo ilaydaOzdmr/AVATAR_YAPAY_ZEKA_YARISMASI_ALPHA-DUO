@@ -34,7 +34,7 @@ services:
       mysql:
         condition: service_healthy
       ml:
-        condition: service_started
+        condition: service_healthy
 
   ml:
     build:
@@ -44,6 +44,13 @@ services:
     restart: unless-stopped
     ports:
       - "${ML_PORT:-8000}:8000"
+    volumes:
+      - ../ml/artifacts:/app/ml/artifacts:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   web:
     build:

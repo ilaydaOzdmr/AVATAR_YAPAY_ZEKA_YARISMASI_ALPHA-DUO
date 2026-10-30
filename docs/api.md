@@ -45,3 +45,58 @@ POST /stock-movements
 - `stock_movements.qty` işaretli: giriş `+`, çıkış `-`.
 - Para `DECIMAL(12,2)`, JSON'da sayı olarak döner.
 - Tüm SQL parametreli.
+
+---
+
+## ML proxy (Go backend)
+
+Web ve Android, Python ML servisine doğrudan gitmez. Go backend sunucu tarafında
+proxy yapar. Tarayıcı/mobil yalnız `http://localhost:8080` bilir.
+
+| Metot | Yol | Başarı | Açıklama |
+|---|---|---|---|
+| GET | `/ml/health` | 200 | ML sağlık + yüklü model sayısı |
+| GET | `/ml/models` | 200 | Model sürümü/durumu/hedefleri |
+| GET | `/ml/report` | 200 | Model vs baseline metrikleri |
+| POST | `/ml/predict/v2/yield` | 200 | Üretim verimi, mamul, tahmini EKP |
+| POST | `/ml/predict/v2/butchery` | 200 | Parçalama parça ağırlıkları |
+| POST | `/ml/predict/yield` | 200 | Eski sözleşme (uyumluluk) |
+| POST | `/ml/predict/butchery` | 200 | Eski sözleşme (uyumluluk) |
+
+Hata kodları:
+- `502` — ML servisine bağlanılamadı.
+- `503` — model artefaktı yüklenmemiş (`model_status=unavailable`).
+- `504` — ML servisi zaman aşımı (10 sn).
+- `422` — Pydantic doğrulama hatası (v2 gövdesi).
+
+### Üretim v2
+
+```json
+POST /ml/predict/v2/yield
+{
+  "raw_material_kg": 100,
+  "spice_kg": 2,
+  "casing_kg": 3,
+  "service_cost": 400,
+  "labor_cost": 80,
+  "actual_finished_qty": 80
+}
+```
+
+Cevap `prediction` (`finished_qty`, `yield_pct`, `estimated_ekp`),
+`model_version`, `model_status`, `applicable_input_range`, `warnings`,
+`uncertainty`, `cost_breakdown` ve `ekp_kind` içerir. `actual_finished_qty`
+verilirse `accounting_ekp` ayrıca döner.
+
+### Parçalama v2
+
+```json
+POST /ml/predict/v2/butchery
+{"animal_type":"lamb","live_weight_kg":45,"carcass_weight_kg":21}
+```
+
+`animal_type`: `lamb` veya `cattle`. `carcass_weight_kg` verilmezse canlı
+ağırlıktan tahmin edilir ve uyarı üretilir. Cevapta `physical_check` ve
+`warnings` bulunur.
+
+Model kartı ve veri sınırlılıkları: `docs/ml.md`.
