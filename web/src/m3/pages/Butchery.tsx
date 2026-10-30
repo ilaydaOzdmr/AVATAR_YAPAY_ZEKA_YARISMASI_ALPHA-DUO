@@ -130,6 +130,19 @@ export default function Butchery() {
         <button className="btn btn-primary" type="button" onClick={() => setShowForm((v) => !v)}>＋ Parçalama kaydı</button>
       </div>
 
+      <div className="recall-banner">
+        <span>ⓘ</span>
+        <div>
+          <strong>PDF örnek tutarsızlığı açıklaması</strong>
+          <p>
+            Kaynak dokümanda 25 kg × 11,50 € = <b>287,50 €</b> beklenirken toplam
+            <b> 351,00 €</b> yazıyor; parça ağırlıkları toplamı da <b>22 kg</b>.
+            "KUZ-2026-DEMO" kaydı bu tutarsızlığı gösterir (beklenen 287,50 € ≠ 351,00 €,
+            fire 3 kg) — aşağıda uyarı olarak işaretlenir.
+          </p>
+        </div>
+      </div>
+
       {showForm && (
         <div className="panel" style={{ marginBottom: 16 }}>
           <div className="panel-head"><h2>Yeni parçalama kaydı</h2></div>
