@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Production from "./pages/Production";
@@ -86,17 +86,10 @@ function renderView(key: string) {
 
 export default function App() {
   const [view, setView] = useState("dashboard");
-  const [collapsed, setCollapsed] = useState(() => window.matchMedia("(max-width: 760px)").matches);
+  const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
   const toastTimer = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 760px)");
-    const closeOnMobile = (event: MediaQueryListEvent) => { if (event.matches) setCollapsed(true); };
-    media.addEventListener("change", closeOnMobile);
-    return () => media.removeEventListener("change", closeOnMobile);
-  }, []);
 
   const activeLabel = titles[view] ?? "Genel Bakış";
   const viewEl = useMemo(() => renderView(view), [view]);
@@ -109,7 +102,6 @@ export default function App() {
 
   function navigate(next: string) {
     setView(next);
-    if (window.matchMedia("(max-width: 760px)").matches) setCollapsed(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -127,7 +119,6 @@ export default function App() {
     <div className="app">
       <aside className={collapsed ? "sidebar collapsed" : "sidebar"} id="sidebar">
         <div className="brand">
-          <button className="sidebar-close" type="button" aria-label="Menüyü kapat" onClick={() => setCollapsed(true)}>×</button>
           <div className="logo">A</div>
           <div>
             <strong>AVATAR</strong>
@@ -165,16 +156,12 @@ export default function App() {
         </div>
       </aside>
 
-      {!collapsed && <button className="sidebar-backdrop" type="button" aria-label="Menü dışına çık" onClick={() => setCollapsed(true)} />}
-
       <main className="main">
         <header className="topbar">
           <button
             className="mobile-menu"
             type="button"
             aria-label="Menü"
-            aria-expanded={!collapsed}
-            aria-controls="sidebar"
             onClick={() => setCollapsed((open) => !open)}
           >
             ☰

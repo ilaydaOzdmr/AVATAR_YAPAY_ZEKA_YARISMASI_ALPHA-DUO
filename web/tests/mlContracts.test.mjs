@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { yieldPayload, butcheryPayload, initialButchery, modelMetrics, numberText, productionProduct,
-  statusText, warningText, YIELD_INITIAL } from "../src/mlContracts.ts";
+  statusText, warningText, YIELD_INITIAL, ensurePredictionVersion } from "../src/mlContracts.ts";
 
 test("PDF form sends all materials separately and service as a per-unit rate", () => {
   const payload = yieldPayload({ ...YIELD_INITIAL, actual_finished_qty: "85" });
@@ -54,6 +54,13 @@ test("missing metrics are not formatted as zero or a success percentage", () => 
   assert.match(statusText("synthetic_only"), /Sentetik/);
   assert.match(statusText(undefined), /bilinmiyor/);
   assert.match(warningText("raw_material_kg=5000 is outside the training range [60, 160]; prediction is extrapolated."), /Et: 5000 eğitim aralığının/);
+});
+
+test("prediction responses must match the displayed report versions", () => {
+  const report = { model_reports: { yield: { model_version: "1.1.0", dataset_version: "data-a" } } };
+  ensurePredictionVersion(report, "yield", { model_version: "1.1.0", dataset_version: "data-a" });
+  assert.throws(() => ensurePredictionVersion(report, "yield", { model_version: "1.1.0", dataset_version: "data-b" }));
+  assert.throws(() => ensurePredictionVersion(report, "yield", { model_version: "1.2.0", dataset_version: "data-a" }));
 });
 
 test("history identifies output product and converts only explicit pack weights", () => {

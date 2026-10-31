@@ -152,29 +152,27 @@ docker compose -f infra/docker-compose.yml up -d --build
 
 ## 8. Web ekranı ve güncel model bağlantısı — 31 Ekim 2026
 
-Main dalı `4660010` commit'ine kadar çekildikten sonra iki web girişindeki
-yapay zekâ ekranı ortak `web/src/components/MLPredictions.tsx` bileşenine alındı.
-Ham panel ve Food Intelligence aynı V2 sözleşmesini kullanır. Model yeniden
-eğitilmedi; mevcut v1.1.0 artefaktlarının metadata ve metrikleri gösterilir.
+İki web girişinin `4660010` commit'indeki özgün arayüzü korunur. İlk entegrasyonda
+eklenen ortak ekran ve CSS, kullanıcı düzeltmesi üzerine kaldırıldı; menü,
+`App.tsx` ve tema commit öncesindeki durumuna döndürüldü. Ham panel ve Food
+Intelligence kendi mevcut formlarını koruyarak V2 sözleşmesini kullanır.
+Model yeniden eğitilmedi; mevcut v1.1.0 artefaktlarının metrikleri gösterilir.
 
-- Ekran sürüm, veri kaynağı, eğitim/test sayıları ve girdi aralıklarını
-  `/ml/health` üzerinden; fiziksel kısıt sonrası hataları `/ml/report` içindeki
-  `model_reports` üzerinden alır. Sürüm, skor veya örnek tahmin sabit yazılmaz.
-- Üretim, kuzu ve sığırın üç ayrı test kartı vardır. Mamul hatası kg, üretim
-  verim hatası yüzde puan, MAPE yüzde ve R² ayrı etiketlenir. R² bir doğruluk
-  yüzdesi olarak sunulmaz. Sentetik veri ve saha doğrulaması eksikliği belirtilir.
-- Üretim formu ürün tipini, bütün miktarları/fiyatları, sabit veya kg başına
-  hizmet bedelini, ek işçiliği ve opsiyonel fiili mamulü gönderir. PDF örneği
-  yalnız formu doldurur; kullanıcı tahmin düğmesiyle gerçek modeli çağırır.
-- Parçalama formu ölçülmüş karkası zorunlu tutar; canlı ağırlık opsiyoneldir.
-  Irk, cinsiyet, yaş ve skorlar girilebilir; eksik değerlerin demo varsayımı
-  ve fiziksel dengeleme uyarıları Türkçe açıklanır.
+- Mevcut sonuç alanları ve iki metrik paneli kullanılır; yeni kart, form veya
+  kontrol eklenmez. Model sürümü, durum ve uyarılar servisten alınır.
+- Üretim paneli `production_quantity` ile kg cinsinden mamul hatasını gösterir;
+  parçalama paneli mevcut hayvan seçimine göre kuzu/sığır metriklerini gösterir.
+  Sentetik veri ve saha doğrulaması eksikliği mevcut açıklamalarda belirtilir.
+- Food Intelligence üretim formundaki et, baharat, bağırsak, sabit hizmet bedeli
+  ve işçilik alanları korunur. Ürün tipi sucuktur. Arayüzde bulunmayan girdi
+  fiyatları/diğer malzemeler servis varsayımlarıdır; uyarılarda açıklanır.
+- Eski ham panelin miktar ve hayvan alanları korunur; V2 yanıtı mevcut sonuç
+  tablosuna uyarlanır. Bu basit formda da eksik malzeme/hayvan bilgileri servis
+  varsayımıdır. Ölçülmüş karkas kullanılır; canlı ağırlıktan dönüşüm yapılmaz.
 - Tahmin yanıtının model ve veri sürümleri metadata ile uyuşmazsa sonuç
-  gösterilmez. Bağlantı hatasında eski skorlar korunmaz, eksik değerler sıfır
-  veya tahmini başarı oranı gibi sunulmaz. Pydantic alan hataları okunabilir döner.
-- Mobil kontrolde mevcut yan menünün kapatma düğmesini örttüğü görüldü.
-  Dar ekranda menü kapalı başlar; görünür kapatma düğmesi/arka planı eklendi,
-  sayfa seçildiğinde kapanır. Böylece tahmin formlarına erişim engellenmez.
+  gösterilmez. Pydantic alan hataları mevcut hata alanında okunabilir döner.
+- Menü, tema, panel yerleşimi, inline stiller ve mevcut giriş kontrolleri
+  commit öncesindeki sürümle aynı tutulur.
 - Kayıt karşılaştırmaları tamamlanmış emirlerde çıkış ürününü doğrular; 1 kg ve
   500 g paketler açık ürün ağırlığıyla kg'ye çevrilir. Bilinmeyen ürün/birimlerde
   hata gösterilir. Geçmiş kayıtların bugünkü modelle yeniden tahmini,
@@ -193,15 +191,16 @@ docker compose -f infra/docker-compose.yml up -d --build ml backend web web-m3
 Bu görevde Docker Compose söz dizimi doğrulandı; image build/deployment ve
 MySQL entegrasyon testleri çalıştırılmadı. Doğrulama:
 
-- 46 Python testi başarılı; 10 Node form/sözleşme/birim testi başarılı.
+- 46 Python testi başarılı; 11 Node veri/sözleşme/birim testi başarılı.
 - TypeScript ve iki girişin Vite üretim derlemesi başarılı.
 - `go test ./...` başarılı. `AVATAR_ML_TEST_URL` ile ek canlı model smoke testi,
   gerçek Python modellerini Go proxy üzerinden çağırarak çalıştırıldı.
-- Headless Chrome'da iki giriş, dinamik metrikler, PDF sucuk örneği, kuzu/sığır
-  ağırlık dengesi, 500 g paket karşılaştırması, mobil taşma, eski model/veri
-  sürümünün reddi ve çevrimdışı servis durumu kontrol edildi. Tarayıcı konsolunda
-  uygulama hatası yoktu. İşletme kayıtları bu kontrolde açıkça yapay QA
-  fixture'larıydı; model tahminleri gerçek yerel artefaktlardan alındı.
+- Düzeltme sonrasında iki sayfanın JSX yapısı, CSS sınıfları, inline stilleri ve
+  giriş kontrolleri `4660010` ile karşılaştırıldı; App/tema içerikleri birebir
+  eşleşti. Headless Chrome'da özgün ekranlar, güncel metrikler, sucuk ve
+  kuzu/sığır tahminleri, 500 g paket karşılaştırması ve V2 çağrıları doğrulandı.
+  İşletme kayıtları açıkça yapay QA fixture'larıydı; tahminler gerçek yerel
+  artefaktlardan alındı. Arayüz yeniden tasarlanmadı.
 
 Tarayıcı QA araçları, fixture sunucusu ve ekran görüntüleri yalnız
 `ml/reports/local/` altında tutulur; veritabanı/kullanıcı kayıtları değiştirilmez.

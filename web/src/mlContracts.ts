@@ -55,7 +55,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   raw_material_kg: "Et", spice_kg: "Baharat", casing_kg: "Bağırsak", other_material_kg: "Diğer malzeme",
   material_unit_price_meat: "Et birim fiyatı", material_unit_price_spice: "Baharat birim fiyatı",
   material_unit_price_casing: "Bağırsak birim fiyatı", material_unit_price_other: "Diğer malzeme birim fiyatı",
-  service_value: "Hizmet bedeli", labor_cost: "Ek işçilik", actual_finished_qty: "Fiili mamul miktarı",
+  service_value: "Hizmet bedeli", service_cost: "Hizmet bedeli", service_unit_cost: "Birim hizmet tarifesi", labor_cost: "Ek işçilik", actual_finished_qty: "Fiili mamul miktarı",
   product_type: "Ürün tipi", breed: "Irk", sex: "Cinsiyet", age_months: "Yaş",
   carcass_weight_kg: "Karkas", live_weight_kg: "Canlı ağırlık", conformation_score: "Konformasyon skoru", fat_score: "Yağ skoru",
 };
@@ -118,11 +118,17 @@ export function modelMetrics(report: MLReport | null, model: ModelInfo | undefin
   return group?.model_version === model.model_version && group.dataset_version === model.dataset_version
     ? group.metrics[target] : undefined;
 }
+export function ensurePredictionVersion(report: MLReport, name: ModelName, response: { model_version: string; dataset_version: string }): void {
+  const model = report.model_reports?.[name];
+  if (!model || model.model_version !== response.model_version || model.dataset_version !== response.dataset_version) {
+    throw new Error("Model veya eğitim verisi sürümü değişti. Raporu yenileyip tekrar tahmin alın.");
+  }
+}
 export function warningText(warning: string): string {
   if (warning.startsWith("Model is trained on synthetic")) return "Model sentetik veriyle eğitildi; gerçek işletme kayıtlarıyla saha doğrulaması yapılmadı.";
   if (warning.startsWith("Part weights reconciled")) return "Parçalar ölçülmüş karkas ağırlığına dengelendi; satılabilir toplam ve verim bu parçalardan hesaplandı.";
   if (warning.startsWith("Missing breed/age/sex")) return "Eksik ırk, yaş veya cinsiyet için demo varsayımları kullanıldı.";
-  if (warning.startsWith("Unspecified fields")) return "Belirtilmeyen alanlarda demo varsayımları kullanıldı. Ayrıntı: " + warning.split(": ").slice(1).join(": ");
+  if (warning.startsWith("Unspecified fields")) return "Demo varsayımı kullanılan alanlar: " + warning.split(": ").slice(1).join(": ").replace(/\.$/, "").split(", ").map((field) => FEATURE_LABELS[field] ?? field).join(", ") + ".";
   const range = warning.match(/^(.+?)=(.+?) is outside the training range \[(.+?), (.+?)\]/);
   if (range) return `${FEATURE_LABELS[range[1]] ?? range[1]}: ${range[2]} eğitim aralığının (${range[3]}–${range[4]}) dışında. Tahminin güvenilirliği sınırlı.`;
   if (warning.includes("outside the training categories")) return "Seçilen kategori eğitim verisinde bulunmuyor. " + warning;
