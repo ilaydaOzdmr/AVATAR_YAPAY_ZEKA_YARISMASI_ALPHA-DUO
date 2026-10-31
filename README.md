@@ -25,119 +25,61 @@ Lot bazında depo transferi, sevkiyat, iade ve yeniden işleme hareketleri deste
 
 ## Ekranlar
 
-Görseller, projeye eklenen **1 Kasım 2026 tarihli ekran görüntüleridir**. İçlerindeki sayılar demo oturumuna aittir; yeni kurulumdaki kayıt sayıları ve sonuçlar farklı olabilir.
+Web ve mobilin önemli işlevleri aşağıda, **aynı konuya ait ekranlar birleştirilerek** gösterilmiştir. Görselleri açarak ayrıntıları büyütebilirsiniz. Ekranlar 1 Kasım 2026 tarihli demo oturumundan alınmıştır; örnek miktarlar yeni kurulumda farklı olabilir.
 
-### Web yönetim paneli
+### Web · Yapay zekâ tahmin sayfası
 
-| Ekran | Kullanıcı ne yapar? |
-|---|---|
-| Genel Bakış | Stok değeri, üretim durumu ve kural tabanlı uyarıları takip eder. |
-| Stok & Hammaddeler | Hammadde/ürün kartı, raf ömrü, lot, son tüketim tarihi ve stok hareketi yönetir. |
-| Üretim Emirleri | Girdileri ve mamul lotlarını ilişkilendirir; üretimi tamamlar veya reddeder, maliyet dökümünü inceler. |
-| Kuzu Parçalama | Giriş partisini ve fiili parça ağırlıklarını kaydeder; ağırlık dengesi, fire ve maliyet dağılımını görür. |
-| Satış & Sevkiyat | Mamul lotu, market ve miktar seçerek satış kaydeder. |
-| Lot İzlenebilirliği / Geri Çağırma | Kayıt zincirini izler; etkilenen lot ve alıcıları bulur, geri çağırma başlatır. |
-| Yapay Zekâ Merkezi | Üretim ve kuzu/sığır tahmini alır; model–gerçek karşılaştırmasını ve hata metriklerini inceler. |
-| Raporlar | Alış, üretim maliyeti, parçalama, lot hareketi, satış ve geri çağırma raporlarını açar; CSV indirir veya yazdırma penceresinden PDF kaydeder. |
-| Fatura / İrsaliye OCR | Yapıştırılan belge metninden ürün, miktar, lot ve maliyet önerileri çıkarır; onaylanan kalemleri stoğa işler. |
+![Üretim ve parçalama tahminleri, model–gerçek grafiği, parçalama sapmaları ve doğruluk tabloları aynı görselde](docs/screenshots/web-yapay-zeka.png)
 
-<details>
-<summary><strong>Stok, üretim, parçalama ve satış ekranlarını görüntüle</strong></summary>
+Üretim girdileriyle **beklenen mamul, verim ve tahmini EKP** hesaplanır. Kuzu veya sığır için karkas ağırlığına göre parça tahminleri alınır. Aynı sayfanın devamında üretim tahmini ile gerçekleşen miktar grafiği, parçalama sapmaları ve MAE/RMSE/R² tabloları bulunur. Böylece kullanıcı tahmini de gerçekleşen sonucu da birlikte değerlendirebilir.
 
-**Stok yönetimi:** kartlar, raf ömrü ve lotlar aynı ekrandadır.
+Bu modeller sentetik veriyle eğitilmiştir; görsellerdeki metrikler gerçek işletme başarısı olarak yorumlanmamalıdır.
 
-![Web stok yönetimi ve ürün kartları](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012423.png)
+### Web · Stok yönetimi ve üretim emirleri
 
-**Üretim emri:** hammadde ve mamul lotları işlemle ilişkilendirilir.
+![Hammadde ve lot oluşturma ile üretim emri ve gerçek maliyet ekranları birlikte](docs/screenshots/web-stok-uretim.png)
 
-![Web yeni üretim emri ve kayıtlı üretimler](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012528.png)
+**Solda** hammadde kartı açma, yeni lot/stok girişi ve mevcut lota hareket ekleme işlemleri; **sağda** üretim kayıtları ve maliyet inceleme bölümü görülür. Bir emir seçildiğinde maliyet dökümü açılır. Hammadde ve mamul lotları üretim emrine bağlanır; kabul edilen fiili mamul miktarı üzerinden gerçek maliyet hesaplanır. Raf ömrü ve son tüketim tarihi de stok yönetiminin parçasıdır.
 
-**Parçalama:** giriş, parçalar ve maliyet dağılımı birlikte takip edilir.
+### Web · Parçalama ve lot bazında satış
 
-![Web parçalama kaydı ve geçmiş partiler](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012545.png)
+![Parçalama kaydı ile mamul lotu ve market seçilerek yapılan satış aynı görselde](docs/screenshots/web-parcalama-satis.png)
 
-**Satış:** lot, market ve miktar üzerinden sevkiyat kaydı oluşturulur.
+Parçalama ekranında **giriş partisi, parça ürünleri, fiili ağırlıklar ve yan ürünler** kaydedilir; ağırlık dengesi, fire ve maliyet dağılımı incelenir. Satış ekranında mamul lotu, market ve miktar seçilir. Böylece hangi partiden çıkan ürünün hangi alıcıya satıldığı kayıt altında tutulur.
 
-![Web hızlı satış formu ve son satışlar](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012610.png)
+### Web · Lot izlenebilirliği ve geri çağırma
 
-</details>
+![Kaynak et lotundan marketlere ileri izleme ve etkilenen lot için geri çağırma, alıcı listesi ve satış blokajı](docs/screenshots/web-lot-geri-cagirma.png)
 
-<details>
-<summary><strong>İzlenebilirlik ve geri çağırma ekranlarını görüntüle</strong></summary>
+**Soldaki örnekte** `ET-2026-001` lotundan `SUC-2026-045` mamulüne ve marketlere giden kayıt zinciri görülür. **Sağdaki ayrı örnekte** `SUC-2026-047` için geri çağırma sonucu; etkilenen miktar, alıcılar, iletişim bilgileri ve aktif satış blokajı gösterilir. Sorunlu lotla ilişkili ürünler belirlenir ve bu lotların satışı engellenir.
 
-**İleri izleme:** kaynak lotun mamule ve marketlere uzanan ilişkisi gösterilir.
+İleri/geri izleme kesin kayıtlara dayanır. Alıcı teyit düğmesi ekran üzerindeki takip durumunu değiştirir; otomatik e-posta veya SMS göndermez.
 
-![Web lot izlenebilirliği ve etkilenen marketler](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012625.png)
+### Web · Raporlar ve fatura kalemlerinin onaylanması
 
-**Geri çağırma:** ürün lotları, alıcı miktarları ve teyit durumu listelenir.
+![Alış ve diğer operasyon raporları ile fatura metninden çıkarılan kalemlerin onaylanması](docs/screenshots/web-rapor-ocr.png)
 
-![Web geri çağırma sonucu ve market iletişim listesi](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012703.png)
+Rapor ekranında **alış, üretim maliyeti, parçalama, lot hareketleri, satış ve geri çağırma** kayıtları ayrı sekmelerde incelenir. CSV indirilebilir; yazdırma penceresinden PDF kaydedilebilir. Fatura/irsaliye ekranında yapıştırılan metinden ürün, miktar, lot ve maliyet önerileri çıkarılır; kalemler kullanıcı onayıyla stoğa işlenir. Mevcut belge akışı metin ayrıştırır; görselden otomatik OCR yapan ayrı bir motor içermez.
 
-Alıcı teyit düğmesi ekran üzerindeki takip durumunu değiştirir; dışarıya otomatik e-posta/SMS gönderildiği anlamına gelmez.
+### Mobil · Bloklu lotlar satılamaz, kullanıcıya uyarı verilir
 
-</details>
+![Solda uygun lot için başarılı satış senkronizasyonu, sağda bloklu lot için satışın reddedildiğini gösteren kırmızı uyarı](docs/screenshots/mobil-satis-blokaj.png)
 
-<details>
-<summary><strong>Yapay zekâ, raporlar ve belge okuma ekranlarını görüntüle</strong></summary>
+**Solda**, uygun lotun satışı sonrasında **“Satış senkronize edildi.”** mesajı görülür. **Sağda**, bloklu lot için yapılan denemede **“Bloklu lot: satış reddedildi.”** uyarısı gösterilir. Ürün, lot, market ve miktar seçimi aynı satış akışının parçasıdır; geri çağrılmış lotun satışı backend tarafından reddedilir.
 
-**Tahminler:** beklenen mamul, verim, tahmini EKP ve parça ağırlıkları.
+### Mobil · Ana sayfa, stoklar ve satış geçmişi
 
-![Yapay Zekâ Merkezi üretim ve parçalama tahminleri](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012720.png)
+![Android ana sayfası ve sunucu bağlantısı, ürün-stok listesi ve satış geçmişi bir arada](docs/screenshots/mobil-stok-senkron.png)
 
-**Karşılaştırma:** model tahmini ve gerçekleşen miktar aynı grafikte gösterilir.
+Ana sayfada kullanılan sunucu adresi ve bağlantı sonucu görülür; **Dene / Değiştir** ile bağlantı kontrol edilir. Ürün-stok ekranı mevcut kayıtları gösterir. Satış geçmişinden yerel satışlar ve senkronizasyon durumu takip edilir, bekleyen satışlar yeniden gönderilebilir.
 
-![Üretim emirleri için model tahmini ve gerçekleşen miktar grafiği](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012730.png)
+Room/SQLite çevrimdışı önbellek ve gönderim kuyruğudur. Bağlantı yokken satış yerelde bekler; sunucu kabul etmeden merkezi satış olarak kesinleşmez. Yeniden gönderimde sunucu blokaj kontrolü yapar ve aynı satış kodunun tekrar gönderilmesini denetler. Barkod/QR kısayolu mevcut prototipte simülasyondur.
 
-**Raporlar:** kayıtlar konuya göre ayrılır; CSV ve PDF çıktısı alınabilir.
+### Mobil · Yapay zekâ tahmini ve PDF raporu
 
-![Web alış raporu, rapor sekmeleri ve dışa aktarma seçenekleri](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012759.png)
+![Android parçalama tahminleri ile merkezi rapor tablosu ve PDF indirme bildirimi birlikte](docs/screenshots/mobil-tahmin-rapor.png)
 
-**Belge metni:** önerilen kalemler kullanıcı onayından sonra kaydedilir. Mevcut akış metin ayrıştırır; görsel yükleyip otomatik OCR yapan ayrı bir motor içermez.
-
-![Fatura metninden çıkarılan ürün, miktar, lot ve maliyet önerisi](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20013147.png)
-
-</details>
-
-### Android operasyon uygulaması
-
-Ana sayfadan stoklara, satışa, tahminlere ve raporlara geçilir. Satışta ürünün **lotu, marketi ve miktarı** seçilir; bağlantı/senkronizasyon sonucu ekranda gösterilir.
-
-<table>
-  <tr>
-    <th>Ana sayfa ve bağlantı</th>
-    <th>Başarılı satış</th>
-    <th>Bloklu lotun reddi</th>
-  </tr>
-  <tr>
-    <td><img src="mobil-arayuz-gorsel/WhatsApp%20Image%202026-11-01%20at%2001.04.07.jpeg" alt="Android ana sayfası, sunucu bağlantısı ve operasyon kısayolları" width="220"></td>
-    <td><img src="mobil-arayuz-gorsel/WhatsApp%20Image%202026-11-01%20at%2001.06.08.jpeg" alt="Android satış formunda başarılı senkronizasyon mesajı" width="220"></td>
-    <td><img src="mobil-arayuz-gorsel/WhatsApp%20Image%202026-11-01%20at%2001.05.17.jpeg" alt="Android satış formunda bloklu lotun reddedilmesi" width="220"></td>
-  </tr>
-</table>
-
-<details>
-<summary><strong>Mobil tahmin, PDF raporu ve satış geçmişini görüntüle</strong></summary>
-
-<table>
-  <tr>
-    <th>Parçalama tahmini</th>
-    <th>Rapor ve PDF indirme</th>
-    <th>Satış geçmişi</th>
-  </tr>
-  <tr>
-    <td><img src="mobil-arayuz-gorsel/WhatsApp%20Image%202026-11-01%20at%2001.04.08%20%282%29.jpeg" alt="Android kuzu parçalama tahmini, parça ağırlıkları ve verim" width="220"></td>
-    <td><img src="mobil-arayuz-gorsel/WhatsApp%20Image%202026-11-01%20at%2001.04.11.jpeg" alt="Android rapor tablosu ve PDF dosyasının indirilme bildirimi" width="220"></td>
-    <td><img src="mobil-arayuz-gorsel/WhatsApp%20Image%202026-11-01%20at%2001.04.12%20%281%29.jpeg" alt="Android satış geçmişi ve bekleyen satışları senkronize etme" width="220"></td>
-  </tr>
-</table>
-
-Mobilde Room/SQLite, çevrimdışı önbellek ve gönderim kuyruğudur. Bağlantı yokken satış yerelde bekler; sunucu kabul etmeden kesinleşmiş merkezi satış sayılmaz. Sunucuya yeniden gönderimde blokaj kontrolü yapılır. Aynı satışın tekrar gönderilmesi çift stok düşümüne yol açmamalıdır; satış kodu tekrar gönderim kontrolünde kullanılır.
-
-Tahmin için sunucu gerekir; çevrimdışıyken yeni tahmin üretilmez. Ana ekrandaki barkod/QR kısayolu mevcut prototipte simülasyondur.
-
-</details>
-
-Tüm görseller: [web galerisi](web-arayuz-gorsel/) · [mobil galeri](mobil-arayuz-gorsel/).
+Mobil tahmin ekranında kuzu/sığır seçimi ve ağırlık bilgileriyle **parça miktarları, satılabilir toplam ve verim** görüntülenir. Raporlar ekranı merkezi kayıtları getirir; **PDF indir** ile dosya cihaza kaydedilir ve konumu kullanıcıya bildirilir. Tahmin için sunucu bağlantısı gerekir; çevrimdışıyken yeni tahmin üretilmez.
 
 ## Kurulum
 
