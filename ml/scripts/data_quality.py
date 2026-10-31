@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 ML_ROOT = Path(__file__).resolve().parents[1]
-PROCESSED = ML_ROOT / "data" / "processed"
+PROCESSED = ML_ROOT / "data" / "processed" / "synthetic_v2"
 REPORTS = ML_ROOT / "reports"
 
 PART_COLUMNS = [

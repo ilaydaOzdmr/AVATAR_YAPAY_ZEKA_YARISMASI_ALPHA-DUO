@@ -6,84 +6,84 @@
       "null_cells": 0,
       "numeric": {
         "raw_material_kg": {
-          "min": 60.099,
-          "max": 159.949,
-          "mean": 108.32059791666666
+          "min": 60.042,
+          "max": 159.238,
+          "mean": 108.15450000000001
         },
         "spice_kg": {
-          "min": 0.653,
-          "max": 4.647,
-          "mean": 2.15420625
+          "min": 0.643,
+          "max": 4.673,
+          "mean": 2.1772541666666663
         },
         "casing_kg": {
-          "min": 1.17,
-          "max": 6.764,
-          "mean": 3.1985249999999996
+          "min": 1.247,
+          "max": 7.857,
+          "mean": 3.7595208333333336
         },
         "other_material_kg": {
-          "min": 0.011,
-          "max": 2.907,
-          "mean": 1.0641
+          "min": 0.003,
+          "max": 3.111,
+          "mean": 1.08915
         },
         "material_unit_price_meat": {
-          "min": 4.97,
-          "max": 19.59,
-          "mean": 9.681229166666666
+          "min": 8.86,
+          "max": 10.53,
+          "mean": 9.677583333333333
         },
         "material_unit_price_spice": {
-          "min": 20.99,
-          "max": 26.98,
-          "mean": 23.873895833333336
+          "min": 21.07,
+          "max": 27.05,
+          "mean": 23.9913125
         },
         "material_unit_price_casing": {
-          "min": 10.17,
-          "max": 13.2,
-          "mean": 11.599104166666667
+          "min": 10.24,
+          "max": 13.02,
+          "mean": 11.609916666666667
         },
         "material_unit_price_other": {
-          "min": 2.86,
-          "max": 4.06,
-          "mean": 3.4899999999999998
+          "min": 2.73,
+          "max": 4.03,
+          "mean": 3.5002708333333334
         },
         "service_cost": {
-          "min": 230.52,
-          "max": 841.18,
-          "mean": 486.5105625
+          "min": 227.46,
+          "max": 821.61,
+          "mean": 485.61970833333334
         },
         "labor_cost": {
-          "min": 45.86,
-          "max": 213.65,
-          "mean": 110.22785416666666
+          "min": 53.22,
+          "max": 243.46,
+          "mean": 129.38491666666667
         },
         "usda_price_index": {
-          "min": 0.5309,
-          "max": 1.9824,
-          "mean": 0.9984097916666668
+          "min": 1.0,
+          "max": 1.0,
+          "mean": 1.0
         },
         "expected_qty": {
-          "min": 50.122,
-          "max": 142.572,
-          "mean": 92.79912083333333
+          "min": 50.669,
+          "max": 142.577,
+          "mean": 92.33706041666667
         },
         "finished_qty": {
-          "min": 49.935,
-          "max": 145.555,
-          "mean": 92.77554375
+          "min": 50.382,
+          "max": 148.913,
+          "mean": 92.49531666666667
         },
         "yield_pct": {
-          "min": 0.7936,
-          "max": 0.9342,
-          "mean": 0.8561425
+          "min": 0.8073,
+          "max": 0.94,
+          "mean": 0.85559
         },
         "actual_total_cost": {
-          "min": 660.13,
-          "max": 3890.53,
-          "mean": 1743.96975
+          "min": 907.7,
+          "max": 2733.93,
+          "mean": 1762.0937083333336
         },
         "actual_ekp": {
-          "min": 11.7,
-          "max": 31.35,
-          "mean": 18.754604166666663
+          "min": 16.28,
+          "max": 21.98,
+          "mean": 19.039895833333333
         }
       }
     },
@@ -258,12 +258,12 @@
         "synthetic_calibrated"
       ],
       "batches": 60,
-      "yield_pct_min": 0.7936,
-      "yield_pct_max": 0.9342,
-      "finished_qty_min": 49.935,
-      "max_abs_ekp_identity_error": 0.005022884850681919,
-      "usda_price_index_min": 0.5309,
-      "usda_price_index_max": 1.9824
+      "yield_pct_min": 0.8073,
+      "yield_pct_max": 0.94,
+      "finished_qty_min": 50.382,
+      "max_abs_ekp_identity_error": 0.005138169993546882,
+      "usda_price_index_min": 1.0,
+      "usda_price_index_max": 1.0
     },
     "butchery_lamb": {
       "data_origin": [

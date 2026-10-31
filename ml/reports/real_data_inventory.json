@@ -1,0 +1,330 @@
+{
+  "verified_on": "2026-10-31",
+  "datasets": {
+    "usda_cooking": {
+      "url": "https://ndownloader.figshare.com/files/43365402",
+      "filename": "usda_cooking.csv",
+      "license": "CC0-1.0",
+      "source": "https://doi.org/10.15482/USDA.ADC/1409031",
+      "sha256": "e6144d36488781c3eab2428bd4fd576d85092a93fc709aa05868d20fe6ba1f4f",
+      "unit_of_observation": "published food/preparation summary, not an individual batch",
+      "rows": 173,
+      "columns": [
+        "source_row",
+        "food_group_code",
+        "ndb_id",
+        "description",
+        "preparation_method",
+        "cooking_yield_pct",
+        "study_sample_count",
+        "yield_sd",
+        "yield_min_pct",
+        "yield_max_pct",
+        "moisture_change_pct",
+        "fat_change_pct",
+        "release_year",
+        "data_origin",
+        "source_doi",
+        "license"
+      ],
+      "null_cells": 226,
+      "quality": {
+        "raw_rows": 173,
+        "rejected_rows": 0,
+        "note": "n is a published sample count; never expanded into pseudo-records"
+      },
+      "duplicate_rows_excluding_provenance": 0,
+      "numeric_summary": {
+        "food_group_code": {
+          "observed_n": 173,
+          "min": 5.0,
+          "max": 17.0,
+          "mean": 10.583815028901734,
+          "iqr_outlier_count": 35
+        },
+        "ndb_id": {
+          "observed_n": 163,
+          "min": 5004.0,
+          "max": 23640.0,
+          "mean": 12765.226993865032,
+          "iqr_outlier_count": 0
+        },
+        "cooking_yield_pct": {
+          "observed_n": 173,
+          "min": 29.0,
+          "max": 96.0,
+          "mean": 74.29168812543352,
+          "iqr_outlier_count": 5
+        },
+        "study_sample_count": {
+          "observed_n": 158,
+          "min": 1.0,
+          "max": 553.0,
+          "mean": 20.569620253164558,
+          "iqr_outlier_count": 26
+        },
+        "yield_sd": {
+          "observed_n": 110,
+          "min": 0.412,
+          "max": 13.44,
+          "mean": 4.0679174116727275,
+          "iqr_outlier_count": 5
+        },
+        "yield_min_pct": {
+          "observed_n": 127,
+          "min": 28.89,
+          "max": 92.73,
+          "mean": 67.80145814322836,
+          "iqr_outlier_count": 3
+        },
+        "yield_max_pct": {
+          "observed_n": 127,
+          "min": 30.13,
+          "max": 99.5,
+          "mean": 82.87311465251967,
+          "iqr_outlier_count": 2
+        },
+        "moisture_change_pct": {
+          "observed_n": 150,
+          "min": -49.88,
+          "max": 2.45,
+          "mean": -21.874222131066666,
+          "iqr_outlier_count": 5
+        },
+        "fat_change_pct": {
+          "observed_n": 150,
+          "min": -35.45,
+          "max": 6.5,
+          "mean": -2.0996850842533332,
+          "iqr_outlier_count": 19
+        },
+        "release_year": {
+          "observed_n": 173,
+          "min": 1975.0,
+          "max": 2014.0,
+          "mean": 2004.8612716763005,
+          "iqr_outlier_count": 16
+        }
+      },
+      "suitability": {
+        "production": {
+          "eligible_for_training": false,
+          "missing_targets": [
+            "finished_qty",
+            "yield_pct"
+          ],
+          "reason": "incomplete competition targets and/or incompatible observation unit"
+        },
+        "butchery": {
+          "eligible_for_training": false,
+          "missing_targets": [
+            "bone_weight",
+            "cutting_yield_pct",
+            "diced_meat_weight",
+            "leg_weight",
+            "loin_weight",
+            "mince_weight",
+            "rib_weight",
+            "shoulder_weight",
+            "total_saleable_weight",
+            "waste_weight"
+          ],
+          "reason": "incomplete competition targets and/or incompatible observation unit"
+        }
+      },
+      "cleaned_sha256": "70642f49e3afe495553bd1638eb4a059aee433d33b19f23425f8336559641ff7"
+    },
+    "nwfp_lamb": {
+      "url": "https://data.mendeley.com/public-files/datasets/xy3ndcy8jd/files/20ced925-37ec-4991-80af-82b8ea2cc681/file_downloaded",
+      "filename": "nwfp.zip",
+      "license": "CC-BY-4.0",
+      "source": "https://doi.org/10.17632/xy3ndcy8jd.1",
+      "sha256": "0e63f6c39170ad72d6a2d7e6e658bed5f32d4d48b260be57c95f00abdfc4ebe1",
+      "unit_of_observation": "one lamb (measured on farm and at abattoir)",
+      "rows": 2978,
+      "columns": [
+        "source_row",
+        "animal_id",
+        "sex",
+        "production_year",
+        "grazing_system",
+        "birth_dam_id",
+        "rearing_dam_id",
+        "last_measured_live_weight_kg",
+        "live_measurement_date",
+        "sale_date",
+        "live_measurement_lag_days",
+        "cold_carcass_weight_kg",
+        "paired_measurements_valid",
+        "data_origin",
+        "source_doi",
+        "license"
+      ],
+      "null_cells": 417,
+      "quality": {
+        "raw_rows": 2979,
+        "animal_rows": 2978,
+        "dictionary_rows_removed": 1,
+        "duplicate_animal_ids": 0,
+        "paired_measurements_valid": 2607,
+        "missing_pair_or_date": 371,
+        "invalid_observed_weight_pairs": 0,
+        "note": "latest measured live weight before sale, NOT necessarily pre-slaughter weight; missing values retained"
+      },
+      "duplicate_rows_excluding_provenance": 0,
+      "numeric_summary": {
+        "production_year": {
+          "observed_n": 2978,
+          "min": 2011.0,
+          "max": 2019.0,
+          "mean": 2015.4163868368032,
+          "iqr_outlier_count": 0
+        },
+        "last_measured_live_weight_kg": {
+          "observed_n": 2964,
+          "min": 3.0,
+          "max": 58.5,
+          "mean": 42.680398110661265,
+          "iqr_outlier_count": 233
+        },
+        "live_measurement_lag_days": {
+          "observed_n": 2964,
+          "min": 0.0,
+          "max": 75.0,
+          "mean": 2.7597840755735494,
+          "iqr_outlier_count": 465
+        },
+        "cold_carcass_weight_kg": {
+          "observed_n": 2607,
+          "min": 14.3,
+          "max": 25.6,
+          "mean": 19.065055619486,
+          "iqr_outlier_count": 44
+        }
+      },
+      "suitability": {
+        "production": {
+          "eligible_for_training": false,
+          "missing_targets": [
+            "finished_qty",
+            "yield_pct"
+          ],
+          "reason": "incomplete competition targets and/or incompatible observation unit"
+        },
+        "butchery": {
+          "eligible_for_training": false,
+          "missing_targets": [
+            "bone_weight",
+            "cutting_yield_pct",
+            "diced_meat_weight",
+            "leg_weight",
+            "loin_weight",
+            "mince_weight",
+            "rib_weight",
+            "shoulder_weight",
+            "total_saleable_weight",
+            "waste_weight"
+          ],
+          "reason": "incomplete competition targets and/or incompatible observation unit"
+        }
+      },
+      "cleaned_sha256": "4b9e28a7fb467348cafb80d5e0cfd31ce245bc80a51b3eeaa864fae46cfbc023"
+    },
+    "hararghe_cattle": {
+      "url": "https://data.mendeley.com/public-files/datasets/w9wbn9mpr8/files/ef186adb-558d-472d-b95f-5e851eaddd43/file_downloaded",
+      "filename": "hararghe.xlsx",
+      "license": "CC-BY-4.0",
+      "source": "https://doi.org/10.17632/w9wbn9mpr8.1",
+      "sha256": "bcdc200aa606146d17e01ddccf53a810cdb587989b38ea9ee159a6e18fde4397",
+      "unit_of_observation": "one slaughtered animal (no animal/farm identifiers supplied)",
+      "rows": 61,
+      "columns": [
+        "source_row",
+        "live_weight_kg",
+        "hot_carcass_weight_kg",
+        "empty_body_weight_kg",
+        "reported_hdp_pct",
+        "calculated_dressing_pct",
+        "data_origin",
+        "source_doi",
+        "license"
+      ],
+      "null_cells": 0,
+      "quality": {
+        "raw_rows": 61,
+        "rejected_rows": 0,
+        "publication_claimed_animals": 62,
+        "file_observed_animals": 61,
+        "hdp_disagrees_over_0_1pp": 56,
+        "note": "source row is provenance, not a measured animal ID; no independent farm/site test possible"
+      },
+      "duplicate_rows_excluding_provenance": 1,
+      "numeric_summary": {
+        "live_weight_kg": {
+          "observed_n": 61,
+          "min": 204.0,
+          "max": 311.0,
+          "mean": 264.04918032786884,
+          "iqr_outlier_count": 0
+        },
+        "hot_carcass_weight_kg": {
+          "observed_n": 61,
+          "min": 85.9,
+          "max": 145.0,
+          "mean": 112.89999999999999,
+          "iqr_outlier_count": 4
+        },
+        "empty_body_weight_kg": {
+          "observed_n": 61,
+          "min": 160.0,
+          "max": 259.0,
+          "mean": 211.39344262295083,
+          "iqr_outlier_count": 0
+        },
+        "reported_hdp_pct": {
+          "observed_n": 61,
+          "min": 32.49097472924188,
+          "max": 57.42971887550201,
+          "mean": 42.86617657837661,
+          "iqr_outlier_count": 0
+        },
+        "calculated_dressing_pct": {
+          "observed_n": 61,
+          "min": 36.22641509433962,
+          "max": 48.99598393574297,
+          "mean": 42.86901214571575,
+          "iqr_outlier_count": 1
+        }
+      },
+      "suitability": {
+        "production": {
+          "eligible_for_training": false,
+          "missing_targets": [
+            "finished_qty",
+            "yield_pct"
+          ],
+          "reason": "incomplete competition targets and/or incompatible observation unit"
+        },
+        "butchery": {
+          "eligible_for_training": false,
+          "missing_targets": [
+            "bone_weight",
+            "cutting_yield_pct",
+            "diced_meat_weight",
+            "leg_weight",
+            "loin_weight",
+            "mince_weight",
+            "rib_weight",
+            "shoulder_weight",
+            "total_saleable_weight",
+            "waste_weight"
+          ],
+          "reason": "incomplete competition targets and/or incompatible observation unit"
+        }
+      },
+      "cleaned_sha256": "0ec52a57a9b87a31b6d18ad6c0dd64ca6bc1949ffc415b3d641172381759f0fd"
+    }
+  },
+  "competition_real_training": "blocked_missing_targets",
+  "synthetic_data_mixed": false
+}

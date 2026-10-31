@@ -1,5 +1,8 @@
 # Model performans raporu — Aşama 3
 
+> Tarihsel v1 sonuçlarıdır. Güncel v1.1 raporu `model_report.md`, bağımsız
+> yeniden değerlendirme `evaluation_report.json`, denetim `docs/ML_AUDIT_AND_IMPROVEMENTS.md`.
+
 Model sürümü: `1.0.0` · Durum: `synthetic_only`
 Eğitim: `python ml/train.py` · Değerlendirme: `python ml/evaluate.py`
 

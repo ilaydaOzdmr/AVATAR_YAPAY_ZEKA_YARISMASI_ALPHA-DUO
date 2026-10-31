@@ -28,6 +28,10 @@ ml/venv/
 ml/*.egg-info/
 # ML raw downloads are reproducible via ml/scripts/download_usda.py
 ml/data/raw/
+ml/data/real/
+ml/data/processed/synthetic_v2/
+ml/artifacts/reliability_v2/
+ml/reports/local/
 
 # IDE / OS
 .idea/

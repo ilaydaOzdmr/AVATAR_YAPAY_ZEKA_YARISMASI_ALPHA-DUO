@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-GENERATOR_VERSION = "synthetic-v1"
+GENERATOR_VERSION = "synthetic-v2"
 
 PRODUCTION_BASE_YIELD = {"sucuk": 0.84, "salam": 0.87, "sausage": 0.90}
 PRODUCTION_SERVICE_PER_KG = {"sucuk": 5.50, "salam": 5.00, "sausage": 4.50}
@@ -124,6 +124,7 @@ def generate_production(
     n_batches: int = 60,
     seed: int = 42,
     price_index: pd.Series | None = None,
+    outcome_noise_scale: float = 0.012,
 ) -> pd.DataFrame:
     """Generate synthetic production orders with a documented mechanism.
 
@@ -155,17 +156,18 @@ def generate_production(
             + batch_effect[batch_idx]
             - 0.35 * (spice_ratio - 0.020)
             - 0.20 * (other_ratio - 0.010)
-            + float(rng.normal(0.0, 0.012))
+            + float(rng.normal(0.0, outcome_noise_scale))
         )
         yield_pct = float(np.clip(yield_pct, 0.72, 0.94))
         finished_qty = raw_kg * yield_pct
 
         casing_ratio = float(rng.uniform(0.020, 0.050))
-        casing_kg = finished_qty * casing_ratio
-        service_cost = finished_qty * PRODUCTION_SERVICE_PER_KG[product_type] * float(
+        casing_kg = raw_kg * casing_ratio
+        planned_qty = raw_kg * PRODUCTION_BASE_YIELD[product_type]
+        service_cost = planned_qty * PRODUCTION_SERVICE_PER_KG[product_type] * float(
             rng.normal(1.0, 0.08)
         )
-        labor_cost = finished_qty * float(rng.uniform(0.80, 1.60))
+        labor_cost = raw_kg * float(rng.uniform(0.80, 1.60))
 
         price_index_value = float(index_values[int(rng.integers(0, len(index_values)))])
         meat_price = PRODUCTION_PRICES["meat"] * price_index_value * float(rng.normal(1.0, 0.03))
@@ -199,7 +201,7 @@ def generate_production(
                 "service_cost": round(service_cost, 2),
                 "labor_cost": round(labor_cost, 2),
                 "usda_price_index": round(price_index_value, 4),
-                "expected_qty": round(finished_qty * float(rng.normal(1.0, 0.03)), 3),
+                "expected_qty": round(planned_qty, 3),
                 "finished_qty": round(finished_qty, 3),
                 "yield_pct": round(yield_pct, 4),
                 "actual_total_cost": round(total_cost, 2),

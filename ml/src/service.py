@@ -10,6 +10,7 @@ from typing import Any
 import pandas as pd
 
 from .config import ARTIFACTS_DIR, DATA_ORIGIN
+from .constraints import butchery_prediction, production_prediction
 from .data import butchery_frame, production_frame
 from .registry import ModelBundle, load_all
 from .schemas import (
@@ -46,7 +47,6 @@ SALEABLE_TARGETS = [
     "mince_weight",
     "diced_meat_weight",
 ]
-DRESSING = {"lamb": 0.47, "cattle": 0.58}
 DEFAULT_AGE = {"lamb": 9.0, "cattle": 24.0}
 DEFAULT_BREED = {"lamb": "Crossbred", "cattle": "Holstein"}
 WARNING_SYNTHETIC = (
@@ -104,23 +104,12 @@ class MLService:
         cattle = self.require("butchery_cattle")
 
         def legacy_metrics(bundle: ModelBundle, target: str) -> dict[str, Any]:
-            report = bundle.metadata["targets"][target]
-            selected = report["selected"]
-            baseline = next(
-                (
-                    row
-                    for row in report["candidates"]
-                    if row.get("ok") and row["model"] == "dummy_mean"
-                ),
-                None,
-            )
-            return {
-                "model_mae": selected["test_mae"],
-                "model_rmse": selected["test_rmse"],
-                "model_r2": selected.get("test_r2"),
-                "baseline_mae": baseline["test_mae"] if baseline else None,
-                "baseline_rmse": baseline["test_rmse"] if baseline else None,
-            }
+            deployed = bundle.metadata["deployed_metrics"][target]
+            return {"model_mae": deployed["test"]["mae"], "model_rmse": deployed["test"]["rmse"],
+                "model_r2": deployed["test"]["r2"],
+                "baseline_mae": deployed["proportional_baseline_test"]["mae"],
+                "baseline_rmse": deployed["proportional_baseline_test"]["rmse"],
+                "baseline_kind": "train-only proportional physical baseline"}
 
         return {
             "yield": legacy_metrics(yield_bundle, "yield_pct"),
@@ -159,6 +148,8 @@ class MLService:
         return frame
 
     def input_ranges(self, bundle: ModelBundle) -> dict[str, Any]:
+        if "input_ranges" in bundle.metadata:
+            return bundle.metadata["input_ranges"]
         frame = self._training_frame(bundle)
         ranges: dict[str, Any] = {}
         for feature in bundle.metadata["feature_names"]:
@@ -199,16 +190,17 @@ class MLService:
         report = bundle.metadata.get("targets", {}).get(target)
         if not report:
             return None
-        selected = report.get("selected", {})
-        rmse = selected.get("test_rmse")
+        deployed = bundle.metadata.get("deployed_metrics", {}).get(target, {}).get("test", {})
+        rmse = deployed.get("rmse")
         if rmse is None:
             return None
         rmse = float(rmse)
         return {
-            "method": "±1.96 × held-out test RMSE (synthetic)",
-            "roughly_95pct": {"lower": round(-1.96 * rmse, 4), "upper": round(1.96 * rmse, 4)},
+            "method": "illustrative ±1.96 × deployed held-out RMSE; synthetic; coverage has not been calibrated",
+            "illustrative_error_band": {"lower": round(-1.96 * rmse, 4), "upper": round(1.96 * rmse, 4)},
+            "coverage_validated": False,
             "test_rmse": rmse,
-            "test_mae": selected.get("test_mae"),
+            "test_mae": deployed.get("mae"),
         }
 
     # -- production yield ------------------------------------------------
@@ -217,12 +209,14 @@ class MLService:
         material_spice = request.spice_kg * request.material_unit_price_spice
         material_casing = request.casing_kg * request.material_unit_price_casing
         material_other = request.other_material_kg * request.material_unit_price_other
+        service_cost = (finished_qty * request.service_unit_cost
+                        if request.service_unit_cost is not None else request.service_cost)
         total = (
             material_meat
             + material_spice
             + material_casing
             + material_other
-            + request.service_cost
+            + service_cost
             + request.labor_cost
         )
         return {
@@ -230,7 +224,7 @@ class MLService:
             "material_spice": round(material_spice, 2),
             "material_casing": round(material_casing, 2),
             "material_other": round(material_other, 2),
-            "service_cost": round(request.service_cost, 2),
+            "service_cost": round(service_cost, 2),
             "labor_cost": round(request.labor_cost, 2),
             "total_cost": round(total, 2),
         }
@@ -251,12 +245,19 @@ class MLService:
             "product_type": request.product_type,
         }
         row = pd.DataFrame([features])[bundle.metadata["feature_names"]]
-        finished_qty = float(bundle.predict("finished_qty", row)[0])
-        yield_pct = float(bundle.predict("yield_pct", row)[0])
+        physical = production_prediction(request.raw_material_kg, {
+            "yield_pct": float(bundle.predict("yield_pct", row)[0]),
+        })
+        finished_qty, yield_pct = physical["finished_qty"], physical["yield_pct"]
+        if finished_qty <= 0:
+            raise ValueError("predicted finished quantity is zero; cannot estimate EKP")
 
         costs = self._yield_costs(request, finished_qty)
         estimated_ekp = costs["total_cost"] / finished_qty if finished_qty > 0 else 0.0
         warnings = [WARNING_SYNTHETIC]
+        defaults = sorted(set(YieldV2Request.model_fields) - request.model_fields_set - {"actual_finished_qty", "service_unit_cost"})
+        if defaults:
+            warnings.append(f"Unspecified fields use documented demo defaults, not observed values: {', '.join(defaults)}.")
         warnings.extend(self._range_warnings(bundle, features))
         if not (0.5 <= yield_pct <= 1.0):
             warnings.append(
@@ -284,9 +285,13 @@ class MLService:
             "ekp_kind": "estimated_pre_production",
         }
         if request.actual_finished_qty is not None:
-            response["accounting_ekp"] = round(
-                costs["total_cost"] / request.actual_finished_qty, 4
-            )
+            actual_costs = self._yield_costs(request, request.actual_finished_qty)
+            response["accounting_cost_breakdown"] = actual_costs
+            response["accounting_ekp"] = round(actual_costs["total_cost"] / request.actual_finished_qty, 4)
+            error = finished_qty - request.actual_finished_qty
+            response["comparison"] = {"actual": request.actual_finished_qty, "predicted": finished_qty,
+                "signed_error": round(error, 3), "absolute_error": round(abs(error), 3),
+                "percentage_error": round(abs(error) / request.actual_finished_qty * 100, 3)}
             response["ekp_kind"] = "actual_accounting"
         return response
 
@@ -294,15 +299,10 @@ class MLService:
         finished = self.predict_yield_v2(
             YieldV2Request(
                 raw_material_kg=request.raw_material_kg,
-                service_cost=request.service_cost or 0,
+                service_cost=request.service_cost if request.service_cost is not None else 0,
+                service_unit_cost=5.50 if request.service_cost is None else None,
             )
         )
-        predicted_qty = finished["prediction"]["finished_qty"]
-        if request.service_cost is None:
-            service = round(5.50 * predicted_qty, 2)
-            finished = self.predict_yield_v2(
-                YieldV2Request(raw_material_kg=request.raw_material_kg, service_cost=service)
-            )
         return {
             **finished,
             "predicted_qty": finished["prediction"]["finished_qty"],
@@ -313,19 +313,14 @@ class MLService:
     def _butchery_features(self, request: ButcheryV2Request) -> tuple[dict[str, Any], list[str]]:
         warnings: list[str] = []
         carcass = request.carcass_weight_kg
-        if carcass is None:
-            carcass = request.live_weight_kg * DRESSING[request.animal_type]
-            warnings.append(
-                f"carcass_weight_kg was not provided; estimated as {carcass:.3f} kg "
-                f"using dressing ratio {DRESSING[request.animal_type]}."
-            )
+        if request.breed is None or request.age_months is None or "sex" not in request.model_fields_set:
+            warnings.append("Missing breed/age/sex use synthetic demo defaults; provide measured attributes for a specific animal.")
         features = {
             "breed": request.breed or DEFAULT_BREED[request.animal_type],
             "sex": request.sex,
             "age_months": request.age_months
             if request.age_months is not None
             else DEFAULT_AGE[request.animal_type],
-            "live_weight_kg": request.live_weight_kg,
             "carcass_weight_kg": carcass,
             "conformation_score": request.conformation_score,
             "fat_score": request.fat_score,
@@ -338,19 +333,22 @@ class MLService:
         warnings.insert(0, WARNING_SYNTHETIC)
         warnings.extend(self._range_warnings(bundle, features))
         row = pd.DataFrame([features])[bundle.metadata["feature_names"]]
-        predictions = {
-            target: round(float(bundle.predict(target, row)[0]), 3)
+        raw_predictions = {
+            target: float(bundle.predict(target, row)[0])
             for target in bundle.metadata["target_names"]
         }
 
         carcass = float(features["carcass_weight_kg"])
+        predictions = butchery_prediction(carcass, raw_predictions)
+        warnings.append("Part weights reconciled to measured carcass; saleable total and yield derived from those parts.")
         parts_sum = sum(max(0.0, predictions.get(target, 0.0)) for target in PART_TARGETS)
         saleable = sum(max(0.0, predictions.get(target, 0.0)) for target in SALEABLE_TARGETS)
         physical_check = {
             "carcass_weight_kg": round(carcass, 3),
             "parts_sum_kg": round(parts_sum, 3),
             "saleable_sum_kg": round(saleable, 3),
-            "parts_over_carcass": parts_sum > carcass * 1.05,
+            "parts_over_carcass": parts_sum > carcass + 0.000501,
+            "reconciliation": "nonnegative proportional allocation; largest remainder at 0.001 kg",
         }
         if physical_check["parts_over_carcass"]:
             warnings.append(
@@ -382,7 +380,7 @@ class MLService:
         result = self.predict_butchery_v2(
             ButcheryV2Request(
                 animal_type=animal_type,  # type: ignore[arg-type]
-                live_weight_kg=request.input_weight,
+                carcass_weight_kg=request.input_weight,
             )
         )
         parts = [

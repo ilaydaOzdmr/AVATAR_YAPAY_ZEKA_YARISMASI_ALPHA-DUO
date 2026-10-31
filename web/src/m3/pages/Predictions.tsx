@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { get, mlGet, mlPost } from "../../api";
+import { butcheryComparison, nonnegativeNumber, predictionError, productionFeatures, type InputLot, type MaterialCard, type OrderInput } from "../../predictionInputs";
 
 interface PredictionMeta {
   model_version: string;
@@ -13,11 +14,6 @@ interface YieldResponse extends PredictionMeta {
   cost_breakdown?: Record<string, number>;
   ekp_kind?: string;
   accounting_ekp?: number;
-}
-
-interface LegacyYieldResult {
-  predicted_qty: number;
-  predicted_unit_cost: number;
 }
 
 interface ButcheryResponse extends PredictionMeta {
@@ -34,6 +30,8 @@ interface ProductionOrder {
   id: number;
   code: string;
   expected_qty: number;
+  status: string;
+  service_unit_cost: number;
 }
 
 interface CostSummary {
@@ -44,10 +42,11 @@ interface CostSummary {
 
 interface ForecastRow {
   code: string;
-  predicted: number;
+  predicted: number | null;
   expected: number;
   actual: number;
-  diff: number;
+  diff: number | null;
+  error?: string;
 }
 
 interface ButcheryCompare {
@@ -56,11 +55,7 @@ interface ButcheryCompare {
   input_weight: number;
   predicted: number;
   actual: number;
-}
-
-interface ButcheryPart {
-  product_code: string;
-  weight: number;
+  parts: { code: string; predicted: number; actual: number }[];
 }
 
 interface ModelMetrics {
@@ -106,14 +101,14 @@ function WarningList({ items }: { items: string[] }) {
 function ForecastChart({ rows }: { rows: ForecastRow[] }) {
   const width = Math.max(420, rows.length * 110);
   const height = 190;
-  const max = Math.max(...rows.flatMap((row) => [row.expected, row.actual, row.predicted]), 1);
+  const max = Math.max(...rows.flatMap((row) => [row.expected, row.actual, row.predicted ?? 0]), 1);
   const barWidth = 20;
   return (
     <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Model tahmini, plan ve gerçek karşılaştırması" style={{ width: "100%", height: "auto" }}>
       <line x1="30" y1={height - 30} x2={width - 10} y2={height - 30} stroke="#c8d1ca" />
       {rows.map((row, index) => {
         const groupX = 30 + index * 110;
-        const predictedHeight = ((height - 60) * row.predicted) / max;
+        const predictedHeight = ((height - 60) * (row.predicted ?? 0)) / max;
         const expectedHeight = ((height - 60) * row.expected) / max;
         const actualHeight = ((height - 60) * row.actual) / max;
         return (
@@ -150,24 +145,17 @@ export default function Predictions() {
 
   useEffect(() => {
     mlGet<MlReport>("/report").then(setReport).catch(() => {});
-    get<ProductionOrder[]>("/production-orders").then(async (orders) => {
+    Promise.all([get<ProductionOrder[]>("/production-orders"), get<InputLot[]>("/lots"), get<MaterialCard[]>("/materials")]).then(async ([orders, lots, cards]) => {
       const rows = await Promise.all(
-        orders.map(async (order) => {
+        orders.filter((order) => order.status === "completed").map(async (order) => {
           try {
             const [summary, inputs] = await Promise.all([
               get<CostSummary>(`/production-orders/${order.id}`),
-              get<{ qty: number }[]>(`/production-orders/${order.id}/inputs`).catch(() => []),
+              get<OrderInput[]>(`/production-orders/${order.id}/inputs`),
             ]);
-            const rawKg = inputs.reduce((sum, input) => sum + input.qty, 0);
-            let predicted = 0;
-            if (rawKg > 0) {
-              try {
-                const ml = await mlPost<LegacyYieldResult>("/predict/yield", { raw_material_kg: rawKg });
-                predicted = ml.predicted_qty;
-              } catch {
-                predicted = 0;
-              }
-            }
+            const features = productionFeatures(inputs, lots, cards);
+            const ml = await mlPost<YieldResponse>("/predict/v2/yield", { ...features, service_unit_cost: order.service_unit_cost });
+            const predicted = ml.prediction.finished_qty;
             return {
               code: order.code,
               predicted,
@@ -175,53 +163,56 @@ export default function Predictions() {
               actual: summary.finished_qty,
               diff: predicted - summary.finished_qty,
             };
-          } catch {
-            return null;
+          } catch (err) {
+            return { code: order.code, predicted: null, expected: order.expected_qty, actual: 0,
+              diff: null, error: err instanceof Error ? err.message : String(err) };
           }
         }),
       );
-      setForecast(rows.filter((row): row is ForecastRow => row !== null));
-    });
+      setForecast(rows);
+    }).catch((err: unknown) => setError(String(err)));
 
-    get<{ id: number; code: string; animal_type: string; input_weight: number }[]>("/butchery-batches").then(async (batches) => {
+    Promise.all([get<{ id: number; code: string; animal_type: string; input_weight: number }[]>("/butchery-batches"), get<{ id: number; code: string }[]>("/products")]).then(async ([batches, products]) => {
       const rows = await Promise.all(
         batches.map(async (batch) => {
           try {
             const [result, prediction] = await Promise.all([
-              get<{ items: { weight: number }[] }>(`/butchery-batches/${batch.id}`),
-              mlPost<{ parts: ButcheryPart[] }>("/predict/butchery", {
-                animal_type: batch.animal_type,
-                input_weight: batch.input_weight,
+              get<{ items: { weight: number; is_waste: boolean; product_id: number }[] }>(`/butchery-batches/${batch.id}`),
+              mlPost<ButcheryResponse>("/predict/v2/butchery", {
+                animal_type: ({ kuzu: "lamb", dana: "cattle" } as Record<string, string>)[batch.animal_type] ?? batch.animal_type,
+                carcass_weight_kg: batch.input_weight,
               }),
             ]);
-            const actual = result.items.reduce((sum, item) => sum + item.weight, 0);
-            const predicted = prediction.parts.reduce((sum, part) => sum + part.weight, 0);
+            const { actual, predicted, parts } = butcheryComparison(result.items, products, prediction.prediction);
             return {
               code: batch.code,
               animal_type: batch.animal_type,
               input_weight: batch.input_weight,
               predicted,
               actual,
+              parts,
             };
-          } catch {
+          } catch (err) {
+            setError(err instanceof Error ? err.message : String(err));
             return null;
           }
         }),
       );
       setButcheryCompare(rows.filter((row): row is ButcheryCompare => row !== null));
-    });
+    }).catch((err: unknown) => setError(String(err)));
   }, []);
 
   async function runYield() {
     setError(null);
+    setYieldResult(null);
     try {
       setYieldResult(
         await mlPost<YieldResponse>("/predict/v2/yield", {
-          raw_material_kg: Number.parseFloat(rawKg),
-          spice_kg: Number.parseFloat(spiceKg) || 0,
-          casing_kg: Number.parseFloat(casingKg) || 0,
-          service_cost: Number.parseFloat(serviceCost) || 0,
-          labor_cost: Number.parseFloat(laborCost) || 0,
+          raw_material_kg: nonnegativeNumber(rawKg, "Et kg"),
+          spice_kg: nonnegativeNumber(spiceKg, "Baharat kg"),
+          casing_kg: nonnegativeNumber(casingKg, "Bağırsak kg"),
+          service_cost: nonnegativeNumber(serviceCost, "Hizmet"),
+          labor_cost: nonnegativeNumber(laborCost, "İşçilik"),
         }),
       );
     } catch (err) {
@@ -231,12 +222,13 @@ export default function Predictions() {
 
   async function runButchery() {
     setError(null);
+    setButcheryResult(null);
     try {
       setButcheryResult(
         await mlPost<ButcheryResponse>("/predict/v2/butchery", {
           animal_type: animalType,
-          live_weight_kg: Number.parseFloat(liveWeight),
-          carcass_weight_kg: carcassWeight.trim() ? Number.parseFloat(carcassWeight) : null,
+          live_weight_kg: liveWeight.trim() ? nonnegativeNumber(liveWeight, "Canlı kg") : null,
+          carcass_weight_kg: nonnegativeNumber(carcassWeight, "Karkas kg"),
         }),
       );
     } catch (err) {
@@ -298,7 +290,7 @@ export default function Predictions() {
           </div>
           <div style={{ padding: 20 }}>
             <form className="inline-form" onSubmit={predictYield} style={{ flexWrap: "wrap", gap: 8 }}>
-              <input value={rawKg} onChange={(e) => setRawKg(e.target.value)} placeholder="Hammadde kg" style={{ width: 120 }} />
+              <input value={rawKg} onChange={(e) => setRawKg(e.target.value)} placeholder="Et kg" style={{ width: 120 }} />
               <input value={spiceKg} onChange={(e) => setSpiceKg(e.target.value)} placeholder="Baharat kg" style={{ width: 110 }} />
               <input value={casingKg} onChange={(e) => setCasingKg(e.target.value)} placeholder="Bağırsak kg" style={{ width: 115 }} />
               <input value={serviceCost} onChange={(e) => setServiceCost(e.target.value)} placeholder="Hizmet €" style={{ width: 100 }} />
@@ -346,7 +338,7 @@ export default function Predictions() {
                 <option value="cattle">Sığır</option>
               </select>
               <input value={liveWeight} onChange={(e) => setLiveWeight(e.target.value)} placeholder="Canlı kg" style={{ width: 110 }} />
-              <input value={carcassWeight} onChange={(e) => setCarcassWeight(e.target.value)} placeholder="Karkas kg (ops.)" style={{ width: 135 }} />
+              <input value={carcassWeight} onChange={(e) => setCarcassWeight(e.target.value)} placeholder="Karkas kg (zorunlu)" style={{ width: 150 }} />
               <button className="btn btn-secondary" type="submit">Tahmin et</button>
             </form>
             {butcheryResult && (
@@ -388,26 +380,25 @@ export default function Predictions() {
           <div className="panel-head">
             <div>
               <h2>Model tahmini vs Gerçek</h2>
-              <p>Üretim emirleri: ML model tahmini, plan ve gerçekleşen miktar karşılaştırması. Grafik yalnızca gerçek kayıt varsa gösterilir.</p>
+              <p>Tamamlanmış sucuk emirleri: model, plan ve kayıtlı sonuç. Demo kayıtları saha doğrulaması değildir.</p>
             </div>
           </div>
           <div style={{ padding: 16 }}>
-            <ForecastChart rows={forecast} />
+            <ForecastChart rows={forecast.filter((row) => row.predicted !== null)} />
             <div className="table-wrap" style={{ marginTop: 12 }}>
               <table>
                 <thead>
-                  <tr><th>Üretim emri</th><th>Model tahmini</th><th>Plan</th><th>Gerçekleşen</th><th>Sapma</th></tr>
+                  <tr><th>Üretim emri</th><th>Model tahmini</th><th>Plan</th><th>Gerçekleşen</th><th>Mutlak hata</th><th>Hata %</th></tr>
                 </thead>
                 <tbody>
                   {forecast.map((row) => (
                     <tr key={row.code}>
                       <td className="id">{row.code}</td>
-                      <td>{row.predicted ? row.predicted.toFixed(1) : "—"}</td>
+                      <td>{row.predicted !== null ? row.predicted.toFixed(1) : row.error ?? "—"}</td>
                       <td>{row.expected}</td>
-                      <td>{row.actual}</td>
-                      <td style={{ color: row.predicted > 0 && Math.abs(row.diff) > 0.5 ? "var(--amber)" : "var(--green-3)" }}>
-                        {row.predicted ? `${row.diff >= 0 ? "+" : ""}${row.diff.toFixed(1)}` : "—"}
-                      </td>
+                      <td>{row.error ? "—" : row.actual}</td>
+                      <td>{predictionError(row.predicted, row.actual).absolute?.toFixed(2) ?? "—"}</td>
+                      <td>{predictionError(row.predicted, row.actual).percentage?.toFixed(2) ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -426,13 +417,13 @@ export default function Predictions() {
           <div className="panel-head">
             <div>
               <h2>Parçalama tahmini vs Gerçek</h2>
-              <p>Kuzu/dana parçalama: ML tahmini toplam parça ağırlığı ve gerçek parça ağırlığı karşılaştırması</p>
+              <p>Kuzu/dana: kaydı bulunan aynı satılabilir parçaların toplamı (kemik ve fire hariç)</p>
             </div>
           </div>
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Parti</th><th>Hayvan</th><th>Giriş</th><th>Tahmini (kg)</th><th>Gerçek (kg)</th><th>Sapma</th></tr>
+                <tr><th>Parti</th><th>Hayvan</th><th>Karkas kg</th><th>Tahmini (kg)</th><th>Gerçek (kg)</th><th>Mutlak hata</th><th>Hata %</th></tr>
               </thead>
               <tbody>
                 {butcheryCompare.map((row) => (
@@ -443,11 +434,22 @@ export default function Predictions() {
                     <td>{row.predicted.toFixed(2)}</td>
                     <td>{row.actual.toFixed(2)}</td>
                     <td style={{ color: Math.abs(row.predicted - row.actual) > 1 ? "var(--amber)" : "var(--green-3)" }}>
-                      {(row.predicted - row.actual).toFixed(2)}
+                      {predictionError(row.predicted, row.actual).absolute?.toFixed(2)}
                     </td>
+                    <td>{predictionError(row.predicted, row.actual).percentage?.toFixed(2) ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
+            </table>
+            <table>
+              <thead><tr><th>Parti</th><th>Parça</th><th>Tahmini kg</th><th>Kayıtlı kg</th><th>Mutlak hata</th><th>Hata %</th></tr></thead>
+              <tbody>{butcheryCompare.flatMap((row) => row.parts.map((part) => (
+                <tr key={`${row.code}-${part.code}`}><td>{row.code}</td><td>{part.code}</td>
+                  <td>{part.predicted.toFixed(3)}</td><td>{part.actual.toFixed(3)}</td>
+                  <td>{predictionError(part.predicted, part.actual).absolute?.toFixed(3)}</td>
+                  <td>{predictionError(part.predicted, part.actual).percentage?.toFixed(2) ?? "—"}</td>
+                </tr>
+              )))}</tbody>
             </table>
           </div>
         </div>

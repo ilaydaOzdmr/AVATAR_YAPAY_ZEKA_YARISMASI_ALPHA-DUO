@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
 from .config import (
     BUTCHERY_FEATURES,
@@ -63,10 +64,15 @@ def validate_production(frame: pd.DataFrame) -> None:
         raise ValueError("production dataset contains nulls")
     if not frame["yield_pct"].between(0.5, 1.0).all():
         raise ValueError("production yield outside physical range")
-    if (frame["finished_qty"] <= 0).all():
+    if (frame["finished_qty"] <= 0).any():
         raise ValueError("production finished_qty must be positive")
     if (frame["raw_material_kg"] <= 0).any():
         raise ValueError("production raw_material_kg must be positive")
+    numeric = frame[list(required)].select_dtypes(include="number")
+    if not np.isfinite(numeric).all().all() or numeric.lt(0).any().any():
+        raise ValueError("production quantities must be finite and nonnegative")
+    if not np.allclose(frame["finished_qty"], frame["raw_material_kg"] * frame["yield_pct"], atol=0.009):
+        raise ValueError("finished quantity and meat-based yield disagree")
 
 
 def validate_butchery(frame: pd.DataFrame, animal_type: str) -> None:
@@ -87,6 +93,14 @@ def validate_butchery(frame: pd.DataFrame, animal_type: str) -> None:
         raise ValueError("butchery saleable weight exceeds carcass")
     if frame[BUTCHERY_TARGETS].lt(0).any().any():
         raise ValueError("butchery targets must be non-negative")
+    if not np.isfinite(frame[list(required)].select_dtypes(include="number")).all().all():
+        raise ValueError("butchery quantities must be finite")
+    if carcass.le(0).any() or (carcass > frame["live_weight_kg"]).any():
+        raise ValueError("carcass must be positive and no larger than live weight")
+    if not np.allclose(saleable, frame["total_saleable_weight"], atol=1e-6):
+        raise ValueError("saleable total does not match parts")
+    if not np.allclose(100 * saleable / carcass, frame["cutting_yield_pct"], atol=0.001):
+        raise ValueError("cutting yield does not match parts")
 
 
 def production_frame() -> pd.DataFrame:

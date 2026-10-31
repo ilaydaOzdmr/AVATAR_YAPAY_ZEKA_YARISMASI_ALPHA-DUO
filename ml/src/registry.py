@@ -9,6 +9,8 @@ from typing import Any
 
 import joblib
 
+from .config import MODEL_VERSION, PRODUCTION_FEATURES, BUTCHERY_FEATURES
+
 
 @dataclass
 class ModelBundle:
@@ -39,6 +41,9 @@ def load_bundle(path: Path, name: str) -> ModelBundle | None:
         return None
     pipelines = joblib.load(model_path)
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    expected_features = PRODUCTION_FEATURES if name == "yield" else BUTCHERY_FEATURES
+    if metadata.get("model_version") != MODEL_VERSION or metadata.get("feature_names") != expected_features:
+        raise ValueError(f"incompatible model schema at {path}; retrain with python ml/train.py")
     return ModelBundle(
         name=name,
         path=path,

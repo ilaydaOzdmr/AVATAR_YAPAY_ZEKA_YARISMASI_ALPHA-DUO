@@ -30,6 +30,9 @@ from ml.src.config import (  # noqa: E402
 )
 from ml.src.data import butchery_frame, production_frame  # noqa: E402
 from ml.src.metrics import regression_metrics, rounded  # noqa: E402
+from ml.src.data import file_sha256  # noqa: E402
+from ml.src.config import DATASET_FILES  # noqa: E402
+from ml.src.constraints import production_prediction, butchery_prediction  # noqa: E402
 
 
 def evaluate_group(
@@ -40,6 +43,8 @@ def evaluate_group(
     targets: list[str],
 ) -> dict:
     metadata = json.loads((artifact_dir / "metadata.json").read_text(encoding="utf-8"))
+    if file_sha256(DATASET_FILES[name])[:16] != metadata["dataset_version"]:
+        raise ValueError("dataset hash differs from training; saved indices are invalid")
     split = json.loads((artifact_dir / "split.json").read_text(encoding="utf-8"))
     pipelines = joblib.load(artifact_dir / "model.joblib")
     test_idx = split["test_indices"]
@@ -51,9 +56,15 @@ def evaluate_group(
         "test_sample_count": len(test_idx),
         "targets": {},
     }
+    raw = {target: pipelines[target].predict(X_test) for target in targets}
+    predictions = []
+    for pos, (_, row) in enumerate(frame.iloc[test_idx].iterrows()):
+        values = {target: raw[target][pos] for target in targets}
+        predictions.append(production_prediction(float(row["raw_material_kg"]), values) if name == "yield"
+                           else butchery_prediction(float(row["carcass_weight_kg"]), values))
     for target in targets:
         y_test = frame[target].astype(float).iloc[test_idx]
-        prediction = pipelines[target].predict(X_test)
+        prediction = [row[target] for row in predictions]
         report["targets"][target] = rounded(regression_metrics(y_test, prediction))
     return report
 

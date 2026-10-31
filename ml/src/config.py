@@ -6,27 +6,21 @@ from pathlib import Path
 
 ML_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ML_ROOT / "data"
-PROCESSED_DIR = DATA_DIR / "processed"
-ARTIFACTS_DIR = ML_ROOT / "artifacts"
+PROCESSED_DIR = DATA_DIR / "processed" / "synthetic_v2"
+ARTIFACTS_DIR = ML_ROOT / "artifacts" / "reliability_v2"
 REPORTS_DIR = ML_ROOT / "reports"
-PLOTS_DIR = REPORTS_DIR / "plots"
+PLOTS_DIR = REPORTS_DIR / "local" / "plots"
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.20
 CV_FOLDS = 5
-MODEL_VERSION = "1.0.0"
+MODEL_VERSION = "1.1.0"
 
 PRODUCTION_FEATURES = [
     "raw_material_kg",
     "spice_kg",
     "casing_kg",
     "other_material_kg",
-    "material_unit_price_meat",
-    "material_unit_price_spice",
-    "material_unit_price_casing",
-    "material_unit_price_other",
-    "service_cost",
-    "labor_cost",
     "product_type",
 ]
 PRODUCTION_TARGETS = ["finished_qty", "yield_pct"]
@@ -36,7 +30,6 @@ BUTCHERY_FEATURES = [
     "breed",
     "sex",
     "age_months",
-    "live_weight_kg",
     "carcass_weight_kg",
     "conformation_score",
     "fat_score",

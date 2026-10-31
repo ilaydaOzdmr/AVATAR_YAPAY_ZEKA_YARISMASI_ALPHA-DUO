@@ -7,17 +7,21 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class LegacyYieldRequest(BaseModel):
+class RequestBase(BaseModel):
+    model_config = ConfigDict(allow_inf_nan=False, extra="forbid")
+
+
+class LegacyYieldRequest(RequestBase):
     raw_material_kg: float = Field(gt=0, le=10000)
     service_cost: float | None = Field(default=None, ge=0)
 
 
-class LegacyButcheryRequest(BaseModel):
+class LegacyButcheryRequest(RequestBase):
     animal_type: str
     input_weight: float = Field(gt=0, le=2000)
 
 
-class YieldV2Request(BaseModel):
+class YieldV2Request(RequestBase):
     raw_material_kg: float = Field(gt=0, le=10000)
     spice_kg: float = Field(default=0, ge=0, le=500)
     casing_kg: float = Field(default=0, ge=0, le=500)
@@ -28,14 +32,21 @@ class YieldV2Request(BaseModel):
     material_unit_price_other: float = Field(default=3.50, ge=0, le=1000)
     service_cost: float = Field(default=0, ge=0, le=1000000)
     labor_cost: float = Field(default=0, ge=0, le=1000000)
+    service_unit_cost: float | None = Field(default=None, ge=0, le=1000)
     product_type: Literal["sucuk", "salam", "sausage"] = "sucuk"
     actual_finished_qty: float | None = Field(default=None, gt=0, le=100000)
 
+    @model_validator(mode="after")
+    def one_service_basis(self) -> "YieldV2Request":
+        if self.service_unit_cost is not None and self.service_cost != 0:
+            raise ValueError("provide either service_cost or service_unit_cost")
+        return self
 
-class ButcheryV2Request(BaseModel):
+
+class ButcheryV2Request(RequestBase):
     animal_type: Literal["lamb", "cattle"]
-    live_weight_kg: float = Field(gt=0, le=2000)
-    carcass_weight_kg: float | None = Field(default=None, gt=0, le=1500)
+    live_weight_kg: float | None = Field(default=None, gt=0, le=2000)
+    carcass_weight_kg: float = Field(ge=0.001, le=1500)
     breed: str | None = None
     sex: Literal["male", "female"] = "male"
     age_months: float | None = Field(default=None, ge=1, le=120)
@@ -44,7 +55,7 @@ class ButcheryV2Request(BaseModel):
 
     @model_validator(mode="after")
     def carcass_not_above_live(self) -> "ButcheryV2Request":
-        if self.carcass_weight_kg is not None and self.carcass_weight_kg > self.live_weight_kg:
+        if self.live_weight_kg is not None and self.carcass_weight_kg > self.live_weight_kg:
             raise ValueError("carcass_weight_kg cannot exceed live_weight_kg")
         return self
 

@@ -29,6 +29,7 @@ from ml.src.config import (  # noqa: E402
     BUTCHERY_GROUP,
     BUTCHERY_TARGETS,
     MODEL_STATUS,
+    MODEL_VERSION,
     PLOTS_DIR,
     PRODUCTION_FEATURES,
     PRODUCTION_GROUP,
@@ -95,7 +96,7 @@ def _summary_markdown(results: dict[str, dict]) -> str:
     lines = [
         "# Model report",
         "",
-        f"Model version: `1.0.0` · Status: `{MODEL_STATUS}`",
+        f"Model version: `{MODEL_VERSION}` · Status: `{MODEL_STATUS}`",
         "",
         "## What was trained",
         "",
@@ -126,6 +127,13 @@ def _summary_markdown(results: dict[str, dict]) -> str:
                 f"{selected['cv_mae_mean']:.4f} | {selected['test_mae']:.4f} | "
                 f"{selected['test_r2']:.4f} | {report['beats_baseline']} |"
             )
+    lines.extend(["", "## Deployed predictions (physical constraints applied)", "",
+        "CV selects raw regressions. API quantities use reconciled parts and meat × predicted yield.", "",
+        "| Group | Target | Train MAE | Test MAE | Test RMSE | R² | MAPE % | Proportional baseline MAE |", "|---|---|---:|---:|---:|---:|---:|---:|"])
+    for group, payload in results.items():
+        for target, report in payload["metadata"]["deployed_metrics"].items():
+            test = report["test"]
+            lines.append(f"| {group} | {target} | {report['train']['mae']} | {test['mae']} | {test['rmse']} | {test['r2']} | {test['mape']} | {report['proportional_baseline_test']['mae']} |")
     lines.extend(
         [
             "",
@@ -136,6 +144,8 @@ def _summary_markdown(results: dict[str, dict]) -> str:
             "generalises to a real plant.",
             "- Production EKP is a separate accounting identity and is not trained as a target.",
             "- Real validation is blocked until real order/carcass data is provided.",
+            "- Real reference measurements exist (docs/DATA_SOURCES.md) but lack competition targets.",
+            "- No standalone validation partition: GroupKFold validates within train; fold counts in metadata.",
             "",
         ]
     )
@@ -230,7 +240,7 @@ def run(quick: bool = False) -> dict[str, dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train AVATAR ML models")
-    parser.add_argument("--quick", action="store_true", help="fewer models/folds for smoke tests")
+    parser.add_argument("--quick", action="store_true", help="four candidates; retains grouped cross-validation")
     args = parser.parse_args()
     results = run(quick=args.quick)
     for group, payload in results.items():
