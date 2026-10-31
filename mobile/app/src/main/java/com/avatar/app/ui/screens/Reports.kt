@@ -52,7 +52,12 @@ fun Reports(
         ) { Text("Raporları yenile") }
 
         if (message != null) {
-            Text(message, color = Red, style = MaterialTheme.typography.labelMedium)
+            val isError = message.startsWith("Bağlantı") || message.contains("çevrimdışı", ignoreCase = true)
+            Text(
+                message,
+                color = if (isError) Red else Green,
+                style = MaterialTheme.typography.labelMedium,
+            )
         }
         if (report?.offline == true) {
             Text(
