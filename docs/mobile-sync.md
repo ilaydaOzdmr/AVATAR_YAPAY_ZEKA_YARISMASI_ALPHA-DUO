@@ -28,6 +28,13 @@ Fiziksel cihaz:
 adb reverse tcp:8080 tcp:8080
 ```
 
+USB her yeniden bağlandığında bu yönlendirme kaybolur. `scripts/adb-reverse.ps1`
+tek seferlik, `scripts/adb-reverse-watch.ps1` ise bağlantıyı izleyip otomatik
+geri kurar.
+
+Alternatif olarak uygulamadaki **Sunucu → Değiştir** alanına aynı Wi-Fi’daki
+PC’nin LAN adresi girilebilir (`http://<PC-IP>:8080`).
+
 Emülatörde ek ayar gerekmez; `10.0.2.2` otomatik denenir.
 
 ## 3. Pull (MySQL → SQLite)

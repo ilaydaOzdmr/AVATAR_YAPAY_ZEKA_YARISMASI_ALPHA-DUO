@@ -54,6 +54,10 @@ adb install app/build/outputs/apk/debug/app-debug.apk
   `adb reverse tcp:8080 tcp:8080` çalıştırın. Kablosuz kullanacaksanız telefonla
   PC aynı Wi-Fi’da olmalı ve PC’nin LAN IP’si (`http://<PC-IP>:8080`) Windows
   güvenlik duvarında açık olmalıdır.
+- Ana ekrandaki **Sunucu → Değiştir** ile adres uygulamadan girilebilir ve
+  kalıcı olarak saklanır. **Dene** bağlantıyı yeniden dener.
+- USB her yeniden bağlandığında `adb reverse` kaybolur; `scripts/adb-reverse.ps1`
+  veya `scripts/adb-reverse-watch.ps1` ile geri kurulabilir.
 - **Raporlar** sekmesi MySQL’den `GET /reports/summary` ile alış, üretim,
   parçalama, lot hareketleri, satış ve geri çağırma bölümlerini gösterir.
 - Senkronizasyon modeli: `docs/mobile-sync.md`.

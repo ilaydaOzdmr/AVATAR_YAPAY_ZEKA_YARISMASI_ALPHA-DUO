@@ -70,11 +70,14 @@ private val PREDICTION_LABELS = mapOf(
 class SyncRepository(
     private val db: AppDatabase,
     private val client: OkHttpClient = OkHttpClient(),
-    private val baseUrl: String = DEFAULT_BASE_URL,
+    baseUrl: String = DEFAULT_BASE_URL,
 ) {
+    private var configuredBaseUrl: String = baseUrl
+
     companion object {
         // Emülatör: 10.0.2.2 host'un localhost'udur. Fiziksel cihaz:
-        // `adb reverse tcp:8080 tcp:8080` sonrası localhost çalışır.
+        // `adb reverse tcp:8080 tcp:8080` sonrası localhost çalışır veya
+        // aynı Wi-Fi'daki PC'nin LAN IP'si girilir.
         const val DEFAULT_BASE_URL = "http://localhost:8080"
         private const val CLIENT_ID = "android"
         private val JSON = "application/json; charset=utf-8".toMediaType()
@@ -86,8 +89,14 @@ class SyncRepository(
 
     fun activeBaseUrl(): String? = resolvedBaseUrl
 
+    // Persist the user's choice from the UI and force a fresh health probe.
+    fun setBaseUrl(url: String) {
+        configuredBaseUrl = url.trim()
+        resolvedBaseUrl = null
+    }
+
     private fun candidateBaseUrls(): List<String> = buildList {
-        if (baseUrl.isNotBlank()) add(baseUrl)
+        if (configuredBaseUrl.isNotBlank()) add(configuredBaseUrl)
         add("http://10.0.2.2:8080")
         add("http://localhost:8080")
     }.distinct()

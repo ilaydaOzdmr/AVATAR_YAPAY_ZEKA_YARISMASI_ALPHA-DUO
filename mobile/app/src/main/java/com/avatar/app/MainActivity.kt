@@ -4,13 +4,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,10 +48,19 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val repository = SyncRepository(AppDatabase.get(this))
+        val prefs = getSharedPreferences("avatar", MODE_PRIVATE)
+        val initialUrl = prefs.getString("base_url", SyncRepository.DEFAULT_BASE_URL)
+            ?: SyncRepository.DEFAULT_BASE_URL
+        val repository = SyncRepository(AppDatabase.get(this), baseUrl = initialUrl)
         setContent {
             AvatarAppTheme {
-                AvatarApp(repository)
+                AvatarApp(
+                    repository = repository,
+                    initialServerUrl = initialUrl,
+                    onServerUrlChanged = { url ->
+                        prefs.edit().putString("base_url", url).apply()
+                    },
+                )
             }
         }
     }
@@ -55,8 +70,15 @@ private enum class Screen { Home, Products, Sale, Prediction, Reports, History }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AvatarApp(repository: SyncRepository) {
+private fun AvatarApp(
+    repository: SyncRepository,
+    initialServerUrl: String,
+    onServerUrlChanged: (String) -> Unit,
+) {
     var screen by remember { mutableStateOf(Screen.Home) }
+    var serverUrl by remember { mutableStateOf(initialServerUrl) }
+    var showServerDialog by remember { mutableStateOf(false) }
+    var serverInput by remember { mutableStateOf(initialServerUrl) }
     var products by remember { mutableStateOf(emptyList<LocalProduct>()) }
     var lots by remember { mutableStateOf(emptyList<LocalLot>()) }
     var markets by remember { mutableStateOf(emptyList<LocalMarket>()) }
@@ -158,6 +180,12 @@ private fun AvatarApp(repository: SyncRepository) {
                     onShipments = { screen = Screen.History },
                     onViewAlerts = { screen = Screen.Products },
                     connectionMessage = message,
+                    serverUrl = serverUrl,
+                    onServerSettings = {
+                        serverInput = serverUrl
+                        showServerDialog = true
+                    },
+                    onRetry = { scope.launch { pullAndRefresh() } },
                 )
                 Screen.Products -> ProductList(
                     products = products,
@@ -240,5 +268,48 @@ private fun AvatarApp(repository: SyncRepository) {
                 )
             }
         }
+    }
+
+    if (showServerDialog) {
+        AlertDialog(
+            onDismissRequest = { showServerDialog = false },
+            title = { Text("Sunucu adresi") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = serverInput,
+                        onValueChange = { serverInput = it },
+                        label = { Text("http://<PC-IP>:8080") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        "Emülatör: http://10.0.2.2:8080\n" +
+                            "Fiziksel cihaz: USB’de `adb reverse tcp:8080 tcp:8080` " +
+                            "veya aynı Wi-Fi’da PC LAN IP’si.",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        var url = serverInput.trim()
+                        if (url.isNotEmpty() && !url.startsWith("http://") && !url.startsWith("https://")) {
+                            url = "http://$url"
+                        }
+                        if (url.isNotEmpty()) {
+                            repository.setBaseUrl(url)
+                            serverUrl = url
+                            onServerUrlChanged(url)
+                            showServerDialog = false
+                            scope.launch { pullAndRefresh() }
+                        }
+                    },
+                ) { Text("Kaydet ve dene") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerDialog = false }) { Text("Vazgeç") }
+            },
+        )
     }
 }

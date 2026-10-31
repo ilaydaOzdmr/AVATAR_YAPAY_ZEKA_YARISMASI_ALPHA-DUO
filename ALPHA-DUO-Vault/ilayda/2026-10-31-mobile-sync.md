@@ -59,5 +59,9 @@
   MySQL’den geldi.
 - Kablosuz kullanım için telefon + PC aynı Wi-Fi’da olmalı; PC LAN IP’si
   (`http://<PC-IP>:8080`) Windows güvenlik duvarında açık olmalı.
+- Uygulamaya **Sunucu → Değiştir** ayarı eklendi; adres kalıcı saklanıyor ve
+  **Dene** ile yeniden bağlanılıyor.
+- `scripts/adb-reverse.ps1` ve `scripts/adb-reverse-watch.ps1` eklendi; USB
+  yeniden bağlandığında reverse’i geri kurar.
 - Hata mesajları artık kırmızı, başarı mesajları yeşil gösteriliyor.
 

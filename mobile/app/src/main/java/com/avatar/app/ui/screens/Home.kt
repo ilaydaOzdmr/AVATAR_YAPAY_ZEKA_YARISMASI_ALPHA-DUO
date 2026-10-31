@@ -40,6 +40,9 @@ fun Home(
     onShipments: () -> Unit,
     onViewAlerts: () -> Unit,
     connectionMessage: String? = null,
+    serverUrl: String = "http://localhost:8080",
+    onServerSettings: () -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -69,6 +72,20 @@ fun Home(
                 style = MaterialTheme.typography.labelSmall,
                 color = if (connectionMessage.startsWith("Bağlı") || connectionMessage.startsWith("Sunucu:")) Green else Amber,
             )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Sunucu: $serverUrl",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetry) { Text("Dene") }
+            TextButton(onClick = onServerSettings) { Text("Değiştir") }
         }
 
         // Kalite uyarısı
