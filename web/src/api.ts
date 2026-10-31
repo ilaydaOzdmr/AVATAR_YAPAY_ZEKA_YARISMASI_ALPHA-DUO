@@ -5,11 +5,13 @@ async function request<T>(base: string, path: string, init?: RequestInit): Promi
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
     try {
-      const body = (await response.json()) as { error?: string; detail?: string };
+      const body = (await response.json()) as { error?: string; detail?: string | { loc?: (string | number)[]; msg?: string }[] };
       if (body.error) {
         message = body.error;
-      } else if (body.detail) {
+      } else if (typeof body.detail === "string") {
         message = body.detail;
+      } else if (Array.isArray(body.detail)) {
+        message = body.detail.map((issue) => `${issue.loc?.filter((part) => part !== "body").join(".") ?? "Girdi"}: ${issue.msg ?? "Geçersiz değer"}`).join("; ");
       }
     } catch {
       // Keep the status message when the response is not JSON.

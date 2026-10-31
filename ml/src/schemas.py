@@ -69,6 +69,11 @@ class ModelInfo(BaseModel):
     training_sample_count: int
     test_sample_count: int
     warnings: list[str]
+    data_origin: str
+    training_date: str
+    feature_names: list[str]
+    validation_method: str
+    input_ranges: dict[str, Any]
 
 
 class HealthResponse(BaseModel):
@@ -82,6 +87,7 @@ class PredictionResponse(BaseModel):
 
     prediction: dict[str, float]
     model_version: str
+    dataset_version: str
     model_status: str
     data_origin: str
     applicable_input_range: dict[str, Any]
