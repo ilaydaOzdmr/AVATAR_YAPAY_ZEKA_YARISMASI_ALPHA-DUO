@@ -175,7 +175,8 @@ Model bağlantısı:
   gösterir. Birimler veya başlıklar kullanıcı arayüzünde değiştirilmedi.
 - Formda bulunmayan alanlar servis varsayımlarıdır. API, uyarıları ve
   `synthetic_only` durumunu döndürmeye devam eder; ham uyarı listeleri M3
-  arayüzünde gösterilmez. Sonuç altındaki model sürümü/durumu satırları korunur.
+  arayüzünde gösterilmez. Sonuç altındaki model sürümü/durumu satırları da
+  kullanıcının isteğiyle kaldırıldı; sürüm eşleştirmesi veri katmanında sürer.
 
 Yerel Docker ortamında eski web image'ı ile ML 1.0.0'ın çalıştığı doğrulandı.
 Kaynağı güncellemek tek başına container'daki uygulamayı değiştirmez.

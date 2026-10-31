@@ -289,11 +289,12 @@ export default function Predictions() {
                     <strong style={{ color: "var(--green-3)" }}>€ {yieldResult.prediction.estimated_ekp.toFixed(3)}</strong>
                   </div>
                 </div>
-                <p className="muted" style={{ marginTop: 10 }}>
-                  Model sürümü: <b>{yieldResult.model_version}</b> · Durum: <b>{yieldResult.model_status}</b>
-                  {yieldResult.cost_breakdown ? ` · Toplam maliyet: € ${yieldResult.cost_breakdown.total_cost}` : ""}
-                  {yieldResult.ekp_kind ? ` · EKP türü: ${yieldResult.ekp_kind}` : ""}
-                </p>
+                {(yieldResult.cost_breakdown || yieldResult.ekp_kind) && (
+                  <p className="muted" style={{ marginTop: 10 }}>
+                    {[yieldResult.cost_breakdown && `Toplam maliyet: € ${yieldResult.cost_breakdown.total_cost}`,
+                      yieldResult.ekp_kind && `EKP türü: ${yieldResult.ekp_kind}`].filter(Boolean).join(" · ")}
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -340,9 +341,6 @@ export default function Predictions() {
                     {butcheryResult.physical_check.parts_over_carcass ? "Uyarı: parça toplamı karkası aşıyor." : "Fiziksel kontrol tutarlı."}
                   </p>
                 )}
-                <p className="muted">
-                  Model sürümü: <b>{butcheryResult.model_version}</b> · Durum: <b>{butcheryResult.model_status}</b>
-                </p>
               </>
             )}
           </div>
