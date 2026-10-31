@@ -1036,3 +1036,61 @@ select:focus {
     min-width: 150px;
   }
 }
+
+/* ========================== Report sheet (print/PDF) ===================== */
+
+.report-sheet {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .report-sheet,
+  .report-sheet * {
+    visibility: visible;
+  }
+  .report-sheet {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 24px;
+    background: #fff;
+    color: #000;
+  }
+  .report-sheet__brand {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #173f35;
+    font-weight: 700;
+  }
+  .report-sheet__title {
+    font-size: 20px;
+    margin: 8px 0 4px;
+    color: #000;
+  }
+  .report-sheet__meta {
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 16px;
+  }
+  .report-sheet__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .report-sheet__table th,
+  .report-sheet__table td {
+    border: 1px solid #999;
+    padding: 6px 8px;
+    text-align: left;
+  }
+  .report-sheet__table th {
+    background: #f0f0f0;
+    font-weight: 700;
+  }
+}
