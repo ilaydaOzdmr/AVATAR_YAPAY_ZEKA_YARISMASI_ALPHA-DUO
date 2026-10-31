@@ -64,6 +64,9 @@ func (f *fakeRepo) ListAllStockMovements(_ context.Context) ([]model.StockMoveme
 func (f *fakeRepo) CreateProductionOrder(_ context.Context, po model.ProductionOrder, _ []model.ProductionOrderInput, _ []model.ProductionOrderOutput) (model.ProductionOrder, error) {
 	return po, f.createProductionErr
 }
+func (f *fakeRepo) CompleteProductionOrder(_ context.Context, id int64, _ *string) (model.ProductionOrder, error) {
+	return model.ProductionOrder{ID: id, Status: "completed"}, nil
+}
 func (f *fakeRepo) GetProductionOrder(_ context.Context, _ int64) (model.ProductionOrder, error) {
 	return model.ProductionOrder{}, nil
 }

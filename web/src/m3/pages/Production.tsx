@@ -75,8 +75,21 @@ export default function Production() {
     return summary?.ekp ?? 0;
   }, [summary]);
 
-  async function createOrder(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function completeOrder(order: ProductionOrder) {
+    setFeedback(null);
+    try {
+      await post(`/production-orders/${order.id}/complete`, {});
+      setFeedback(`${order.code} tamamlandı; stok hareketleri ve lot bağları işlendi.`);
+      load();
+      if (selectedId === String(order.id)) {
+        get<CostSummary>(`/production-orders/${order.id}`).then(setSummary).catch(() => {});
+      }
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function createOrder(event: FormEvent<HTMLFormElement>) {    event.preventDefault();
     setFeedback(null);
     const parsedInputs = inputs
       .map((line) => ({ material_lot_id: Number.parseInt(line.lot_id, 10), qty: Number.parseFloat(line.qty) || 0 }))
@@ -197,7 +210,7 @@ export default function Production() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Üretim emri</th><th>Beklenen</th><th>Hizmet miktarı</th><th>Durum</th></tr>
+                <tr><th>Üretim emri</th><th>Beklenen</th><th>Hizmet miktarı</th><th>Durum</th><th>İşlem</th></tr>
               </thead>
               <tbody>
                 {orders.map((order) => (
@@ -208,9 +221,18 @@ export default function Production() {
                     <td>
                       {order.status === "completed" ? <span className="status ok">Tamamlandı</span> : <span className="status progress">İşlemde</span>}
                     </td>
+                    <td onClick={(event) => event.stopPropagation()}>
+                      {order.status === "completed" ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <button className="btn btn-primary" type="button" onClick={() => void completeOrder(order)}>
+                          Tamamla
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
-                {orders.length === 0 && <tr><td colSpan={4} className="muted">Üretim emri bulunamadı.</td></tr>}
+                {orders.length === 0 && <tr><td colSpan={5} className="muted">Üretim emri bulunamadı.</td></tr>}
               </tbody>
             </table>
           </div>

@@ -729,3 +729,64 @@ func TestUpdateProductShelfLife(t *testing.T) {
 		t.Fatalf("negative shelf life error = %v, want ErrInvalidLot", err)
 	}
 }
+
+func TestCompleteProductionOrderAppliesStockOnce(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+
+	materialID := insertMaterial(t, db, unique("MAT"), 10)
+	inputLotID := insertLot(t, db, unique("ET"), "material", materialID, 10, 10)
+	productID := insertProduct(t, db, unique("PRD"), 25)
+	outputLotID := insertLot(t, db, unique("SUC"), "product", productID, 0, 0)
+
+	order, err := r.CreateProductionOrder(ctx, model.ProductionOrder{
+		Code: unique("URT"), Status: "draft", ExpectedQty: 8,
+	}, []model.ProductionOrderInput{{
+		MaterialLotID: inputLotID, Qty: 10,
+	}}, []model.ProductionOrderOutput{{
+		ProductLotID: outputLotID, Qty: 8,
+	}})
+	if err != nil {
+		t.Fatalf("CreateProductionOrder draft: %v", err)
+	}
+	if order.Status != "draft" {
+		t.Fatalf("status = %q, want draft", order.Status)
+	}
+	inputAfterDraft, _ := r.GetLot(ctx, inputLotID)
+	if inputAfterDraft.Qty != 10 {
+		t.Fatalf("draft consumed stock: input qty = %v, want 10", inputAfterDraft.Qty)
+	}
+	outputAfterDraft, _ := r.GetLot(ctx, outputLotID)
+	if outputAfterDraft.Qty != 0 {
+		t.Fatalf("draft produced stock: output qty = %v, want 0", outputAfterDraft.Qty)
+	}
+
+	completed, err := r.CompleteProductionOrder(ctx, order.ID, nil)
+	if err != nil {
+		t.Fatalf("CompleteProductionOrder: %v", err)
+	}
+	if completed.Status != "completed" || completed.FinishedAt == nil {
+		t.Fatalf("completed order = %+v, want status completed + finished_at", completed)
+	}
+	inputAfter, _ := r.GetLot(ctx, inputLotID)
+	if inputAfter.Qty != 0 {
+		t.Fatalf("input qty = %v, want 0", inputAfter.Qty)
+	}
+	outputAfter, _ := r.GetLot(ctx, outputLotID)
+	if outputAfter.Qty != 8 {
+		t.Fatalf("output qty = %v, want 8", outputAfter.Qty)
+	}
+	links, _ := r.ListLotLinksByParent(ctx, inputLotID)
+	if len(links) != 1 {
+		t.Fatalf("links = %d, want 1", len(links))
+	}
+
+	// Repeated completion must not deduct stock again.
+	if _, err := r.CompleteProductionOrder(ctx, order.ID, nil); err != nil {
+		t.Fatalf("second CompleteProductionOrder: %v", err)
+	}
+	outputAgain, _ := r.GetLot(ctx, outputLotID)
+	if outputAgain.Qty != 8 {
+		t.Fatalf("second completion changed output qty = %v, want 8", outputAgain.Qty)
+	}
+}

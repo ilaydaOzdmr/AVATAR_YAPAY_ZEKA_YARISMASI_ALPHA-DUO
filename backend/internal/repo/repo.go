@@ -28,6 +28,7 @@ type Repo interface {
 	ListStockMovements(ctx context.Context, lotID int64) ([]model.StockMovement, error)
 	ListAllStockMovements(ctx context.Context) ([]model.StockMovement, error)
 	CreateProductionOrder(ctx context.Context, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) (model.ProductionOrder, error)
+	CompleteProductionOrder(ctx context.Context, id int64, finishedAt *string) (model.ProductionOrder, error)
 	GetProductionOrder(ctx context.Context, id int64) (model.ProductionOrder, error)
 	ListProductionOrderInputs(ctx context.Context, poID int64) ([]model.ProductionOrderInput, error)
 	ListProductionOrderCodesByInputLot(ctx context.Context, lotID int64) ([]string, error)
@@ -499,10 +500,42 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 		return model.ProductionOrder{}, err
 	}
 
-	occurredAt := time.Now().Format("2006-01-02 15:04:05")
-	if po.FinishedAt != nil && *po.FinishedAt != "" {
-		occurredAt = *po.FinishedAt
+	for _, input := range inputs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO production_order_inputs (production_order_id, material_lot_id, qty) VALUES (?, ?, ?)`,
+			po.ID, input.MaterialLotID, input.Qty); err != nil {
+			return model.ProductionOrder{}, err
+		}
 	}
+	for _, output := range outputs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO production_order_outputs (production_order_id, product_lot_id, qty) VALUES (?, ?, ?)`,
+			po.ID, output.ProductLotID, output.Qty); err != nil {
+			return model.ProductionOrder{}, err
+		}
+	}
+
+	// A draft is only a plan: stock and lot links are applied when the order is
+	// completed, so an in-progress order never consumes raw material twice.
+	if po.Status == "completed" {
+		occurredAt := time.Now().Format("2006-01-02 15:04:05")
+		if po.FinishedAt != nil && *po.FinishedAt != "" {
+			occurredAt = *po.FinishedAt
+		}
+		if err := applyProductionOrderTx(ctx, tx, po, inputs, outputs, occurredAt); err != nil {
+			return model.ProductionOrder{}, err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	return po, nil
+}
+
+// applyProductionOrderTx consumes inputs, stocks outputs and writes runtime lot
+// links. It is shared by create-completed and the explicit complete transition.
+func applyProductionOrderTx(ctx context.Context, tx *sql.Tx, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput, occurredAt string) error {
 	refType := "production_order"
 
 	var inputCost float64
@@ -511,24 +544,19 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 		if err := tx.QueryRowContext(ctx,
 			`SELECT unit_cost FROM lots WHERE id = ? FOR UPDATE`, input.MaterialLotID).
 			Scan(&lotUnitCost); err != nil {
-			return model.ProductionOrder{}, err
+			return err
 		}
 		inputCost += input.Qty * lotUnitCost
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO production_order_inputs (production_order_id, material_lot_id, qty) VALUES (?, ?, ?)`,
-			po.ID, input.MaterialLotID, input.Qty); err != nil {
-			return model.ProductionOrder{}, err
-		}
 	}
 
 	var totalOutputQty float64
 	for _, output := range outputs {
 		totalOutputQty += output.Qty
 	}
-	outputUnitCost := 0.0
-	if totalOutputQty > 0 {
-		outputUnitCost = roundMoney((inputCost + po.ServiceUnitCost*po.ServiceQty) / totalOutputQty)
+	if totalOutputQty <= 0 {
+		return ErrInvalidOrder
 	}
+	outputUnitCost := roundMoney((inputCost + po.ServiceUnitCost*po.ServiceQty) / totalOutputQty)
 
 	for _, output := range outputs {
 		var shelfLifeDays int
@@ -536,7 +564,7 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 			`SELECT p.shelf_life_days
 			 FROM lots l JOIN products p ON p.id = l.item_id
 			 WHERE l.id = ?`, output.ProductLotID).Scan(&shelfLifeDays); err != nil {
-			return model.ProductionOrder{}, err
+			return err
 		}
 		if shelfLifeDays > 0 {
 			expiryDate := addDays(occurredAt, shelfLifeDays)
@@ -544,12 +572,12 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 				`UPDATE lots SET unit_cost = ?, received_at = COALESCE(received_at, ?),
 				 expiry_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 				outputUnitCost, occurredAt, expiryDate, output.ProductLotID); err != nil {
-				return model.ProductionOrder{}, err
+				return err
 			}
 		} else if _, err := tx.ExecContext(ctx,
 			`UPDATE lots SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 			outputUnitCost, output.ProductLotID); err != nil {
-			return model.ProductionOrder{}, err
+			return err
 		}
 		if _, err := applyMovementTx(ctx, tx, model.StockMovement{
 			LotID:        output.ProductLotID,
@@ -560,12 +588,7 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 			RefID:        &po.ID,
 			OccurredAt:   occurredAt,
 		}); err != nil {
-			return model.ProductionOrder{}, err
-		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO production_order_outputs (production_order_id, product_lot_id, qty) VALUES (?, ?, ?)`,
-			po.ID, output.ProductLotID, output.Qty); err != nil {
-			return model.ProductionOrder{}, err
+			return err
 		}
 	}
 
@@ -578,7 +601,7 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 			RefID:        &po.ID,
 			OccurredAt:   occurredAt,
 		}); err != nil {
-			return model.ProductionOrder{}, err
+			return err
 		}
 
 		remaining := input.Qty
@@ -593,15 +616,117 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 			if _, err := tx.ExecContext(ctx,
 				`INSERT INTO lot_links (parent_lot_id, child_lot_id, qty, link_type) VALUES (?, ?, ?, 'production')`,
 				input.MaterialLotID, output.ProductLotID, linkQty); err != nil {
-				return model.ProductionOrder{}, err
+				return err
 			}
 			remaining -= linkQty
 		}
 	}
+	return nil
+}
 
+// CompleteProductionOrder applies stock and links once, then marks the order
+// completed. Repeated calls are idempotent.
+func (r *mysqlRepo) CompleteProductionOrder(ctx context.Context, id int64, finishedAt *string) (model.ProductionOrder, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.ProductionOrder{}, err
+	}
+	defer tx.Rollback()
+
+	var po model.ProductionOrder
+	var startedAt, existingFinished, notes, serviceName sql.NullString
+	if err := tx.QueryRowContext(ctx,
+		`SELECT id, code, status, started_at, finished_at, notes, service_name,
+		        service_unit_cost, service_qty, expected_qty
+		 FROM production_orders WHERE id = ? FOR UPDATE`, id).
+		Scan(&po.ID, &po.Code, &po.Status, &startedAt, &existingFinished,
+			&notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty, &po.ExpectedQty); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	if startedAt.Valid {
+		po.StartedAt = &startedAt.String
+	}
+	if existingFinished.Valid {
+		po.FinishedAt = &existingFinished.String
+	}
+	if notes.Valid {
+		po.Notes = &notes.String
+	}
+	if serviceName.Valid {
+		po.ServiceName = &serviceName.String
+	}
+	if po.Status == "completed" {
+		return po, nil
+	}
+
+	inputRows, err := tx.QueryContext(ctx,
+		`SELECT id, production_order_id, material_lot_id, qty
+		 FROM production_order_inputs WHERE production_order_id = ? ORDER BY id`, id)
+	if err != nil {
+		return model.ProductionOrder{}, err
+	}
+	var inputs []model.ProductionOrderInput
+	for inputRows.Next() {
+		var input model.ProductionOrderInput
+		if err := inputRows.Scan(&input.ID, &input.ProductionOrderID, &input.MaterialLotID, &input.Qty); err != nil {
+			inputRows.Close()
+			return model.ProductionOrder{}, err
+		}
+		inputs = append(inputs, input)
+	}
+	inputRows.Close()
+
+	outputRows, err := tx.QueryContext(ctx,
+		`SELECT id, production_order_id, product_lot_id, qty
+		 FROM production_order_outputs WHERE production_order_id = ? ORDER BY id`, id)
+	if err != nil {
+		return model.ProductionOrder{}, err
+	}
+	var outputs []model.ProductionOrderOutput
+	for outputRows.Next() {
+		var output model.ProductionOrderOutput
+		if err := outputRows.Scan(&output.ID, &output.ProductionOrderID, &output.ProductLotID, &output.Qty); err != nil {
+			outputRows.Close()
+			return model.ProductionOrder{}, err
+		}
+		outputs = append(outputs, output)
+	}
+	outputRows.Close()
+	if len(inputs) == 0 || len(outputs) == 0 {
+		return model.ProductionOrder{}, ErrInvalidOrder
+	}
+
+	occurredAt := time.Now().Format("2006-01-02 15:04:05")
+	if finishedAt != nil && *finishedAt != "" {
+		occurredAt = *finishedAt
+	} else if po.FinishedAt != nil && *po.FinishedAt != "" {
+		occurredAt = *po.FinishedAt
+	}
+
+	// Old drafts may have been created by the previous buggy path; do not
+	// double-consume stock if movements already exist for this order.
+	var movementCount int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM stock_movements
+		 WHERE ref_type = 'production_order' AND ref_id = ?`, id).Scan(&movementCount); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	if movementCount == 0 {
+		if err := applyProductionOrderTx(ctx, tx, po, inputs, outputs, occurredAt); err != nil {
+			return model.ProductionOrder{}, err
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE production_orders SET status = 'completed', finished_at = ? WHERE id = ?`,
+		occurredAt, id); err != nil {
+		return model.ProductionOrder{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return model.ProductionOrder{}, err
 	}
+	po.Status = "completed"
+	po.FinishedAt = &occurredAt
 	return po, nil
 }
 

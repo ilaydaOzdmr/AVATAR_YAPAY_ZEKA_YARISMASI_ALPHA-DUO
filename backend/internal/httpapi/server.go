@@ -62,6 +62,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s.mux.HandleFunc("GET /lots/{code}/movements", s.handleListMovements)
 	s.mux.HandleFunc("POST /stock-movements", s.handleAddStockMovement)
 	s.mux.HandleFunc("POST /production-orders", s.handleCreateProductionOrder)
+	s.mux.HandleFunc("POST /production-orders/{id}/complete", s.handleCompleteProductionOrder)
 	s.mux.HandleFunc("GET /production-orders", s.handleListProductionOrders)
 	s.mux.HandleFunc("GET /production-orders/{id}", s.handleGetProductionOrder)
 	s.mux.HandleFunc("GET /production-orders/{id}/inputs", s.handleListProductionOrderInputs)
@@ -278,6 +279,27 @@ func (s *Server) handleCreateProductionOrder(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
+}
+
+func (s *Server) handleCompleteProductionOrder(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var body struct {
+		FinishedAt *string `json:"finished_at"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	completed, err := s.repo.CompleteProductionOrder(r.Context(), id, body.FinishedAt)
+	if err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, completed)
 }
 
 func (s *Server) handleGetProductionOrder(w http.ResponseWriter, r *http.Request) {

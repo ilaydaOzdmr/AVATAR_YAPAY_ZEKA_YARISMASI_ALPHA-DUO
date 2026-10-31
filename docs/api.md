@@ -208,3 +208,20 @@ Cevapta `created_at` ve `shelf_life_days` döner.
 - `expiry_date` boşsa backend `received_at + shelf_life_days` ile hesaplar.
 - `qty > 0` ise aynı transaction’da `inbound` stok hareketi yazılır.
 - Ürün/hammadde bulunamazsa `400` (`ErrInvalidLot`).
+
+### Üretim emri tamamlama
+`POST /production-orders/{id}/complete`
+
+```json
+{}
+```
+veya bitiş zamanı ile:
+```json
+{"finished_at":"2026-10-31 17:00:00"}
+```
+
+- `draft` emir yalnızca plandır; stok hareketi/lot bağı yazılmaz.
+- Tamamlamada girdi lotları tüketilir, çıktı lotları stoğa girer, lot bağları
+  ve SKT işlenir; emir `completed` olur.
+- Aynı emir ikinci kez tamamlanırsa stok tekrar düşmez (idempotent).
+- Girdi/çıktı satırı yoksa `400`.
