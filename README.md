@@ -172,6 +172,11 @@ ve `python ml/train.py --quick` çalıştırın. Yeni model/veri dosyaları Git 
 Gerçek ölçümleri indirmek için `python -m ml.scripts.import_real_data` kullanılır;
 bu referanslar eksik yarışma hedefleri nedeniyle eğitim verisine karıştırılmaz.
 
+Webdeki **Yapay Zekâ Merkezi**, üretim/kuzu/sığır modellerinin sürüm, eğitim
+kaynağı ve test hatalarını çalışan ML servisinden alır. İki web girişi mevcut
+arayüzlerini koruyarak V2 tahmin API'sini kullanır; sentetik test sonuçları saha başarısı olarak sunulmaz.
+Model eksikliği veya bağlantı hatası ekranda açıkça gösterilir.
+
 Lot izlenebilirliği ve geri çağırma **KI tahminine değil**, kesin kayıt
 ilişkilerine dayanır.
 

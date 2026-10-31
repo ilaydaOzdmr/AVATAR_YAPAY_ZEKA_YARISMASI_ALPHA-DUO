@@ -67,6 +67,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s.mux.HandleFunc("GET /production-orders", s.handleListProductionOrders)
 	s.mux.HandleFunc("GET /production-orders/{id}", s.handleGetProductionOrder)
 	s.mux.HandleFunc("GET /production-orders/{id}/inputs", s.handleListProductionOrderInputs)
+	s.mux.HandleFunc("GET /production-orders/{id}/outputs", s.handleListProductionOrderOutputs)
 	s.mux.HandleFunc("GET /trace/forward", s.handleTraceForward)
 	s.mux.HandleFunc("GET /trace/backward", s.handleTraceBackward)
 	s.mux.HandleFunc("POST /butchery-batches", s.handleCreateButcheryBatch)
@@ -594,6 +595,27 @@ func (s *Server) handleListProductionOrderInputs(w http.ResponseWriter, r *http.
 		return
 	}
 	writeJSON(w, http.StatusOK, inputs)
+}
+
+func (s *Server) handleListProductionOrderOutputs(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, http.StatusBadRequest, errors.New("invalid production order id"))
+		return
+	}
+	if _, err := s.repo.GetProductionOrder(r.Context(), id); err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	outputs, err := s.repo.ListProductionOrderOutputs(r.Context(), id)
+	if err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	if outputs == nil {
+		outputs = []model.ProductionOrderOutput{}
+	}
+	writeJSON(w, http.StatusOK, outputs)
 }
 
 func (s *Server) handleListButcheryBatches(w http.ResponseWriter, r *http.Request) {

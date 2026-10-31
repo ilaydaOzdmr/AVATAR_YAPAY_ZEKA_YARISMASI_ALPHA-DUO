@@ -20,6 +20,21 @@ test("blank, invalid, negative and nonfinite form fields are rejected", () => {
   assert.equal(nonnegativeNumber("0", "test"), 0);
 });
 
+test("catalog seasonings preserve ingredient groups and weighted prices", () => {
+  const cards = ["MAT-001", "MAT-005", "MAT-006", "MAT-007", "MAT-008"]
+    .map((code, id) => ({ id, code, unit: "kg" }));
+  const lots = cards.map(({ id }) => ({ id, item_id: id, item_type: "material", unit: "kg",
+    unit_cost: [10, 18, 45, 32, 2.8][id] }));
+  const inputs = [100, 1, .5, .5, .25].map((qty, material_lot_id) => ({ qty, material_lot_id }));
+  const result = productionFeatures(inputs, lots, cards);
+  assert.equal(result.raw_material_kg, 100);
+  assert.equal(result.spice_kg, 1);
+  assert.equal(result.other_material_kg, 1.25);
+  assert.equal(result.material_unit_price_spice, 38.5);
+  assert.equal(result.material_unit_price_other, 18.7 / 1.25);
+  assert.throws(() => productionFeatures(inputs, lots, cards.map((card) => ({ ...card, code: "UNKNOWN" }))));
+});
+
 test("order errors use actual denominator and preserve unavailable predictions", () => {
   assert.deepEqual(predictionError(80, 100), { signed: -20, absolute: 20, percentage: 20 });
   assert.deepEqual(predictionError(100, 80), { signed: 20, absolute: 20, percentage: 25 });

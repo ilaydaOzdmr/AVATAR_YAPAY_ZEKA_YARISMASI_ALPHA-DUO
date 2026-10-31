@@ -115,6 +115,29 @@ POST /recalls
 
 ## ML proxy (Go backend)
 
+### Web model bilgileri
+
+`GET /ml/health` ve `/ml/models`, yüklü modellerin sürümü, veri sürümü,
+`data_origin`, eğitim tarihi, özellikler, eğitim/test sayıları, doğrulama yöntemi
+ve `input_ranges` alanlarını döner. Üç modelden biri eksikse sağlık gövdesi
+`status=degraded` olur; HTTP 200 gövdesi eksik model bilgisini taşır.
+
+`GET /ml/report` eski alanları korur; ek `model_reports` nesnesi `yield`,
+`butchery_lamb`, `butchery_cattle` anahtarlarıyla **fiziksel kısıt sonrası**
+eğitim/test/oransal baseline metriklerini ve model/veri sürümlerini sunar.
+`production_quantity` kg cinsinden mamul özetidir; eski `yield` özeti ise
+0–1 verim oranının hatasını taşır. Web bunları aynı birimmiş gibi göstermez.
+
+V2 tahmin yanıtları `model_version` yanında `dataset_version` da taşır. Web,
+metadata ve tahminin model/veri sürümlerinin eşleşmesini kontrol eder.
+
+`GET /production-orders/{id}/outputs`, kaydedilmiş mamul kabul satırlarını
+(`product_lot_id`, `qty` dahil) döner. Bu salt okunur uç nokta, webin ürün
+tipini ve paket→kg dönüşümünü ürün kartıyla doğrulamasını sağlar. Geçersiz
+kimlik 400, bulunmayan emir 404, boş liste `[]` döner. Paket ağırlığı ürün
+adında açıkça `(1 kg)` veya `(500 g)` gibi belirtilmiyorsa web karşılaştırmayı
+reddeder; farklı paket ağırlıklarını tek plan biriminde birleştirmez.
+
 Web ve Android, Python ML servisine doğrudan gitmez. Go backend sunucu tarafında
 proxy yapar. Tarayıcı/mobil yalnız `http://localhost:8080` bilir.
 

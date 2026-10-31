@@ -15,6 +15,8 @@ export function productionFeatures(inputs: OrderInput[], lots: InputLot[], cards
   const costs = { raw_material_kg: 0, spice_kg: 0, casing_kg: 0, other_material_kg: 0 };
   const mapping: Record<string, keyof typeof quantities> = {
     "MAT-001": "raw_material_kg", "MAT-002": "spice_kg", "MAT-003": "casing_kg", "MAT-004": "other_material_kg",
+    // Catalog 0002: garlic and salt are other ingredients; cumin and pepper are spices.
+    "MAT-005": "other_material_kg", "MAT-006": "spice_kg", "MAT-007": "spice_kg", "MAT-008": "other_material_kg",
   };
   for (const input of inputs) {
     const lot = lots.find((candidate) => candidate.id === input.material_lot_id);

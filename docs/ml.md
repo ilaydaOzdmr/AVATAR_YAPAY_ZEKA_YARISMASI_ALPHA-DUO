@@ -149,3 +149,52 @@ docker compose -f infra/docker-compose.yml up -d --build
 - Bu eğitimde yerel USDA fiyat dosyası yoktu; fiyat endeksi 1,0 fallback'i kullanıldı.
 - Gerçek verinin gelmesi tek başına `validated_real` statüsü vermez; lisans,
   kapsam, gözlem kimliği ve bağımsız grup/zaman testi ayrıca doğrulanmalıdır.
+
+## 8. Mevcut web arayüzüne model bağlantısı
+
+Arayüzün temeli, ilk ML düzeltmelerinden önceki main sürümüdür (`706ac23`).
+Kullanıcının son ekran işaretlemelerine göre M3 sayfasından ham uyarı listeleri,
+alttaki model durumu kartı ve Plan sütunu/serisi kaldırıldı. Üretim grafiği yalnız
+tahmin ve gerçekleşen kg değerlerini gösterir: mavi/yeşil renkler, kg ekseni,
+değer etiketleri, klavyeyle odaklanma ve dar ekranda yatay kaydırma içerir.
+Formlar, sonuç kartları, menü, parçalama ve doğruluk tabloları korunur.
+
+Model bağlantısı:
+
+- Her iki sayfa mevcut alanlarından Go proxy üzerinden V2 modeli çağırır.
+  Kaydedilmiş model/veri sürümleri kontrol edilir; skor veya tahmin uydurulmaz.
+- Geçmiş üretim girdileri lot ve malzeme kartlarıyla ayrılır. Et, baharat ve
+  bağırsak tek et miktarı yapılmaz. Açık paket ağırlıkları kg'ye dönüştürülür.
+  Katalogdaki sarımsak ve tuz diğer girdilere, kimyon ve pul biber baharatlara
+  eşlenir; bilinmeyen kartlar için otomatik miktar tahmin edilmez.
+- Parçalama karşılaştırması yalnız kaydedilmiş aynı parça hedeflerini toplar;
+  kaydedilmiş kemik ve fire varsa eşleşen hedefe dahil eder. Canlı ve karkas
+  ağırlıkları arasında sabit dönüşüm uygulanmaz.
+- Mevcut üretim metrik tablosu önceden olduğu gibi verim oranının hatasını
+  gösterir; parçalama tablosu seçili hayvan modelinin satılabilir toplam hatasını
+  gösterir. Birimler veya başlıklar kullanıcı arayüzünde değiştirilmedi.
+- Formda bulunmayan alanlar servis varsayımlarıdır. API, uyarıları ve
+  `synthetic_only` durumunu döndürmeye devam eder; ham uyarı listeleri M3
+  arayüzünde gösterilmez. Sonuç altındaki model sürümü/durumu satırları da
+  kullanıcının isteğiyle kaldırıldı; sürüm eşleştirmesi veri katmanında sürer.
+
+Yerel Docker ortamında eski web image'ı ile ML 1.0.0'ın çalıştığı doğrulandı.
+Kaynağı güncellemek tek başına container'daki uygulamayı değiştirmez.
+Güncel image'lar için:
+
+```powershell
+docker compose -f infra/docker-compose.yml build ml backend web web-m3
+docker compose -f infra/docker-compose.yml up -d --no-deps ml backend web web-m3
+```
+
+MySQL servisi ve veri volume'ları bu komutlarla yeniden oluşturulmaz.
+Yerel DB yedekleri ve QA araçları `ml/reports/local/` altında Git dışındadır.
+Veri adaptörleri ve sayfanın gerçek model çağrıları test edilir; istenen
+alanların kaldırılması, grafik etkileşimi ve dar ekran görünümü kontrol edilir.
+
+Yerel çalışma doğrulaması: `localhost:5174` gerçek Go/Python servisleriyle
+üretim ve kuzu tahminini döndürdü; üç model 1.1.0 olarak yüklendi. Mevcut
+veritabanındaki dokuz üretim ve dokuz parçalama kaydı aynı tablolarda gösterildi.
+Bu yerel seed/demo kayıtları bağımsız saha testi değildir. Ekran görüntüsündeki
+geçmiş kayıtları veya plan değerlerini yeniden üretmek için veritabanına kayıt
+eklenmedi; tablolarda mevcut API değerleri kullanılır.

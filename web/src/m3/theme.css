@@ -1105,6 +1105,56 @@ select:focus {
   }
 }
 
+/* Prediction comparison chart */
+.forecast-chart {
+  --forecast-predicted: #3b6ea5;
+  --forecast-actual: #23785b;
+}
+.forecast-chart__legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 4px 8px 16px;
+  color: #45574d;
+  font-size: 13px;
+}
+.forecast-chart__legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.forecast-chart__key {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.forecast-chart__key--predicted { background: var(--forecast-predicted); }
+.forecast-chart__key--actual { background: var(--forecast-actual); }
+.forecast-chart__unit { margin-left: auto; }
+.forecast-chart__scroll { overflow-x: auto; border-radius: 8px; }
+.forecast-chart__scroll:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.forecast-chart svg { display: block; width: 100%; height: auto; }
+.forecast-chart__grid { stroke: var(--line); stroke-dasharray: 4 4; }
+.forecast-chart__axis { stroke: #bccac1; }
+.forecast-chart__tick { fill: #586a5f; font-size: 12px; }
+.forecast-chart__group:focus { outline: none; }
+.forecast-chart__group:focus-visible > rect:first-of-type { stroke: var(--blue); stroke-width: 2px; }
+.forecast-chart__bar--predicted { fill: var(--forecast-predicted); }
+.forecast-chart__bar--actual { fill: var(--forecast-actual); }
+.forecast-chart__value { font-size: 12px; font-weight: 600; }
+.forecast-chart__value--predicted { fill: #2b5685; }
+.forecast-chart__value--actual { fill: #1b6148; }
+.forecast-chart__detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  min-height: 40px;
+  padding: 12px 8px 4px;
+  color: #586a5f;
+  font-size: 12px;
+}
+
 /* ========================== Report sheet (print/PDF) ===================== */
 
 .report-sheet {
