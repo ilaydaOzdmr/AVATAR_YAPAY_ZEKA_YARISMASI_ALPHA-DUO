@@ -102,7 +102,7 @@ def test_test_labels_never_affect_selection_or_preprocessor():
     x = pd.DataFrame({"x": np.arange(100, dtype=float)})
     groups = pd.Series(np.repeat(np.arange(10), 10))
     y = pd.Series(2 * x.x + 1)
-    kwargs = dict(X_train=x.iloc[:80], y_train=y.iloc[:80], X_test=x.iloc[80:], groups=groups.iloc[:80], quick=True)
+    kwargs = dict(x_train=x.iloc[:80], y_train=y.iloc[:80], x_test=x.iloc[80:], groups=groups.iloc[:80], quick=True)
     first = train_target(**kwargs, y_test=y.iloc[80:])
     changed = train_target(**kwargs, y_test=pd.Series(np.repeat(-10000, 20)))
     assert first["selected_model"] == changed["selected_model"]

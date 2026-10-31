@@ -123,8 +123,8 @@ export default function Dashboard() {
             <span className="status warn">{anomalies.length} bildirim</span>
           </div>
           <div className="alert-list">
-            {anomalies.map((anomaly, index) => (
-              <div className="alert" key={`${anomaly.ref}-${index}`}>
+            {anomalies.map((anomaly) => (
+              <div className="alert" key={`${anomaly.type}:${anomaly.ref}:${anomaly.message}`}>
                 <div className={`alert-symbol ${anomaly.severity === "critical" ? "red" : "amber"}`}>
                   {anomaly.severity === "critical" ? "⚠" : "↗"}
                 </div>

@@ -1,3 +1,4 @@
+import { rowKey } from "../../rowIdentity";
 import { useEffect, useState } from "react";
 import { get } from "../../api";
 import { downloadCsv } from "../csv";
@@ -260,8 +261,8 @@ export default function Reports() {
                 <tr>{activeReport.columns.map((column) => <th key={column}>{column}</th>)}</tr>
               </thead>
               <tbody>
-                {activeReport.rows.map((row, index) => (
-                  <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>
+                {activeReport.rows.map((row) => (
+                  <tr key={rowKey(row)}>{reportCells(activeReport.columns, row).map((cell) => <td key={cell.column}>{cell.value}</td>)}</tr>
                 ))}
                 {activeReport.rows.length === 0 && (
                   <tr><td colSpan={activeReport.columns.length} className="muted">Kayıt bulunamadı.</td></tr>
@@ -283,8 +284,8 @@ export default function Reports() {
               <tr>{activeReport.columns.map((column) => <th key={column}>{column}</th>)}</tr>
             </thead>
             <tbody>
-              {activeReport.rows.map((row, index) => (
-                <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>
+              {activeReport.rows.map((row) => (
+                <tr key={rowKey(row)}>{reportCells(activeReport.columns, row).map((cell) => <td key={cell.column}>{cell.value}</td>)}</tr>
               ))}
             </tbody>
           </table>
@@ -292,4 +293,8 @@ export default function Reports() {
       )}
     </section>
   );
+}
+
+function reportCells(columns: string[], row: (string | number)[]) {
+  return columns.map((column, position) => ({ column, value: row[position] }));
 }

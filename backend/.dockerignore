@@ -1,0 +1,7 @@
+.env*
+!.env.example
+bin
+vendor
+coverage
+*.coverprofile
+.git

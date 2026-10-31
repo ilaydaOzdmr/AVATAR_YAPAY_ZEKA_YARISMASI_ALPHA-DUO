@@ -121,6 +121,34 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 	for _, lot := range lots {
 		lotByID[lot.ID] = lot
 	}
+	if err := s.appendPurchases(ctx, &summary, lots, materialByID); err != nil {
+		return summary, err
+	}
+
+	if err := s.appendProduction(ctx, &summary); err != nil {
+		return summary, err
+	}
+
+	if err := s.appendButchery(ctx, &summary); err != nil {
+		return summary, err
+	}
+
+	if err := s.appendMovements(ctx, &summary, lotByID); err != nil {
+		return summary, err
+	}
+
+	if err := s.appendSales(ctx, &summary); err != nil {
+		return summary, err
+	}
+
+	if err := s.appendRecalls(ctx, &summary, lotByID); err != nil {
+		return summary, err
+	}
+
+	return summary, nil
+}
+
+func (s *ReportService) appendPurchases(ctx context.Context, summary *ReportSummary, lots []model.Lot, materialByID map[int64]model.Material) error {
 	for _, lot := range lots {
 		if lot.ItemType != "material" {
 			continue
@@ -144,14 +172,18 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 		})
 	}
 
+	return nil
+}
+
+func (s *ReportService) appendProduction(ctx context.Context, summary *ReportSummary) error {
 	orders, err := s.repo.ListProductionOrders(ctx)
 	if err != nil {
-		return summary, err
+		return err
 	}
 	for _, order := range orders {
 		inputs, err := s.repo.ListProductionOrderInputs(ctx, order.ID)
 		if err != nil {
-			return summary, err
+			return err
 		}
 		var inputKg float64
 		for _, input := range inputs {
@@ -159,7 +191,7 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 		}
 		cost, err := s.cost.ProductionOrderCost(ctx, order.ID)
 		if err != nil {
-			return summary, err
+			return err
 		}
 		summary.Production = append(summary.Production, ProductionReportRow{
 			Code:        order.Code,
@@ -171,14 +203,18 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 		})
 	}
 
+	return nil
+}
+
+func (s *ReportService) appendButchery(ctx context.Context, summary *ReportSummary) error {
 	batches, err := s.repo.ListButcheryBatches(ctx)
 	if err != nil {
-		return summary, err
+		return err
 	}
 	for _, batch := range batches {
 		items, err := s.repo.ListButcheryItems(ctx, batch.ID)
 		if err != nil {
-			return summary, err
+			return err
 		}
 		var partsWeight, allWeight float64
 		partCount := 0
@@ -204,9 +240,13 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 		})
 	}
 
+	return nil
+}
+
+func (s *ReportService) appendMovements(ctx context.Context, summary *ReportSummary, lotByID map[int64]model.Lot) error {
 	movements, err := s.repo.ListAllStockMovements(ctx)
 	if err != nil {
-		return summary, err
+		return err
 	}
 	for _, movement := range movements {
 		summary.LotMovements = append(summary.LotMovements, MovementReportRow{
@@ -219,9 +259,13 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 		})
 	}
 
+	return nil
+}
+
+func (s *ReportService) appendSales(ctx context.Context, summary *ReportSummary) error {
 	markets, err := s.repo.ListMarkets(ctx)
 	if err != nil {
-		return summary, err
+		return err
 	}
 	marketByID := make(map[int64]model.Market, len(markets))
 	for _, market := range markets {
@@ -229,12 +273,12 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 	}
 	sales, err := s.repo.ListSales(ctx)
 	if err != nil {
-		return summary, err
+		return err
 	}
 	for _, sale := range sales {
 		lines, err := s.repo.ListSaleLines(ctx, sale.ID)
 		if err != nil {
-			return summary, err
+			return err
 		}
 		var qty, total float64
 		for _, line := range lines {
@@ -251,14 +295,18 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 		})
 	}
 
+	return nil
+}
+
+func (s *ReportService) appendRecalls(ctx context.Context, summary *ReportSummary, lotByID map[int64]model.Lot) error {
 	events, err := s.repo.ListRecallEvents(ctx)
 	if err != nil {
-		return summary, err
+		return err
 	}
 	for _, event := range events {
 		blocks, err := s.repo.ListRecallBlocks(ctx, event.ID)
 		if err != nil {
-			return summary, err
+			return err
 		}
 		blocked := make([]string, 0, len(blocks))
 		for _, block := range blocks {
@@ -275,5 +323,5 @@ func (s *ReportService) Summary(ctx context.Context) (ReportSummary, error) {
 		})
 	}
 
-	return summary, nil
+	return nil
 }

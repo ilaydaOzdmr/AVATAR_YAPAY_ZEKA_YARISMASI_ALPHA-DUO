@@ -114,64 +114,20 @@ export default function Predictions() {
       get<{ id: number; code: string; name: string; unit: string }[]>("/products")]);
     Promise.all([get<ProductionOrder[]>("/production-orders"), catalog]).then(async ([orders, [lots, cards, products]]) => {
       const rows = await Promise.all(
-        (orders ?? []).map(async (order) => {
-          try {
-            const [summary, inputs, outputs] = await Promise.all([
-              get<CostSummary>(`/production-orders/${order.id}`),
-              get<OrderInput[]>(`/production-orders/${order.id}/inputs`),
-              get<{ product_lot_id: number }[]>(`/production-orders/${order.id}/outputs`),
-            ]);
-            if (summary.finished_qty <= 0) return null;
-            const context = productionProduct(outputs ?? [], lots ?? [], products ?? []);
-            const features = productionFeatures(inputs ?? [], lots ?? [], cards ?? []);
-            const ml = await mlPost<YieldResponse>("/predict/v2/yield", { ...features,
-              product_type: context.product_type,
-              service_unit_cost: order.service_unit_cost / context.kg_per_unit });
-            ensurePredictionVersion(await reportRequest, "yield", ml);
-            const predicted = ml.prediction.finished_qty;
-            return {
-              code: order.code,
-              predicted,
-              actual: summary.finished_qty * context.kg_per_unit,
-              diff: predicted - summary.finished_qty * context.kg_per_unit,
-            };
-          } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-            return null;
-          }
-        }),
+        (orders ?? []).map((order) => productionForecast(order, lots ?? [], cards ?? [], products ?? [], reportRequest).catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : String(err));
+          return null;
+        })),
       );
       setForecast(rows.filter((row): row is ForecastRow => row !== null));
     }).catch((err: unknown) => setError(String(err)));
 
     Promise.all([get<{ id: number; code: string; animal_type: string; input_weight: number }[]>("/butchery-batches"), catalog]).then(async ([batches, [, , products]]) => {
       const rows = await Promise.all(
-        (batches ?? []).map(async (batch) => {
-          try {
-            const aliases: Record<string, "lamb" | "cattle"> = { kuzu: "lamb", dana: "cattle", lamb: "lamb", cattle: "cattle" };
-            const animal = aliases[batch.animal_type.toLowerCase()];
-            if (!animal) throw new Error("Unknown animal type");
-            const [result, prediction] = await Promise.all([
-              get<{ items: { product_id: number; weight: number; is_waste: boolean }[] }>(`/butchery-batches/${batch.id}`),
-              mlPost<ButcheryResponse>("/predict/v2/butchery", {
-                animal_type: animal,
-                carcass_weight_kg: batch.input_weight,
-              }),
-            ]);
-            ensurePredictionVersion(await reportRequest, animal === "cattle" ? "butchery_cattle" : "butchery_lamb", prediction);
-            const { actual, predicted } = recordedPartTotals(result.items ?? [], products ?? [], prediction.prediction);
-            return {
-              code: batch.code,
-              animal_type: batch.animal_type,
-              input_weight: batch.input_weight,
-              predicted,
-              actual,
-            };
-          } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-            return null;
-          }
-        }),
+        (batches ?? []).map((batch) => butcheryForecast(batch, products ?? [], reportRequest).catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : String(err));
+          return null;
+        })),
       );
       setButcheryCompare(rows.filter((row): row is ButcheryCompare => row !== null));
     }).catch((err: unknown) => setError(String(err)));
@@ -369,7 +325,7 @@ export default function Predictions() {
                       <td>{row.predicted ? row.predicted.toFixed(1) : "—"}</td>
                       <td>{row.actual}</td>
                       <td style={{ color: row.predicted > 0 && Math.abs(row.diff) > 0.5 ? "var(--amber)" : "var(--green-3)" }}>
-                        {row.predicted ? `${row.diff >= 0 ? "+" : ""}${row.diff.toFixed(1)}` : "—"}
+                        {forecastDifference(row)}
                       </td>
                     </tr>
                   ))}
@@ -434,4 +390,55 @@ export default function Predictions() {
       )}
     </section>
   );
+}
+
+interface CatalogProduct { id: number; code: string; name: string; unit: string }
+interface Batch { id: number; code: string; animal_type: string; input_weight: number }
+function forecastDifference(row: ForecastRow): string {
+  if (!row.predicted) return "—";
+  const sign = row.diff >= 0 ? "+" : "";
+  return `${sign}${row.diff.toFixed(1)}`;
+}
+async function productionForecast(order: ProductionOrder, lots: InputLot[], cards: MaterialCard[], products: CatalogProduct[], reportRequest: Promise<MlReport>): Promise<ForecastRow | null> {
+  const [summary, inputs, outputs] = await Promise.all([
+    get<CostSummary>(`/production-orders/${order.id}`),
+    get<OrderInput[]>(`/production-orders/${order.id}/inputs`),
+    get<{ product_lot_id: number }[]>(`/production-orders/${order.id}/outputs`),
+  ]);
+  if (summary.finished_qty <= 0) return null;
+  const context = productionProduct(outputs ?? [], lots ?? [], products ?? []);
+  const features = productionFeatures(inputs ?? [], lots ?? [], cards ?? []);
+  const ml = await mlPost<YieldResponse>("/predict/v2/yield", { ...features,
+    product_type: context.product_type,
+    service_unit_cost: order.service_unit_cost / context.kg_per_unit });
+  ensurePredictionVersion(await reportRequest, "yield", ml);
+  const predicted = ml.prediction.finished_qty;
+  return {
+    code: order.code,
+    predicted,
+    actual: summary.finished_qty * context.kg_per_unit,
+    diff: predicted - summary.finished_qty * context.kg_per_unit,
+  };
+}
+
+async function butcheryForecast(batch: Batch, products: CatalogProduct[], reportRequest: Promise<MlReport>): Promise<ButcheryCompare> {
+  const aliases: Record<string, "lamb" | "cattle"> = { kuzu: "lamb", dana: "cattle", lamb: "lamb", cattle: "cattle" };
+  const animal = aliases[batch.animal_type.toLowerCase()];
+  if (!animal) throw new Error("Unknown animal type");
+  const [result, prediction] = await Promise.all([
+    get<{ items: { product_id: number; weight: number; is_waste: boolean }[] }>(`/butchery-batches/${batch.id}`),
+    mlPost<ButcheryResponse>("/predict/v2/butchery", {
+      animal_type: animal,
+      carcass_weight_kg: batch.input_weight,
+    }),
+  ]);
+  ensurePredictionVersion(await reportRequest, animal === "cattle" ? "butchery_cattle" : "butchery_lamb", prediction);
+  const { actual, predicted } = recordedPartTotals(result.items ?? [], products ?? [], prediction.prediction);
+  return {
+    code: batch.code,
+    animal_type: batch.animal_type,
+    input_weight: batch.input_weight,
+    predicted,
+    actual,
+  };
 }

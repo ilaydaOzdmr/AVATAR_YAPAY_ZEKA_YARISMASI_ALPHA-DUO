@@ -1,3 +1,4 @@
+import { newRowKey } from "../../rowIdentity";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { get, post } from "../../api";
 
@@ -30,6 +31,7 @@ interface Lot {
 }
 
 interface OrderLine {
+  clientKey: string;
   lot_id: string;
   qty: string;
 }
@@ -164,7 +166,7 @@ export default function Production() {
               <div>
                 <b style={{ fontSize: 13 }}>Hammadde girişleri (inputs)</b>
                 {inputs.map((line, index) => (
-                  <div key={index} className="inline-form" style={{ margin: "8px 0" }}>
+                  <div key={line.clientKey} className="inline-form" style={{ margin: "8px 0" }}>
                     <select value={line.lot_id} onChange={(e) => setInputs((prev) => prev.map((l, i) => (i === index ? { ...l, lot_id: e.target.value } : l)))}>
                       <option value="">Hammadde lotu...</option>
                       {materialLots.map((lot) => <option key={lot.id} value={lot.id}>{lot.code}</option>)}
@@ -173,12 +175,12 @@ export default function Production() {
                     <button className="btn btn-secondary" type="button" onClick={() => setInputs((prev) => prev.filter((_, i) => i !== index))}>✕</button>
                   </div>
                 ))}
-                <button className="btn btn-secondary" type="button" onClick={() => setInputs((prev) => [...prev, { lot_id: "", qty: "" }])}>＋ Hammadde ekle</button>
+                <button className="btn btn-secondary" type="button" onClick={() => setInputs((prev) => [...prev, { clientKey: newRowKey(), lot_id: "", qty: "" }])}>＋ Hammadde ekle</button>
               </div>
               <div>
                 <b style={{ fontSize: 13 }}>Mamul çıktıları (outputs)</b>
                 {outputs.map((line, index) => (
-                  <div key={index} className="inline-form" style={{ margin: "8px 0" }}>
+                  <div key={line.clientKey} className="inline-form" style={{ margin: "8px 0" }}>
                     <select value={line.lot_id} onChange={(e) => setOutputs((prev) => prev.map((l, i) => (i === index ? { ...l, lot_id: e.target.value } : l)))}>
                       <option value="">Mamul lotu...</option>
                       {productLots.map((lot) => <option key={lot.id} value={lot.id}>{lot.code}</option>)}
@@ -187,7 +189,7 @@ export default function Production() {
                     <button className="btn btn-secondary" type="button" onClick={() => setOutputs((prev) => prev.filter((_, i) => i !== index))}>✕</button>
                   </div>
                 ))}
-                <button className="btn btn-secondary" type="button" onClick={() => setOutputs((prev) => [...prev, { lot_id: "", qty: "" }])}>＋ Mamul ekle</button>
+                <button className="btn btn-secondary" type="button" onClick={() => setOutputs((prev) => [...prev, { clientKey: newRowKey(), lot_id: "", qty: "" }])}>＋ Mamul ekle</button>
               </div>
               <button className="btn btn-primary" type="submit">Oluştur</button>
             </form>
@@ -237,13 +239,7 @@ export default function Production() {
                     <td>{order.expected_qty}</td>
                     <td>{order.service_qty}</td>
                     <td>
-                      {order.status === "completed" ? (
-                        <span className="status ok">Tamamlandı</span>
-                      ) : order.status === "rejected" ? (
-                        <span className="status block">Reddedildi</span>
-                      ) : (
-                        <span className="status progress">İşlemde</span>
-                      )}
+                      {orderStatus(order.status)}
                     </td>
                     <td onClick={(event) => event.stopPropagation()}>
                       {order.status === "completed" || order.status === "rejected" ? (
@@ -302,4 +298,10 @@ export default function Production() {
       </div>
     </section>
   );
+}
+
+function orderStatus(status: string) {
+  if (status === "completed") return <span className="status ok">Tamamlandı</span>;
+  if (status === "rejected") return <span className="status block">Reddedildi</span>;
+  return <span className="status progress">İşlemde</span>;
 }

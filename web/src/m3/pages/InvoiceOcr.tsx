@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { rowKey } from "../../rowIdentity";
 import { get, post } from "../../api";
 
 interface Material {
@@ -127,7 +128,7 @@ export default function InvoiceOcr() {
               </thead>
               <tbody>
                 {items.map((item, index) => (
-                  <tr key={index}>
+                  <tr key={rowKey(item)}>
                     <td><b>{item.product_name || "—"}</b></td>
                     <td>{item.qty} {item.unit}</td>
                     <td className="id">{item.lot_code || "—"}</td>

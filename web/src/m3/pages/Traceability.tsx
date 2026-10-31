@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { rowKey } from "../../rowIdentity";
 import { get } from "../../api";
 import { downloadCsv } from "../csv";
 
@@ -230,8 +231,8 @@ export default function Traceability() {
                 <tr><th>Mamul lotu</th><th>Market</th><th>Alt alıcı</th><th>Miktar</th><th>İletişim</th></tr>
               </thead>
               <tbody>
-                {redistributions.map((red, index) => (
-                  <tr key={`${red.lot_code}-${index}`}>
+                {redistributions.map((red) => (
+                  <tr key={rowKey(red)}>
                     <td className="id">{red.lot_code}</td>
                     <td>{red.market_name}</td>
                     <td><b>{red.sub_buyer}</b></td>

@@ -1,0 +1,14 @@
+[run]
+branch = True
+relative_files = True
+source = ml,infra
+data_file = coverage/ml/.coverage
+omit =
+    */tests/*
+    */test_*.py
+    */.venv/*
+    */venv/*
+    */reports/*
+
+[xml]
+output = coverage/ml/coverage.xml

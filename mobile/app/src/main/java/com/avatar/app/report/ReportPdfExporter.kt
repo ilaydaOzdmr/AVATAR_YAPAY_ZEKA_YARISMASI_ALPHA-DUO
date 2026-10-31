@@ -162,6 +162,7 @@ object ReportPdfExporter {
             y += 5f
         }
 
+
         startPage()
 
         for (section in report.sections) {
@@ -226,20 +227,7 @@ object ReportPdfExporter {
                 if (rowIndex % 2 == 1) {
                     c.drawRect(MARGIN, y, PAGE_WIDTH - MARGIN, y + rowHeight, altRowPaint)
                 }
-                var x = MARGIN
-                cellLines.forEachIndexed { index, lines ->
-                    var textY = y + CELL_PADDING_V + LINE_HEIGHT - 2.5f
-                    lines.forEach { line ->
-                        val textX = if (numeric[index]) {
-                            x + widths[index] - CELL_PADDING - bodyPaint.measureText(line)
-                        } else {
-                            x + CELL_PADDING
-                        }
-                        c.drawText(line, textX, textY, bodyPaint)
-                        textY += LINE_HEIGHT
-                    }
-                    x += widths[index]
-                }
+                drawBodyCells(c, cellLines, widths, numeric, y, bodyPaint)
                 y += rowHeight
                 c.drawLine(MARGIN, y, PAGE_WIDTH - MARGIN, y, dividerPaint)
             }
@@ -304,27 +292,12 @@ object ReportPdfExporter {
         val lines = mutableListOf<String>()
         var current = StringBuilder()
 
+        val state = WrapState(lines, current)
         for (word in words) {
-            val candidate = if (current.isEmpty()) word else "$current $word"
-            if (paint.measureText(candidate) <= maxWidth) {
-                current = StringBuilder(candidate)
-                continue
-            }
-            if (current.isNotEmpty()) {
-                lines += current.toString()
-                current = StringBuilder()
-                if (lines.size == maxLines) break
-            }
-            if (paint.measureText(word) <= maxWidth) {
-                current = StringBuilder(word)
-            } else {
-                lines += ellipsize(word, maxWidth, paint)
-                if (lines.size == maxLines) {
-                    current = StringBuilder()
-                    break
-                }
-            }
+            if (!appendWord(state, word, maxWidth, paint, maxLines)) break
         }
+        current = state.current
+
         if (lines.size < maxLines && current.isNotEmpty()) {
             lines += current.toString()
         }
@@ -336,6 +309,48 @@ object ReportPdfExporter {
                 line
             }
         }
+    }
+
+    private fun drawBodyCells(c: Canvas, cellLines: List<List<String>>, widths: FloatArray, numeric: List<Boolean>, y: Float, bodyPaint: Paint) {
+    var x = MARGIN
+    cellLines.forEachIndexed { index, lines ->
+        var textY = y + CELL_PADDING_V + LINE_HEIGHT - 2.5f
+        lines.forEach { line ->
+            val textX = if (numeric[index]) {
+                x + widths[index] - CELL_PADDING - bodyPaint.measureText(line)
+            } else {
+                x + CELL_PADDING
+            }
+            c.drawText(line, textX, textY, bodyPaint)
+            textY += LINE_HEIGHT
+        }
+        x += widths[index]
+    }
+    }
+
+    private data class WrapState(val lines: MutableList<String>, var current: StringBuilder)
+
+    private fun appendWord(state: WrapState, word: String, maxWidth: Float, paint: Paint, maxLines: Int): Boolean {
+        val candidate = if (state.current.isEmpty()) word else "${state.current} $word"
+        if (paint.measureText(candidate) <= maxWidth) {
+            state.current = StringBuilder(candidate)
+            return true
+        }
+        if (state.current.isNotEmpty()) {
+            state.lines += state.current.toString()
+            state.current = StringBuilder()
+            if (state.lines.size == maxLines) return false
+        }
+        if (paint.measureText(word) <= maxWidth) {
+            state.current = StringBuilder(word)
+        } else {
+            state.lines += ellipsize(word, maxWidth, paint)
+            if (state.lines.size == maxLines) {
+                state.current = StringBuilder()
+                return false
+            }
+        }
+        return true
     }
 
     private fun ellipsize(text: String, maxWidth: Float, paint: Paint): String {

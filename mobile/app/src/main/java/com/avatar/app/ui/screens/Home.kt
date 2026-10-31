@@ -1,6 +1,5 @@
 package com.avatar.app.ui.screens
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,15 +34,9 @@ private val Green = Color(0xFF2C7058)
 fun Home(
     blockedLots: List<LocalLot>,
     lastSale: LocalSale?,
-    onQuickSale: () -> Unit,
-    onScan: () -> Unit,
-    onStock: () -> Unit,
-    onShipments: () -> Unit,
-    onViewAlerts: () -> Unit,
+    actions: HomeActions,
     connectionMessage: String? = null,
     serverUrl: String = SyncRepository.DEFAULT_BASE_URL,
-    onServerSettings: () -> Unit = {},
-    onRetry: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -85,8 +78,8 @@ fun Home(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onRetry) { Text("Dene") }
-            TextButton(onClick = onServerSettings) { Text("Değiştir") }
+            TextButton(onClick = actions.onRetry) { Text("Dene") }
+            TextButton(onClick = actions.onServerSettings) { Text("Değiştir") }
         }
 
         // Kalite uyarısı
@@ -109,7 +102,7 @@ fun Home(
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFF8A5A1B),
                         )
-                        TextButton(onClick = onViewAlerts, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+                        TextButton(onClick = actions.onViewAlerts, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
                             Text("Detayları görüntüle →", color = Amber, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -119,12 +112,12 @@ fun Home(
 
         // Hızlı işlemler (2x2)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickAction("▣", "Hızlı satış", "Lot seçerek satış yap", Modifier.weight(1f), onQuickSale)
-            QuickAction("⌗", "Lot okut", "Barkod / QR tara", Modifier.weight(1f), onScan)
+            QuickAction("▣", "Hızlı satış", "Lot seçerek satış yap", Modifier.weight(1f), actions.onQuickSale)
+            QuickAction("⌗", "Lot okut", "Barkod / QR tara", Modifier.weight(1f), actions.onScan)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickAction("▤", "Stok sorgula", "Anlık stok durumu", Modifier.weight(1f), onStock)
-            QuickAction("↗", "Sevkiyatlar", "Hazır ve gönderilenler", Modifier.weight(1f), onShipments)
+            QuickAction("▤", "Stok sorgula", "Anlık stok durumu", Modifier.weight(1f), actions.onStock)
+            QuickAction("↗", "Sevkiyatlar", "Hazır ve gönderilenler", Modifier.weight(1f), actions.onShipments)
         }
 
         // Son satış kartı
@@ -178,3 +171,13 @@ private fun QuickAction(
         }
     }
 }
+
+data class HomeActions(
+    val onQuickSale: () -> Unit,
+    val onScan: () -> Unit,
+    val onStock: () -> Unit,
+    val onShipments: () -> Unit,
+    val onViewAlerts: () -> Unit,
+    val onServerSettings: () -> Unit,
+    val onRetry: () -> Unit,
+)

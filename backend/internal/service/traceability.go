@@ -83,44 +83,18 @@ func (t *Traceability) Forward(ctx context.Context, sourceLotCode string) ([]Aff
 		queue = queue[1:]
 
 		if lot.ItemType == "product" {
-			markets, err := t.marketImpacts(ctx, lot.ID)
+			affectedLot, err := t.affectedLot(ctx, lot)
 			if err != nil {
 				return nil, err
-			}
-			subBuyers, err := t.subBuyerImpacts(ctx, lot.ID)
-			if err != nil {
-				return nil, err
-			}
-			affectedLot := AffectedLot{
-				LotCode:   lot.Code,
-				ItemType:  lot.ItemType,
-				Qty:       lot.Qty,
-				Unit:      lot.Unit,
-				Markets:   markets,
-				SubBuyers: subBuyers,
-			}
-			if product, err := t.repo.GetProduct(ctx, lot.ItemID); err == nil {
-				affectedLot.ProductCode = product.Code
-				affectedLot.ProductName = product.Name
 			}
 			affected = append(affected, affectedLot)
 		}
 
-		links, err := t.repo.ListLotLinksByParent(ctx, lot.ID)
+		children, err := t.linkedLots(ctx, lot.ID, visited, false)
 		if err != nil {
 			return nil, err
 		}
-		for _, link := range links {
-			if visited[link.ChildLotID] {
-				continue
-			}
-			child, err := t.repo.GetLot(ctx, link.ChildLotID)
-			if err != nil {
-				return nil, err
-			}
-			visited[link.ChildLotID] = true
-			queue = append(queue, child)
-		}
+		queue = append(queue, children...)
 	}
 
 	return affected, nil
@@ -142,48 +116,49 @@ func (t *Traceability) Backward(ctx context.Context, productLotCode string) ([]R
 		queue = queue[1:]
 
 		if lot.ItemType == "material" {
-			source := RawMaterialSource{
-				LotCode: lot.Code,
-				Qty:     lot.Qty,
-			}
-			if lot.ReceivedAt != nil {
-				source.ReceivedAt = *lot.ReceivedAt
-			}
-			if lot.ExpiryDate != nil {
-				source.ExpiryDate = *lot.ExpiryDate
-			}
-			if lot.SupplierID != nil {
-				supplier, err := t.repo.GetSupplier(ctx, *lot.SupplierID)
-				if err != nil {
-					return nil, err
-				}
-				source.SupplierCode = supplier.Code
-				source.SupplierName = supplier.Name
-			}
-			if orders, err := t.repo.ListProductionOrderCodesByInputLot(ctx, lot.ID); err == nil {
-				source.ProductionOrders = orders
+			source, err := t.materialSource(ctx, lot)
+			if err != nil {
+				return nil, err
 			}
 			sources = append(sources, source)
 		}
 
-		links, err := t.repo.ListLotLinksByChild(ctx, lot.ID)
+		parents, err := t.linkedLots(ctx, lot.ID, visited, true)
 		if err != nil {
 			return nil, err
 		}
-		for _, link := range links {
-			if visited[link.ParentLotID] {
-				continue
-			}
-			parent, err := t.repo.GetLot(ctx, link.ParentLotID)
-			if err != nil {
-				return nil, err
-			}
-			visited[link.ParentLotID] = true
-			queue = append(queue, parent)
-		}
+		queue = append(queue, parents...)
 	}
 
 	return sources, nil
+}
+
+func (t *Traceability) linkedLots(ctx context.Context, lotID int64, visited map[int64]bool, parents bool) ([]model.Lot, error) {
+	load := t.repo.ListLotLinksByParent
+	if parents {
+		load = t.repo.ListLotLinksByChild
+	}
+	links, err := load(ctx, lotID)
+	if err != nil {
+		return nil, err
+	}
+	var out []model.Lot
+	for _, link := range links {
+		id := link.ChildLotID
+		if parents {
+			id = link.ParentLotID
+		}
+		if visited[id] {
+			continue
+		}
+		lot, err := t.repo.GetLot(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		visited[id] = true
+		out = append(out, lot)
+	}
+	return out, nil
 }
 
 func (t *Traceability) marketImpacts(ctx context.Context, lotID int64) ([]MarketImpact, error) {
@@ -258,4 +233,53 @@ func (t *Traceability) subBuyerImpacts(ctx context.Context, lotID int64) ([]SubB
 		})
 	}
 	return subBuyers, nil
+}
+
+func (t *Traceability) affectedLot(ctx context.Context, lot model.Lot) (AffectedLot, error) {
+	markets, err := t.marketImpacts(ctx, lot.ID)
+	if err != nil {
+		return AffectedLot{}, err
+	}
+	subBuyers, err := t.subBuyerImpacts(ctx, lot.ID)
+	if err != nil {
+		return AffectedLot{}, err
+	}
+	affectedLot := AffectedLot{
+		LotCode:   lot.Code,
+		ItemType:  lot.ItemType,
+		Qty:       lot.Qty,
+		Unit:      lot.Unit,
+		Markets:   markets,
+		SubBuyers: subBuyers,
+	}
+	if product, err := t.repo.GetProduct(ctx, lot.ItemID); err == nil {
+		affectedLot.ProductCode = product.Code
+		affectedLot.ProductName = product.Name
+	}
+	return affectedLot, nil
+}
+
+func (t *Traceability) materialSource(ctx context.Context, lot model.Lot) (RawMaterialSource, error) {
+	source := RawMaterialSource{
+		LotCode: lot.Code,
+		Qty:     lot.Qty,
+	}
+	if lot.ReceivedAt != nil {
+		source.ReceivedAt = *lot.ReceivedAt
+	}
+	if lot.ExpiryDate != nil {
+		source.ExpiryDate = *lot.ExpiryDate
+	}
+	if lot.SupplierID != nil {
+		supplier, err := t.repo.GetSupplier(ctx, *lot.SupplierID)
+		if err != nil {
+			return RawMaterialSource{}, err
+		}
+		source.SupplierCode = supplier.Code
+		source.SupplierName = supplier.Name
+	}
+	if orders, err := t.repo.ListProductionOrderCodesByInputLot(ctx, lot.ID); err == nil {
+		source.ProductionOrders = orders
+	}
+	return source, nil
 }

@@ -19,6 +19,21 @@ export function ensurePredictionVersion(report: MLReport, name: ModelName, respo
   }
 }
 export interface OutputProduct { id: number; name: string; unit: string }
+function productWeight(lotUnit: string, product: OutputProduct): number {
+  if (lotUnit === "kg" && product.unit === "kg") return 1;
+  const pack = product.name.match(/\((\d+(?:[.,]\d+)?)\s*(kg|g)\)/i);
+  if (lotUnit !== "paket" || product.unit !== "paket" || !pack) throw new Error("Mamulün kg dönüşümü için açık paket ağırlığı bulunamadı.");
+  const factor = Number(pack[1].replace(",", ".")) / (pack[2].toLowerCase() === "g" ? 1000 : 1);
+  if (factor <= 0) throw new Error("Paket ağırlığı geçersiz.");
+  return factor;
+}
+
+function productType(product: OutputProduct): ProductType {
+  const name = product.name.toLocaleLowerCase("tr-TR");
+  const matches = [name.includes("sucuk") && "sucuk", name.includes("salam") && "salam", (name.includes("sosis") || name.includes("sausage")) && "sausage"].filter(Boolean) as ProductType[];
+  if (matches.length !== 1) throw new Error("Mamul tipi desteklenmiyor veya belirsiz.");
+  return matches[0];
+}
 export function productionProduct(outputs: { product_lot_id: number }[], lots: { id: number; item_id: number; item_type: string; unit: string }[], products: OutputProduct[]): { product_type: ProductType; kg_per_unit: number } {
   const types = new Set<ProductType>();
   const factors = new Set<number>();
@@ -27,18 +42,8 @@ export function productionProduct(outputs: { product_lot_id: number }[], lots: {
     const lot = lots.find((entry) => entry.id === output.product_lot_id);
     const product = products.find((entry) => entry.id === lot?.item_id);
     if (!lot || lot.item_type !== "product" || !product) throw new Error("Mamul kartı bulunamadı.");
-    let factor = 1;
-    if (lot.unit !== "kg" || product.unit !== "kg") {
-      const pack = product.name.match(/\((\d+(?:[.,]\d+)?)\s*(kg|g)\)/i);
-      if (lot.unit !== "paket" || product.unit !== "paket" || !pack) throw new Error("Mamulün kg dönüşümü için açık paket ağırlığı bulunamadı.");
-      factor = Number(pack[1].replace(",", ".")) / (pack[2].toLowerCase() === "g" ? 1000 : 1);
-      if (!(factor > 0)) throw new Error("Paket ağırlığı geçersiz.");
-    }
-    const name = product.name.toLocaleLowerCase("tr-TR");
-    const matches = [name.includes("sucuk") && "sucuk", name.includes("salam") && "salam", (name.includes("sosis") || name.includes("sausage")) && "sausage"].filter(Boolean) as ProductType[];
-    if (matches.length !== 1) throw new Error("Mamul tipi desteklenmiyor veya belirsiz.");
-    types.add(matches[0]);
-    factors.add(factor);
+    types.add(productType(product));
+    factors.add(productWeight(lot.unit, product));
   }
   if (types.size !== 1) throw new Error("Aynı emirde birden fazla ürün tipi var; otomatik karşılaştırma yapılamıyor.");
   if (factors.size !== 1) throw new Error("Aynı emirde farklı paket ağırlıkları var; planın birimi belirsiz.");

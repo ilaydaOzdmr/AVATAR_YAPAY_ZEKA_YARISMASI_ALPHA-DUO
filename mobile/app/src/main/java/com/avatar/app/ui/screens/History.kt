@@ -57,7 +57,7 @@ fun History(
                         Column {
                             Text(sale.code, fontWeight = FontWeight.Bold)
                             Text(
-                                "${sale.sold_at} · Market ${sale.market_id}",
+                                "${sale.soldAt} · Market ${sale.marketId}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
