@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { get, mlGet, mlPost } from "../../api";
 import { nonnegativeNumber, productionFeatures, type InputLot, type MaterialCard, type OrderInput } from "../../predictionInputs";
 import { ensurePredictionVersion, productionProduct, recordedPartTotals, type MLReport as VersionedReport } from "../../mlContracts";
+import ForecastChart from "../components/ForecastChart";
 
 interface PredictionMeta {
   model_version: string;
@@ -31,7 +32,6 @@ interface ButcheryResponse extends PredictionMeta {
 interface ProductionOrder {
   id: number;
   code: string;
-  expected_qty: number;
   service_unit_cost: number;
 }
 
@@ -44,7 +44,6 @@ interface CostSummary {
 interface ForecastRow {
   code: string;
   predicted: number;
-  expected: number;
   actual: number;
   diff: number;
 }
@@ -87,44 +86,6 @@ const PART_LABELS: Record<string, string> = {
   total_saleable_weight: "Toplam satılabilir",
   cutting_yield_pct: "Verim %",
 };
-
-function WarningList({ items }: { items: string[] }) {
-  if (items.length === 0) return null;
-  return (
-    <ul className="mt-2 space-y-1 text-sm" style={{ paddingLeft: 18, color: "#8A5A1B" }}>
-      {items.map((item) => (
-        <li key={item}>{item}</li>
-      ))}
-    </ul>
-  );
-}
-
-function ForecastChart({ rows }: { rows: ForecastRow[] }) {
-  const width = Math.max(420, rows.length * 110);
-  const height = 190;
-  const max = Math.max(...rows.flatMap((row) => [row.expected, row.actual, row.predicted]), 1);
-  const barWidth = 20;
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Model tahmini, plan ve gerçek karşılaştırması" style={{ width: "100%", height: "auto" }}>
-      <line x1="30" y1={height - 30} x2={width - 10} y2={height - 30} stroke="#c8d1ca" />
-      {rows.map((row, index) => {
-        const groupX = 30 + index * 110;
-        const predictedHeight = ((height - 60) * row.predicted) / max;
-        const expectedHeight = ((height - 60) * row.expected) / max;
-        const actualHeight = ((height - 60) * row.actual) / max;
-        return (
-          <g key={row.code}>
-            <rect x={groupX} y={height - 30 - predictedHeight} width={barWidth} height={predictedHeight} fill="#3B6EA5" />
-            <rect x={groupX + barWidth + 3} y={height - 30 - expectedHeight} width={barWidth} height={expectedHeight} fill="#B97722" />
-            <rect x={groupX + (barWidth + 3) * 2} y={height - 30 - actualHeight} width={barWidth} height={actualHeight} fill="#2C7058" />
-            <text x={groupX} y={height - 12} fontSize="9" fill="#59645c">{row.code.slice(-6)}</text>
-          </g>
-        );
-      })}
-      <text x={30} y={14} fontSize="11" fill="#59645c">■ Model (mavi) · ■ Plan (turuncu) · ■ Gerçek (yeşil)</text>
-    </svg>
-  );
-}
 
 export default function Predictions() {
   const [rawKg, setRawKg] = useState("100");
@@ -171,7 +132,6 @@ export default function Predictions() {
             return {
               code: order.code,
               predicted,
-              expected: order.expected_qty * context.kg_per_unit,
               actual: summary.finished_qty * context.kg_per_unit,
               diff: predicted - summary.finished_qty * context.kg_per_unit,
             };
@@ -289,7 +249,7 @@ export default function Predictions() {
         <div>
           <div className="eyebrow">KARAR DESTEK SİSTEMİ</div>
           <h1>Yapay Zekâ Merkezi</h1>
-          <p>Tahminler Go backend üzerinden alınır. Model durumu ve belirsizlik her cevapta gösterilir.</p>
+          <p>Üretim ve parçalama tahminlerini inceleyin, gerçekleşen miktarlarla karşılaştırın.</p>
         </div>
         <button className="btn btn-primary" type="button" onClick={refreshAll}>↻ Tahminleri güncelle</button>
       </div>
@@ -334,7 +294,6 @@ export default function Predictions() {
                   {yieldResult.cost_breakdown ? ` · Toplam maliyet: € ${yieldResult.cost_breakdown.total_cost}` : ""}
                   {yieldResult.ekp_kind ? ` · EKP türü: ${yieldResult.ekp_kind}` : ""}
                 </p>
-                <WarningList items={yieldResult.warnings} />
               </>
             )}
           </div>
@@ -384,7 +343,6 @@ export default function Predictions() {
                 <p className="muted">
                   Model sürümü: <b>{butcheryResult.model_version}</b> · Durum: <b>{butcheryResult.model_status}</b>
                 </p>
-                <WarningList items={butcheryResult.warnings} />
               </>
             )}
           </div>
@@ -396,7 +354,7 @@ export default function Predictions() {
           <div className="panel-head">
             <div>
               <h2>Model tahmini vs Gerçek</h2>
-              <p>Üretim emirleri: ML model tahmini, plan ve gerçekleşen miktar karşılaştırması. Grafik yalnızca gerçek kayıt varsa gösterilir.</p>
+              <p>Üretim emirlerinin tahmini ve gerçekleşen mamul miktarları (kg).</p>
             </div>
           </div>
           <div style={{ padding: 16 }}>
@@ -404,14 +362,13 @@ export default function Predictions() {
             <div className="table-wrap" style={{ marginTop: 12 }}>
               <table>
                 <thead>
-                  <tr><th>Üretim emri</th><th>Model tahmini</th><th>Plan</th><th>Gerçekleşen</th><th>Sapma</th></tr>
+                  <tr><th>Üretim emri</th><th>Model tahmini</th><th>Gerçekleşen</th><th>Sapma</th></tr>
                 </thead>
                 <tbody>
                   {forecast.map((row) => (
                     <tr key={row.code}>
                       <td className="id">{row.code}</td>
                       <td>{row.predicted ? row.predicted.toFixed(1) : "—"}</td>
-                      <td>{row.expected}</td>
                       <td>{row.actual}</td>
                       <td style={{ color: row.predicted > 0 && Math.abs(row.diff) > 0.5 ? "var(--amber)" : "var(--green-3)" }}>
                         {row.predicted ? `${row.diff >= 0 ? "+" : ""}${row.diff.toFixed(1)}` : "—"}
@@ -474,17 +431,6 @@ export default function Predictions() {
               <h2>Parçalama modeli doğruluk</h2>
             </div>
             <div className="table-wrap">{metricsTable(report.butchery)}</div>
-          </div>
-          <div className="panel" style={{ gridColumn: "1 / -1" }}>
-            <div className="alert-list" style={{ padding: "14px 20px" }}>
-              <div className="alert" style={{ borderBottom: 0 }}>
-                <div className="alert-symbol amber">↗</div>
-                <div>
-                  <b>Model durumu: {report.model_status ?? "synthetic_only"} · Sürüm {report.model_version ?? "—"}</b>
-                  <p>{report.note}</p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}

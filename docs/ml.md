@@ -152,12 +152,14 @@ docker compose -f infra/docker-compose.yml up -d --build
 
 ## 8. Mevcut web arayüzüne model bağlantısı
 
-Kullanıcının sağladığı ekran görüntülerindeki arayüz, ilk ML düzeltmelerimizden
-önceki main sürümünde (`706ac23`) bulunur. İki tahmin sayfasının JSX'i bu sürümle
-birebir aynıdır: metinler, form alanları, stiller, grafik, Sapma sütunları ve
-iki doğruluk tablosu değiştirilmedi. App/tema mevcut main (`4660010`) ile aynıdır.
+Arayüzün temeli, ilk ML düzeltmelerinden önceki main sürümüdür (`706ac23`).
+Kullanıcının son ekran işaretlemelerine göre M3 sayfasından ham uyarı listeleri,
+alttaki model durumu kartı ve Plan sütunu/serisi kaldırıldı. Üretim grafiği yalnız
+tahmin ve gerçekleşen kg değerlerini gösterir: mavi/yeşil renkler, kg ekseni,
+değer etiketleri, klavyeyle odaklanma ve dar ekranda yatay kaydırma içerir.
+Formlar, sonuç kartları, menü, parçalama ve doğruluk tabloları korunur.
 
-Değişiklikler yalnız veri katmanındadır:
+Model bağlantısı:
 
 - Her iki sayfa mevcut alanlarından Go proxy üzerinden V2 modeli çağırır.
   Kaydedilmiş model/veri sürümleri kontrol edilir; skor veya tahmin uydurulmaz.
@@ -171,8 +173,9 @@ Değişiklikler yalnız veri katmanındadır:
 - Mevcut üretim metrik tablosu önceden olduğu gibi verim oranının hatasını
   gösterir; parçalama tablosu seçili hayvan modelinin satılabilir toplam hatasını
   gösterir. Birimler veya başlıklar kullanıcı arayüzünde değiştirilmedi.
-- Formda bulunmayan alanlar servis varsayımlarıdır. Mevcut uyarı ve model
-  durumu alanları API yanıtındaki bilgileri olduğu gibi gösterir.
+- Formda bulunmayan alanlar servis varsayımlarıdır. API, uyarıları ve
+  `synthetic_only` durumunu döndürmeye devam eder; ham uyarı listeleri M3
+  arayüzünde gösterilmez. Sonuç altındaki model sürümü/durumu satırları korunur.
 
 Yerel Docker ortamında eski web image'ı ile ML 1.0.0'ın çalıştığı doğrulandı.
 Kaynağı güncellemek tek başına container'daki uygulamayı değiştirmez.
@@ -185,8 +188,8 @@ docker compose -f infra/docker-compose.yml up -d --no-deps ml backend web web-m3
 
 MySQL servisi ve veri volume'ları bu komutlarla yeniden oluşturulmaz.
 Yerel DB yedekleri ve QA araçları `ml/reports/local/` altında Git dışındadır.
-Veri adaptörleri ve mevcut sayfaların gerçek model çağrıları test edilir;
-metin/JSX/stil eşitliği ekran görüntülerinin referans sürümüyle doğrulanır.
+Veri adaptörleri ve sayfanın gerçek model çağrıları test edilir; istenen
+alanların kaldırılması, grafik etkileşimi ve dar ekran görünümü kontrol edilir.
 
 Yerel çalışma doğrulaması: `localhost:5174` gerçek Go/Python servisleriyle
 üretim ve kuzu tahminini döndürdü; üç model 1.1.0 olarak yüklendi. Mevcut
