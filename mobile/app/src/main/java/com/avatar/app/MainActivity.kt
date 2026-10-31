@@ -42,6 +42,7 @@ import com.avatar.app.ui.screens.Prediction
 import com.avatar.app.ui.screens.ProductList
 import com.avatar.app.ui.screens.Reports
 import com.avatar.app.ui.screens.Sale
+import com.avatar.app.ui.screens.latestAcceptedSale
 import com.avatar.app.ui.theme.AvatarAppTheme
 import kotlinx.coroutines.CoroutineScope
 import com.avatar.app.ui.screens.HomeActions
@@ -294,7 +295,7 @@ private fun AvatarContent(state: AvatarState, scope: CoroutineScope) {
     with(state) {
         when (screen) {
             Screen.Home -> Home(
-                blockedLots = lots.filter { it.blocked }, lastSale = sales.firstOrNull(),
+                blockedLots = lots.filter { it.blocked }, lastSale = latestAcceptedSale(sales),
                 actions = HomeActions(
                     onQuickSale = { screen = Screen.Sale },
                     onScan = { message = "Barkod tarama simüle edildi." },

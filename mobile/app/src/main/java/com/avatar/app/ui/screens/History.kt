@@ -62,8 +62,13 @@ fun History(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        val (statusText, statusColor) = if (sale.synced) "Senkron" to Green else "Bekliyor" to Amber
-                        Text(statusText, style = MaterialTheme.typography.labelMedium, color = statusColor, fontWeight = FontWeight.Bold)
+                        val display = saleDisplayStatus(sale)
+                        val statusColor = when (display) {
+                            SaleDisplayStatus.Rejected -> Red
+                            SaleDisplayStatus.Synced -> Green
+                            SaleDisplayStatus.Pending -> Amber
+                        }
+                        Text(display.label, style = MaterialTheme.typography.labelMedium, color = statusColor, fontWeight = FontWeight.Bold)
                     }
                 }
             }
