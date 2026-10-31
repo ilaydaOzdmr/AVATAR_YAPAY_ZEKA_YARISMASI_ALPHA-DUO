@@ -553,14 +553,19 @@ class SyncRepository(
 
     suspend fun submitSale(saleId: Long): PushResult = withContext(Dispatchers.IO) {
         val sale = db.saleDao().getById(saleId) ?: return@withContext PushResult.Failed("sale not found")
+        if (sale.status == "rejected") {
+            // Already handled; do not restore stock twice on a repeated submit.
+            return@withContext PushResult.Blocked("blocked lot: sale rejected")
+        }
         val lines = db.saleDao().getLines(saleId)
         try {
             val base = serverBaseUrl()
             post("$base/sales", salePayload(sale, lines).toString()).use { response ->
                 when {
                     response.code == 409 -> {
-                        // Server rejected the sale (blocked lot). Do not retry
-                        // forever: mark it rejected and remove the outbox row.
+                        // Server rejected the sale (blocked lot). Undo the local
+                        // stock deduction from saveSale and do not retry forever.
+                        lines.forEach { line -> db.lotDao().adjustQty(line.lotId, line.qty) }
                         db.saleDao().setStatus(saleId, "rejected")
                         db.saleDao().setSynced(saleId, true)
                         db.outboxDao().deleteByEntity("sale", saleId)

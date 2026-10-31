@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { get } from "../api";
 import Dashboard from "./pages/Dashboard";
 import Inventory from "./pages/Inventory";
 import Production from "./pages/Production";
@@ -33,7 +34,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     label: "Kontrol Merkezi",
     items: [
       { key: "trace", label: "Lot İzlenebilirliği", icon: "⌘" },
-      { key: "recall", label: "Geri Çağırma", icon: "⚠", badge: 1 },
+      { key: "recall", label: "Geri Çağırma", icon: "⚠" },
       { key: "ai", label: "Yapay Zekâ", icon: "✳" },
       { key: "mobile", label: "Mobil Uygulama", icon: "▯" },
       { key: "reports", label: "Raporlar", icon: "▥" },
@@ -56,7 +57,7 @@ const titles: Record<string, string> = {
   "invoice-ocr": "Fatura OCR",
 };
 
-function renderView(key: string) {
+function renderView(key: string, onRecallChanged: () => void) {
   switch (key) {
     case "inventory":
       return <Inventory />;
@@ -69,7 +70,7 @@ function renderView(key: string) {
     case "trace":
       return <Traceability />;
     case "recall":
-      return <Recall />;
+      return <Recall onChanged={onRecallChanged} />;
     case "ai":
       return <Predictions />;
     case "mobile":
@@ -89,10 +90,23 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
+  const [blockedLotCount, setBlockedLotCount] = useState(0);
   const toastTimer = useRef<number | undefined>(undefined);
 
+  // The sidebar badge must reflect the backend's canonical blocked-lot list;
+  // mobile uses the same /sync/pull field, so both surfaces agree.
+  const refreshAlerts = useCallback(() => {
+    get<{ blocked_lot_codes?: string[] }>("/sync/pull")
+      .then((data) => setBlockedLotCount(data.blocked_lot_codes?.length ?? 0))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshAlerts();
+  }, [refreshAlerts, view]);
+
   const activeLabel = titles[view] ?? "Genel Bakış";
-  const viewEl = useMemo(() => renderView(view), [view]);
+  const viewEl = useMemo(() => renderView(view, refreshAlerts), [view, refreshAlerts]);
 
   function showToast(message: string) {
     setToast(message);
@@ -138,7 +152,8 @@ export default function App() {
                 >
                   <span className="ico">{item.icon}</span>
                   {item.label}
-                  {item.badge ? <span className="badge">{item.badge}</span> : null}
+                  {item.key === "recall" && blockedLotCount > 0 ? <span className="badge">{blockedLotCount}</span> : null}
+                  {item.key !== "recall" && item.badge ? <span className="badge">{item.badge}</span> : null}
                 </button>
               ))}
             </nav>
@@ -186,7 +201,9 @@ export default function App() {
               className="icon-btn"
               type="button"
               title="Bildirimler"
-              onClick={() => showToast("1 kritik lot uyarısı ve 1 üretim verimi bildirimi var.")}
+              onClick={() => showToast(blockedLotCount > 0
+                ? `${blockedLotCount} bloke lot nedeniyle satış engellendi.`
+                : "Aktif lot uyarısı yok.")}
             >
               ♧
             </button>

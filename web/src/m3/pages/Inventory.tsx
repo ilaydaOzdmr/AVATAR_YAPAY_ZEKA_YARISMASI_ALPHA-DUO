@@ -42,6 +42,7 @@ export default function Inventory() {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
+  const [blockedCodes, setBlockedCodes] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showMaterialForm, setShowMaterialForm] = useState(false);
@@ -79,6 +80,10 @@ export default function Inventory() {
     get<Material[]>("/materials").then(setMaterials).catch(() => {});
     get<Product[]>("/products").then(setProducts).catch(() => {});
     get<Lot[]>("/lots").then(setLots).catch(() => {});
+    // Same canonical blocked-lot list the mobile app syncs.
+    get<{ blocked_lot_codes?: string[] }>("/sync/pull")
+      .then((data) => setBlockedCodes(new Set(data.blocked_lot_codes ?? [])))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -96,10 +101,13 @@ export default function Inventory() {
   const stockValue = lots.reduce((sum, lot) => sum + lot.qty * lot.unit_cost, 0);
   const totalKg = lots.reduce((sum, lot) => sum + lot.qty, 0);
 
+  const isBlocked = (lot: Lot) => lot.status === "blocked" || blockedCodes.has(lot.code);
+  const blockedCount = lots.filter(isBlocked).length;
+
   const rows = lots.filter((lot) => {
     const name = itemName(lot);
     const matchesQuery = `${lot.code} ${name}`.toLowerCase().includes(query.toLowerCase());
-    const blocked = lot.status === "blocked";
+    const blocked = isBlocked(lot);
     const matchesStatus = statusFilter === "all" || (statusFilter === "blocked" ? blocked : !blocked);
     return matchesQuery && matchesStatus;
   });
@@ -356,7 +364,7 @@ export default function Inventory() {
         </div>
         <div className="metric">
           <div className="metric-top">Bloke lot <span className="metric-icon" style={{ background: "var(--red-bg)", color: "var(--red)" }}>⚠</span></div>
-          <strong>{lots.filter((l) => l.status === "blocked").length}</strong>
+          <strong>{blockedCount}</strong>
           <div className="metric-foot warning">Satış engelli</div>
         </div>
         <div className="metric">
@@ -437,7 +445,7 @@ export default function Inventory() {
                   <td>€ {lot.unit_cost.toFixed(2)}</td>
                   <td>{lot.received_at ?? "—"}</td>
                   <td>{lot.expiry_date ?? "—"}</td>
-                  <td>{lot.status === "blocked" ? <span className="status block">Bloke</span> : <span className="status ok">Aktif</span>}</td>
+                  <td>{isBlocked(lot) ? <span className="status block">Bloke</span> : <span className="status ok">Aktif</span>}</td>
                 </tr>
               ))}
               {rows.length === 0 && <tr><td colSpan={8} className="muted">Sonuç bulunamadı.</td></tr>}

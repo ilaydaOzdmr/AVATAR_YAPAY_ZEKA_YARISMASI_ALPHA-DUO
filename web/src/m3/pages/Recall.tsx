@@ -36,7 +36,7 @@ interface RecallResult {
   message: string;
 }
 
-export default function Recall() {
+export default function Recall({ onChanged }: { onChanged?: () => void }) {
   const [sourceLotCode, setSourceLotCode] = useState("");
   const [reason, setReason] = useState("Kalite sorunu");
   const [result, setResult] = useState<RecallResult | null>(null);
@@ -59,7 +59,9 @@ export default function Recall() {
       return;
     }
     try {
-      setResult(await post<RecallResult>("/recalls", { source_lot_code: code, reason }));
+      const created = await post<RecallResult>("/recalls", { source_lot_code: code, reason });
+      setResult(created);
+      onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

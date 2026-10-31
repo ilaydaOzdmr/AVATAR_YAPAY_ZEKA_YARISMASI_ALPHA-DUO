@@ -155,9 +155,9 @@ private class AvatarState(val repository: SyncRepository, initialServerUrl: Stri
 
     suspend fun pushPending() {
         message = when (val result = repository.push()) {
-            is PushResult.Success -> "Pending sales synced."
-            is PushResult.Blocked -> "Blocked lot: sale rejected."
-            is PushResult.Failed -> "Sync failed: ${result.message}"
+            is PushResult.Success -> "Bekleyen satışlar senkronize edildi."
+            is PushResult.Blocked -> "Bloklu lot: satış reddedildi."
+            is PushResult.Failed -> "Bağlantı hatası: ${result.message}"
         }
         refresh()
     }
