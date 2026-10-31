@@ -77,6 +77,28 @@ POST /butchery-batches
  "items":[{"product_id":2,"weight":10,"quantity":1,"is_waste":false}]}
 ```
 
+### Parçalama fire ve maliyet kontrolü
+`GET /butchery-batches/{id}` (ve `POST` yanıtı) kayıttan otomatik hesaplanan
+kontrol alanlarını döner. Bu alanlar istemciden alınmaz; backend hesaplar ve
+`butchery_batches` tablosunda saklar.
+
+| Alan | Anlam |
+|---|---|
+| `part_weight` | Fire olmayan parçaların toplam ağırlığı |
+| `fire_weight` | `input_weight - part_weight` |
+| `weight_diff` | `input_weight - (parça + is_waste satırları)` |
+| `weight_check_status` | `ok` / `mismatch` — 3 ondalık |
+| `expected_cost` | `input_weight × unit_cost` — 2 ondalık |
+| `recorded_cost` | `total_cost` |
+| `cost_difference` | `recorded_cost - expected_cost` |
+| `cost_check_status` | `ok` / `mismatch` — 2 ondalık |
+
+- Fire tek başına veri hatası değildir. `weight_check_status` yalnızca satılabilir
+  parçalar giriş ağırlığını aştığında (negatif fire) `mismatch` olur.
+- Maliyet ve ağırlık kontrolleri birbirinden bağımsızdır.
+- `KUZ-2026-DEMO`: 25 kg, 11,50 €/kg, 351,00 € → fire 3 kg, beklenen 287,50 €,
+  kayıtlı 351,00 €, fark 63,50 €, `cost_check_status = mismatch`.
+
 ### Geri çağırma başlat
 ```json
 POST /recalls

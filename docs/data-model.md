@@ -66,3 +66,25 @@ BAR-2026-001 (5 kg)     ─┘                                             ├�
   `stock_movements` (`inbound`) yazılır; lot bakiyesi ve stok defteri tutarlı kalır.
 - Üretim emri çıktı lotlarında ve butchery’de backend’in oluşturduğu ürün
   lotlarında SKT, üretim/parti tarihi + ürün raf ömrü olarak hesaplanır.
+
+## Parçalama fire ve maliyet kontrolleri
+`butchery_batches` tablosuna migration `0003_butchery_consistency` ile eklenen
+alanlar:
+
+- `expected_cost` `DECIMAL(12,2)` — giriş ağırlığı × birim maliyet.
+- `cost_difference` `DECIMAL(12,2)` — kayıtlı toplam maliyet − beklenen maliyet.
+- `cost_check_status` `VARCHAR(16)` — `ok` / `mismatch` (2 ondalık).
+- `weight_check_status` `VARCHAR(16)` — `ok` / `mismatch` (3 ondalık).
+
+`EnsureSchema` bu kolonları eski hacimlere de ekler ve mevcut kayıtları yeniden
+hesaplayarak doldurur. Geri alma dosyası:
+`backend/migrations/down/0003_butchery_consistency.down.sql`.
+
+Hesaplar:
+- `part_weight` = fire olmayan (`is_waste = FALSE`) parçaların toplamı.
+- `fire_weight` = `input_weight - part_weight`.
+- `expected_cost` = `input_weight × unit_cost`.
+- `cost_difference` = `total_cost - expected_cost`.
+- Fire tek başına hata değildir; yalnızca negatif fire ağırlık kontrolünü
+  `mismatch` yapar. Maliyet ve ağırlık kontrolleri bağımsızdır.
+

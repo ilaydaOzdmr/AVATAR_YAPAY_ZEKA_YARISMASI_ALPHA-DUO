@@ -102,6 +102,18 @@ func TestEnsureSchemaUpgradesOldButcheryTables(t *testing.T) {
 		}
 	}
 
+	// One legacy batch with a 3 kg unrecorded fire and a 63.50 cost gap.
+	if _, err := database.Exec(
+		`INSERT INTO butchery_batches (id, code, animal_type, input_weight, unit_cost, total_cost, batch_date, status)
+		 VALUES (10, 'KUZ-2026-DEMO', 'kuzu', 25, 11.50, 351, '2026-10-27', 'completed')`); err != nil {
+		t.Fatalf("insert legacy batch: %v", err)
+	}
+	if _, err := database.Exec(
+		`INSERT INTO butchery_items (batch_id, product_id, weight, quantity, is_waste)
+		 VALUES (10, 1, 10, 1, FALSE), (10, 2, 8, 1, FALSE), (10, 3, 4, 1, FALSE)`); err != nil {
+		t.Fatalf("insert legacy items: %v", err)
+	}
+
 	ctx := context.Background()
 	if err := EnsureSchema(ctx, database); err != nil {
 		t.Fatalf("EnsureSchema: %v", err)
@@ -114,6 +126,10 @@ func TestEnsureSchemaUpgradesOldButcheryTables(t *testing.T) {
 	for _, col := range []struct{ table, column string }{
 		{"butchery_batches", "input_lot_id"},
 		{"butchery_items", "allocated_cost"},
+		{"butchery_batches", "expected_cost"},
+		{"butchery_batches", "cost_difference"},
+		{"butchery_batches", "cost_check_status"},
+		{"butchery_batches", "weight_check_status"},
 		{"materials", "shelf_life_days"},
 		{"materials", "created_at"},
 		{"products", "shelf_life_days"},
@@ -130,6 +146,21 @@ func TestEnsureSchemaUpgradesOldButcheryTables(t *testing.T) {
 		if !exists {
 			t.Fatalf("column %s.%s missing after EnsureSchema", col.table, col.column)
 		}
+	}
+
+	var expectedCost, costDifference float64
+	var costStatus, weightStatus string
+	if err := database.QueryRow(
+		`SELECT expected_cost, cost_difference, cost_check_status, weight_check_status
+		 FROM butchery_batches WHERE id = 10`).
+		Scan(&expectedCost, &costDifference, &costStatus, &weightStatus); err != nil {
+		t.Fatalf("read backfilled checks: %v", err)
+	}
+	if expectedCost != 287.50 || costDifference != 63.50 {
+		t.Fatalf("backfilled cost = %v/%v, want 287.50/63.50", expectedCost, costDifference)
+	}
+	if costStatus != "mismatch" || weightStatus != "ok" {
+		t.Fatalf("backfilled statuses = %q/%q, want mismatch/ok", costStatus, weightStatus)
 	}
 
 	var constraint bool

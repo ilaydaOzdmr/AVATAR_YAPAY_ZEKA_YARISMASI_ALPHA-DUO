@@ -724,6 +724,74 @@ select:focus {
   font-size: 13px;
 }
 
+/* ===================== Butchery consistency analysis ===================== */
+
+.analysis-card {
+  margin: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--white);
+  padding: 16px 18px;
+}
+
+.analysis-card.ok {
+  border-color: #cfe4d8;
+  background: #fbfdfb;
+}
+
+.analysis-card.warn {
+  border-color: var(--amber-line);
+  background: var(--amber-bg);
+}
+
+.analysis-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.analysis-grid div {
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.analysis-grid span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.analysis-grid b {
+  font-size: 15px;
+}
+
+.analysis-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.analysis-card.warn .analysis-note {
+  color: #8a5a1b;
+}
+
+@media (max-width: 720px) {
+  .analysis-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ============================== Trace flow =============================== */
 
 .trace-flow {

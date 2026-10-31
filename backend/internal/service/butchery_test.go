@@ -116,6 +116,146 @@ func TestBuildResultCountsWasteInBalance(t *testing.T) {
 	}
 }
 
+func TestBuildResultDemoBatchReportsFireAndCostDifference(t *testing.T) {
+	batch := model.ButcheryBatch{
+		Code:        "KUZ-2026-DEMO",
+		InputWeight: 25,
+		UnitCost:    11.50,
+		TotalCost:   351,
+	}
+	items := []model.ButcheryItem{
+		{ProductID: 2, Weight: 10},
+		{ProductID: 3, Weight: 8},
+		{ProductID: 6, Weight: 4},
+	}
+
+	result := NewButcheryService(&storedButcheryRepository{}).buildResult(context.Background(), batch, items)
+
+	if !approxFloat(result.PartWeight, 22) {
+		t.Fatalf("PartWeight = %v, want 22", result.PartWeight)
+	}
+	if !approxFloat(result.FireWeight, 3) {
+		t.Fatalf("FireWeight = %v, want 3", result.FireWeight)
+	}
+	if !approxFloat(result.WeightDiff, 3) {
+		t.Fatalf("WeightDiff = %v, want 3", result.WeightDiff)
+	}
+	if !approxFloat(result.ExpectedCost, 287.50) {
+		t.Fatalf("ExpectedCost = %v, want 287.50", result.ExpectedCost)
+	}
+	if !approxFloat(result.RecordedCost, 351) {
+		t.Fatalf("RecordedCost = %v, want 351", result.RecordedCost)
+	}
+	if !approxFloat(result.CostDifference, 63.50) {
+		t.Fatalf("CostDifference = %v, want 63.50", result.CostDifference)
+	}
+	if result.CostCheckStatus != CheckMismatch {
+		t.Fatalf("CostCheckStatus = %q, want %q", result.CostCheckStatus, CheckMismatch)
+	}
+	if result.WeightCheckStatus != CheckOK {
+		t.Fatalf("WeightCheckStatus = %q, want %q (3 kg fire is normal)", result.WeightCheckStatus, CheckOK)
+	}
+}
+
+func TestBuildResultCostAndWeightChecksAreIndependent(t *testing.T) {
+	repo := &storedButcheryRepository{}
+
+	// Balanced weights, wrong recorded cost: only the cost check warns.
+	costOnly := NewButcheryService(repo).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 20, UnitCost: 10, TotalCost: 250,
+	}, []model.ButcheryItem{{ProductID: 1, Weight: 20}})
+	if costOnly.WeightCheckStatus != CheckOK {
+		t.Fatalf("cost-only weight status = %q, want %q", costOnly.WeightCheckStatus, CheckOK)
+	}
+	if costOnly.CostCheckStatus != CheckMismatch {
+		t.Fatalf("cost-only cost status = %q, want %q", costOnly.CostCheckStatus, CheckMismatch)
+	}
+
+	// Parts exceeding the input weight, correct recorded cost: only the
+	// weight check warns because fire cannot be negative.
+	weightOnly := NewButcheryService(repo).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 20, UnitCost: 10, TotalCost: 200,
+	}, []model.ButcheryItem{{ProductID: 1, Weight: 22}})
+	if weightOnly.CostCheckStatus != CheckOK {
+		t.Fatalf("weight-only cost status = %q, want %q", weightOnly.CostCheckStatus, CheckOK)
+	}
+	if weightOnly.WeightCheckStatus != CheckMismatch {
+		t.Fatalf("weight-only weight status = %q, want %q", weightOnly.WeightCheckStatus, CheckMismatch)
+	}
+	if !approxFloat(weightOnly.CostDifference, 0) {
+		t.Fatalf("weight-only cost difference = %v, want 0", weightOnly.CostDifference)
+	}
+}
+
+func TestBuildResultRecordedWasteAccountsForWeight(t *testing.T) {
+	// 5 kg is recorded as waste, so the weight balance is consistent even
+	// though fire (input minus saleable parts) is 5 kg.
+	result := NewButcheryService(&storedButcheryRepository{}).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 25, UnitCost: 10, TotalCost: 250,
+	}, []model.ButcheryItem{
+		{ProductID: 1, Weight: 20},
+		{ProductID: 2, Weight: 5, IsWaste: true},
+	})
+
+	if !approxFloat(result.FireWeight, 5) {
+		t.Fatalf("FireWeight = %v, want 5", result.FireWeight)
+	}
+	if result.WeightCheckStatus != CheckOK {
+		t.Fatalf("WeightCheckStatus = %q, want %q (waste row is recorded)", result.WeightCheckStatus, CheckOK)
+	}
+	if result.CostCheckStatus != CheckOK {
+		t.Fatalf("CostCheckStatus = %q, want %q", result.CostCheckStatus, CheckOK)
+	}
+}
+
+func TestBuildResultConsistentBatchHasNoWarnings(t *testing.T) {
+	result := NewButcheryService(&storedButcheryRepository{}).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 50, UnitCost: 12.40, TotalCost: 620,
+	}, []model.ButcheryItem{
+		{ProductID: 1, Weight: 30},
+		{ProductID: 2, Weight: 20},
+	})
+
+	if result.WeightCheckStatus != CheckOK {
+		t.Fatalf("WeightCheckStatus = %q, want %q", result.WeightCheckStatus, CheckOK)
+	}
+	if result.CostCheckStatus != CheckOK {
+		t.Fatalf("CostCheckStatus = %q, want %q", result.CostCheckStatus, CheckOK)
+	}
+	if !approxFloat(result.FireWeight, 0) {
+		t.Fatalf("FireWeight = %v, want 0", result.FireWeight)
+	}
+	if !approxFloat(result.CostDifference, 0) {
+		t.Fatalf("CostDifference = %v, want 0", result.CostDifference)
+	}
+}
+
+func TestBuildResultUsesTwoAndThreeDecimalTolerances(t *testing.T) {
+	// A cost difference below half a cent is not a mismatch.
+	costOK := NewButcheryService(&storedButcheryRepository{}).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 10, UnitCost: 10, TotalCost: 100.004,
+	}, []model.ButcheryItem{{ProductID: 1, Weight: 10}})
+	if costOK.CostCheckStatus != CheckOK {
+		t.Fatalf("cost status = %q, want %q", costOK.CostCheckStatus, CheckOK)
+	}
+
+	// A one-gram excess is a mismatch at three decimals.
+	weightDiff := NewButcheryService(&storedButcheryRepository{}).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 10, UnitCost: 10, TotalCost: 100,
+	}, []model.ButcheryItem{{ProductID: 1, Weight: 10.001}})
+	if weightDiff.WeightCheckStatus != CheckMismatch {
+		t.Fatalf("weight status = %q, want %q", weightDiff.WeightCheckStatus, CheckMismatch)
+	}
+
+	// A smaller excess rounds away at three decimals.
+	weightOK := NewButcheryService(&storedButcheryRepository{}).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 10, UnitCost: 10, TotalCost: 100,
+	}, []model.ButcheryItem{{ProductID: 1, Weight: 10.0004}})
+	if weightOK.WeightCheckStatus != CheckOK {
+		t.Fatalf("rounded weight status = %q, want %q", weightOK.WeightCheckStatus, CheckOK)
+	}
+}
+
 func approxFloat(a, b float64) bool {
 	d := a - b
 	if d < 0 {

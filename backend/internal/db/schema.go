@@ -18,6 +18,19 @@ func EnsureSchema(ctx context.Context, database *sql.DB) error {
 		`ALTER TABLE butchery_items ADD COLUMN allocated_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00`); err != nil {
 		return err
 	}
+	for _, column := range []struct{ name, ddl string }{
+		{"expected_cost", `ALTER TABLE butchery_batches ADD COLUMN expected_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER status`},
+		{"cost_difference", `ALTER TABLE butchery_batches ADD COLUMN cost_difference DECIMAL(12,2) NOT NULL DEFAULT 0.00 AFTER expected_cost`},
+		{"cost_check_status", `ALTER TABLE butchery_batches ADD COLUMN cost_check_status VARCHAR(16) NOT NULL DEFAULT 'ok' AFTER cost_difference`},
+		{"weight_check_status", `ALTER TABLE butchery_batches ADD COLUMN weight_check_status VARCHAR(16) NOT NULL DEFAULT 'ok' AFTER cost_check_status`},
+	} {
+		if err := ensureColumn(ctx, database, "butchery_batches", column.name, column.ddl); err != nil {
+			return err
+		}
+	}
+	if err := backfillButcheryChecks(ctx, database); err != nil {
+		return err
+	}
 	if err := ensureColumn(ctx, database, "production_orders", "expected_qty",
 		`ALTER TABLE production_orders ADD COLUMN expected_qty DECIMAL(12,3) NOT NULL DEFAULT 0.000 AFTER service_qty`); err != nil {
 		return err
@@ -55,6 +68,31 @@ func EnsureSchema(ctx context.Context, database *sql.DB) error {
 	return ensureConstraint(ctx, database, "butchery_batches", "fk_bb_input_lot",
 		`ALTER TABLE butchery_batches
 		 ADD CONSTRAINT fk_bb_input_lot FOREIGN KEY (input_lot_id) REFERENCES lots(id)`)
+}
+
+// backfillButcheryChecks recalculates the persisted consistency fields for
+// batches created before the columns existed. It is idempotent and also keeps
+// the values correct if items were edited outside the normal flow.
+func backfillButcheryChecks(ctx context.Context, database *sql.DB) error {
+	_, err := database.ExecContext(ctx, `
+		UPDATE butchery_batches b
+		SET b.expected_cost = ROUND(b.input_weight * b.unit_cost, 2),
+		    b.cost_difference = ROUND(b.total_cost - ROUND(b.input_weight * b.unit_cost, 2), 2),
+		    b.cost_check_status = CASE
+		        WHEN ROUND(b.total_cost, 2) = ROUND(b.input_weight * b.unit_cost, 2) THEN 'ok'
+		        ELSE 'mismatch'
+		    END,
+		    b.weight_check_status = CASE
+		        WHEN ROUND(b.input_weight - COALESCE((
+		            SELECT SUM(i.weight) FROM butchery_items i
+		            WHERE i.batch_id = b.id AND i.is_waste = FALSE
+		        ), 0), 3) < 0 THEN 'mismatch'
+		        ELSE 'ok'
+		    END`)
+	if err != nil {
+		return fmt.Errorf("backfill butchery checks: %w", err)
+	}
+	return nil
 }
 
 func ensureTable(ctx context.Context, database *sql.DB, table, ddl string) error {

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"avatar/backend/internal/butchery"
 	"avatar/backend/internal/model"
 )
 
@@ -971,6 +972,14 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 	}
 	allocated := allocateByWeight(batch.TotalCost, items)
 
+	// Persist the consistency results so the API and any later report can rely
+	// on them without re-deriving the checks.
+	checks := butchery.Compute(batch, items)
+	batch.ExpectedCost = checks.ExpectedCost
+	batch.CostDifference = checks.CostDifference
+	batch.CostCheckStatus = checks.CostCheckStatus
+	batch.WeightCheckStatus = checks.WeightCheckStatus
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.ButcheryBatch{}, err
@@ -994,10 +1003,12 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 	}
 
 	res, err := tx.ExecContext(ctx,
-		`INSERT INTO butchery_batches (code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO butchery_batches (code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status,
+		                               expected_cost, cost_difference, cost_check_status, weight_check_status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		batch.Code, batch.AnimalType, nullInt64(batch.InputLotID), batch.InputWeight,
-		batch.UnitCost, batch.TotalCost, batch.BatchDate, batch.Status)
+		batch.UnitCost, batch.TotalCost, batch.BatchDate, batch.Status,
+		batch.ExpectedCost, batch.CostDifference, batch.CostCheckStatus, batch.WeightCheckStatus)
 	if err != nil {
 		return model.ButcheryBatch{}, err
 	}
@@ -1226,13 +1237,15 @@ func uniqueLotCodeTx(ctx context.Context, tx *sql.Tx, base string) (string, erro
 
 func (r *mysqlRepo) GetButcheryBatch(ctx context.Context, id int64) (model.ButcheryBatch, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status
+		`SELECT id, code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status,
+		        expected_cost, cost_difference, cost_check_status, weight_check_status
 		 FROM butchery_batches WHERE id = ?`, id)
 
 	var batch model.ButcheryBatch
 	var inputLotID sql.NullInt64
 	if err := row.Scan(&batch.ID, &batch.Code, &batch.AnimalType, &inputLotID, &batch.InputWeight,
-		&batch.UnitCost, &batch.TotalCost, &batch.BatchDate, &batch.Status); err != nil {
+		&batch.UnitCost, &batch.TotalCost, &batch.BatchDate, &batch.Status,
+		&batch.ExpectedCost, &batch.CostDifference, &batch.CostCheckStatus, &batch.WeightCheckStatus); err != nil {
 		return model.ButcheryBatch{}, err
 	}
 	if inputLotID.Valid {
@@ -1275,7 +1288,8 @@ func (r *mysqlRepo) ListButcheryItems(ctx context.Context, batchID int64) ([]mod
 
 func (r *mysqlRepo) ListButcheryBatches(ctx context.Context) ([]model.ButcheryBatch, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status
+		`SELECT id, code, animal_type, input_lot_id, input_weight, unit_cost, total_cost, batch_date, status,
+		        expected_cost, cost_difference, cost_check_status, weight_check_status
 		 FROM butchery_batches ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -1287,7 +1301,8 @@ func (r *mysqlRepo) ListButcheryBatches(ctx context.Context) ([]model.ButcheryBa
 		var batch model.ButcheryBatch
 		var inputLotID sql.NullInt64
 		if err := rows.Scan(&batch.ID, &batch.Code, &batch.AnimalType, &inputLotID, &batch.InputWeight,
-			&batch.UnitCost, &batch.TotalCost, &batch.BatchDate, &batch.Status); err != nil {
+			&batch.UnitCost, &batch.TotalCost, &batch.BatchDate, &batch.Status,
+			&batch.ExpectedCost, &batch.CostDifference, &batch.CostCheckStatus, &batch.WeightCheckStatus); err != nil {
 			return nil, err
 		}
 		if inputLotID.Valid {

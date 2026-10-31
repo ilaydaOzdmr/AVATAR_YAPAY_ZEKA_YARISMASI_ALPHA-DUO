@@ -15,6 +15,10 @@ interface ButcheryBatch {
   total_cost: number;
   batch_date: string;
   status: string;
+  expected_cost: number;
+  cost_difference: number;
+  cost_check_status: string;
+  weight_check_status: string;
 }
 
 interface ButcheryItemCost {
@@ -30,9 +34,17 @@ interface ButcheryResult {
   batch: ButcheryBatch;
   items: ButcheryItemCost[];
   weight_balance_ok: boolean;
+  weight_check_status: string;
+  part_weight: number;
   fire_weight: number;
+  weight_diff: number;
   cost_mismatch: boolean;
+  cost_check_status: string;
   expected_cost: number;
+  recorded_cost: number;
+  cost_difference: number;
+  cost_balance_ok: boolean;
+  cost_diff: number;
 }
 
 interface ItemDraft {
@@ -41,6 +53,15 @@ interface ItemDraft {
   quantity: string;
   is_waste: boolean;
 }
+
+const weightFormatter = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 3 });
+const moneyFormatter = new Intl.NumberFormat("tr-TR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const formatWeight = (value: number) => weightFormatter.format(value);
+const formatMoney = (value: number) => moneyFormatter.format(value);
 
 export default function Butchery() {
   const [batches, setBatches] = useState<ButcheryBatch[]>([]);
@@ -130,19 +151,6 @@ export default function Butchery() {
           <p>Giriş ağırlığından parça ürünlere kadar maliyet dağıtımını ve ağırlık dengesini izleyin.</p>
         </div>
         <button className="btn btn-primary" type="button" onClick={() => setShowForm((v) => !v)}>＋ Parçalama kaydı</button>
-      </div>
-
-      <div className="recall-banner">
-        <span>ⓘ</span>
-        <div>
-          <strong>PDF örnek tutarsızlığı açıklaması</strong>
-          <p>
-            Kaynak dokümanda 25 kg × 11,50 € = <b>287,50 €</b> beklenirken toplam
-            <b> 351,00 €</b> yazıyor; parça ağırlıkları toplamı da <b>22 kg</b>.
-            "KUZ-2026-DEMO" kaydı bu tutarsızlığı gösterir (beklenen 287,50 € ≠ 351,00 €,
-            fire 3 kg) — aşağıda uyarı olarak işaretlenir.
-          </p>
-        </div>
       </div>
 
       {showForm && (
@@ -238,24 +246,74 @@ export default function Butchery() {
           </div>
           {result ? (
             <>
-              {!result.weight_balance_ok && (
+              {result.fire_weight > 0 && (
                 <div className="recall-banner" style={{ margin: 16 }}>
                   <span>ⓘ</span>
                   <div>
-                    <strong>Ağırlık dengesi</strong>
-                    <p>{result.fire_weight} kg fire tespit edildi.</p>
+                    <strong>Fire tespiti</strong>
+                    <p>{formatWeight(result.fire_weight)} kg fire tespit edildi.</p>
                   </div>
                 </div>
               )}
-              {result.cost_mismatch && (
-                <div className="recall-banner" style={{ margin: 16 }}>
-                  <span>⚠</span>
+
+              <div className={`analysis-card ${result.weight_check_status === "ok" ? "ok" : "warn"}`}>
+                <div className="analysis-head">
+                  <strong>Fire ve Tutarlılık Analizi</strong>
+                  <span className={`status ${result.weight_check_status === "ok" ? "ok" : "warn"}`}>
+                    {result.weight_check_status === "ok" ? "Tutarlı" : "Uyarı"}
+                  </span>
+                </div>
+                <div className="analysis-grid">
                   <div>
-                    <strong>Maliyet uyuşmazlığı</strong>
-                    <p>Beklenen € {result.expected_cost.toFixed(2)} ≠ € {result.batch.total_cost.toFixed(2)}</p>
+                    <span>Giriş ağırlığı</span>
+                    <b>{formatWeight(result.batch.input_weight)} kg</b>
+                  </div>
+                  <div>
+                    <span>Parça toplamı</span>
+                    <b>{formatWeight(result.part_weight)} kg</b>
+                  </div>
+                  <div>
+                    <span>Hesaplanan fire</span>
+                    <b>{formatWeight(result.fire_weight)} kg</b>
                   </div>
                 </div>
-              )}
+                <p className="analysis-note">
+                  Ürün giriş ağırlığı ile elde edilen parçaların toplamı karşılaştırılmıştır.{" "}
+                  {formatWeight(result.batch.input_weight)} kg girişten {formatWeight(result.part_weight)} kg parça elde edilmiş,
+                  aradaki {formatWeight(result.fire_weight)} kg fark fire olarak hesaplanmıştır.
+                </p>
+              </div>
+
+              <div className={`analysis-card ${result.cost_check_status === "ok" ? "ok" : "warn"}`}>
+                <div className="analysis-head">
+                  <strong>Maliyet Kontrolü</strong>
+                  <span className={`status ${result.cost_check_status === "ok" ? "ok" : "warn"}`}>
+                    {result.cost_check_status === "ok" ? "Tutarlı" : "Tutarsız"}
+                  </span>
+                </div>
+                <div className="analysis-grid">
+                  <div>
+                    <span>Beklenen maliyet</span>
+                    <b>€ {formatMoney(result.expected_cost)}</b>
+                  </div>
+                  <div>
+                    <span>Kayıtlı maliyet</span>
+                    <b>€ {formatMoney(result.recorded_cost)}</b>
+                  </div>
+                  <div>
+                    <span>Maliyet farkı</span>
+                    <b>€ {formatMoney(result.cost_difference)}</b>
+                  </div>
+                </div>
+                <p className="analysis-note">
+                  Maliyet kontrolünde ise {formatWeight(result.batch.input_weight)} kg × {formatMoney(result.batch.unit_cost)} € ={" "}
+                  {formatMoney(result.expected_cost)} € beklenirken veritabanında {formatMoney(result.recorded_cost)} € kayıtlı olduğu görülmüştür.{" "}
+                  {result.cost_check_status === "ok"
+                    ? "Beklenen ve kayıtlı maliyet tutarlıdır."
+                    : `Aradaki ${formatMoney(result.cost_difference)} € fark maliyet tutarsızlığı olarak belirlenmiştir.`}
+                </p>
+              </div>
+
               <div className="table-wrap">
                 <table>
                   <thead>

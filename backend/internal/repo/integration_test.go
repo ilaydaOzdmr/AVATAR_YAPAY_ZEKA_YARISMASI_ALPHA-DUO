@@ -843,3 +843,105 @@ func TestRejectProductionOrderKeepsStockAndExpectedQty(t *testing.T) {
 		t.Fatalf("second RejectProductionOrder: %v", err)
 	}
 }
+
+func TestCreateButcheryBatchPersistsConsistencyChecks(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+	productID := insertProduct(t, db, unique("PRD"), 10)
+
+	batch, err := r.CreateButcheryBatch(ctx, model.ButcheryBatch{
+		Code:        unique("KUZ"),
+		AnimalType:  "kuzu",
+		InputWeight: 25,
+		UnitCost:    11.50,
+		TotalCost:   351,
+		BatchDate:   "2026-10-27",
+		Status:      "draft",
+	}, []model.ButcheryItem{
+		{ProductID: productID, Weight: 10, Quantity: 1},
+		{ProductID: productID, Weight: 8, Quantity: 1},
+		{ProductID: productID, Weight: 4, Quantity: 1},
+	})
+	if err != nil {
+		t.Fatalf("CreateButcheryBatch: %v", err)
+	}
+
+	if !approx(batch.ExpectedCost, 287.50) {
+		t.Fatalf("expected_cost = %v, want 287.50", batch.ExpectedCost)
+	}
+	if !approx(batch.CostDifference, 63.50) {
+		t.Fatalf("cost_difference = %v, want 63.50", batch.CostDifference)
+	}
+	if batch.CostCheckStatus != "mismatch" || batch.WeightCheckStatus != "ok" {
+		t.Fatalf("statuses = %q/%q, want mismatch/ok", batch.CostCheckStatus, batch.WeightCheckStatus)
+	}
+
+	loaded, err := r.GetButcheryBatch(ctx, batch.ID)
+	if err != nil {
+		t.Fatalf("GetButcheryBatch: %v", err)
+	}
+	if !approx(loaded.ExpectedCost, 287.50) || !approx(loaded.CostDifference, 63.50) {
+		t.Fatalf("loaded checks = %v/%v, want 287.50/63.50", loaded.ExpectedCost, loaded.CostDifference)
+	}
+	if loaded.CostCheckStatus != "mismatch" || loaded.WeightCheckStatus != "ok" {
+		t.Fatalf("loaded statuses = %q/%q", loaded.CostCheckStatus, loaded.WeightCheckStatus)
+	}
+
+	var expected, difference float64
+	var costStatus, weightStatus string
+	if err := db.QueryRow(
+		`SELECT expected_cost, cost_difference, cost_check_status, weight_check_status
+		 FROM butchery_batches WHERE id = ?`, batch.ID).
+		Scan(&expected, &difference, &costStatus, &weightStatus); err != nil {
+		t.Fatalf("read persisted checks: %v", err)
+	}
+	if !approx(expected, 287.50) || !approx(difference, 63.50) {
+		t.Fatalf("persisted checks = %v/%v, want 287.50/63.50", expected, difference)
+	}
+
+	list, err := r.ListButcheryBatches(ctx)
+	if err != nil {
+		t.Fatalf("ListButcheryBatches: %v", err)
+	}
+	found := false
+	for _, item := range list {
+		if item.ID == batch.ID {
+			found = true
+			if !approx(item.CostDifference, 63.50) {
+				t.Fatalf("listed cost_difference = %v, want 63.50", item.CostDifference)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("created batch missing from list")
+	}
+}
+
+func TestCreateButcheryBatchConsistentRecordHasNoWarnings(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+	productID := insertProduct(t, db, unique("PRD"), 10)
+
+	batch, err := r.CreateButcheryBatch(ctx, model.ButcheryBatch{
+		Code:        unique("KUZ"),
+		AnimalType:  "kuzu",
+		InputWeight: 22,
+		UnitCost:    11.50,
+		TotalCost:   253,
+		BatchDate:   "2026-10-27",
+		Status:      "draft",
+	}, []model.ButcheryItem{
+		{ProductID: productID, Weight: 10, Quantity: 1},
+		{ProductID: productID, Weight: 8, Quantity: 1},
+		{ProductID: productID, Weight: 4, Quantity: 1},
+	})
+	if err != nil {
+		t.Fatalf("CreateButcheryBatch: %v", err)
+	}
+	if batch.CostCheckStatus != "ok" || batch.WeightCheckStatus != "ok" {
+		t.Fatalf("statuses = %q/%q, want ok/ok", batch.CostCheckStatus, batch.WeightCheckStatus)
+	}
+	if !approx(batch.CostDifference, 0) {
+		t.Fatalf("cost_difference = %v, want 0", batch.CostDifference)
+	}
+}

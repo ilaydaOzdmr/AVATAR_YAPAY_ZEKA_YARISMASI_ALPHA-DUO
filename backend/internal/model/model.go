@@ -115,15 +115,19 @@ type ProductionOrderOutput struct {
 
 // ButcheryBatch is a whole-animal butchery batch and its purchase cost.
 type ButcheryBatch struct {
-	ID          int64   `json:"id"`
-	Code        string  `json:"code"`
-	AnimalType  string  `json:"animal_type"`
-	InputLotID  *int64  `json:"input_lot_id"`
-	InputWeight float64 `json:"input_weight"`
-	UnitCost    float64 `json:"unit_cost"`
-	TotalCost   float64 `json:"total_cost"`
-	BatchDate   string  `json:"batch_date"`
-	Status      string  `json:"status"`
+	ID                int64   `json:"id"`
+	Code              string  `json:"code"`
+	AnimalType        string  `json:"animal_type"`
+	InputLotID        *int64  `json:"input_lot_id"`
+	InputWeight       float64 `json:"input_weight"`
+	UnitCost          float64 `json:"unit_cost"`
+	TotalCost         float64 `json:"total_cost"`
+	BatchDate         string  `json:"batch_date"`
+	Status            string  `json:"status"`
+	ExpectedCost      float64 `json:"expected_cost"`
+	CostDifference    float64 `json:"cost_difference"`
+	CostCheckStatus   string  `json:"cost_check_status"`
+	WeightCheckStatus string  `json:"weight_check_status"`
 }
 
 // ButcheryItem is a part (or waste) produced from a butchery batch.
