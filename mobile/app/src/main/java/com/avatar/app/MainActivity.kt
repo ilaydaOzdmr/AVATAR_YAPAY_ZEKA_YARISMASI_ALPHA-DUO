@@ -43,14 +43,21 @@ import com.avatar.app.ui.screens.ProductList
 import com.avatar.app.ui.screens.Reports
 import com.avatar.app.ui.screens.Sale
 import com.avatar.app.ui.theme.AvatarAppTheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val prefs = getSharedPreferences("avatar", MODE_PRIVATE)
-        val initialUrl = prefs.getString("base_url", SyncRepository.DEFAULT_BASE_URL)
-            ?: SyncRepository.DEFAULT_BASE_URL
+        // Eski sürümlerin otomatik "localhost/10.0.2.2" değerini kullanıcı
+        // tercihi sayma; fiziksel cihaz için PC LAN IP'sini varsayılan yap.
+        val legacyAuto = setOf("localhost", "127.0.0.1", "10.0.2.2")
+        val storedUrl = prefs.getString("base_url_v2", null)
+            ?: prefs.getString("base_url", null)?.takeUnless { saved ->
+                legacyAuto.any { saved.contains(it) }
+            }
+        val initialUrl = storedUrl?.takeIf { it.isNotBlank() } ?: SyncRepository.DEFAULT_BASE_URL
         val repository = SyncRepository(AppDatabase.get(this), baseUrl = initialUrl)
         setContent {
             AvatarAppTheme {
@@ -58,7 +65,7 @@ class MainActivity : ComponentActivity() {
                     repository = repository,
                     initialServerUrl = initialUrl,
                     onServerUrlChanged = { url ->
-                        prefs.edit().putString("base_url", url).apply()
+                        prefs.edit().putString("base_url_v2", url).apply()
                     },
                 )
             }
@@ -101,15 +108,27 @@ private fun AvatarApp(
     suspend fun pullAndRefresh() {
         message = try {
             repository.pull()
-            "Sunucu: ${repository.activeBaseUrl() ?: "-"} · ürün, lot ve market senkronize edildi."
+            val active = repository.activeBaseUrl()
+            if (active != null) serverUrl = active
+            "Sunucu: ${active ?: "-"} · ürün, lot ve market senkronize edildi."
         } catch (error: Exception) {
             "Bağlantı hatası: ${error.message}"
         }
         refresh()
     }
 
+    // Bağlantı yoksa kısa aralıklarla otomatik yeniden dene. Böylece USB
+    // takıldığında adb reverse izleyicisi yönlendirmeyi kurunca uygulama
+    // kendiliğinden bağlanır; kullanıcı "Dene"ye basmak zorunda kalmaz.
     LaunchedEffect(Unit) {
-        pullAndRefresh()
+        var attempts = 0
+        while (true) {
+            pullAndRefresh()
+            val failed = message?.startsWith("Bağlantı hatası") == true
+            if (!failed || attempts >= 6) break
+            attempts++
+            delay(5_000)
+        }
     }
 
     Scaffold(
@@ -185,7 +204,10 @@ private fun AvatarApp(
                         serverInput = serverUrl
                         showServerDialog = true
                     },
-                    onRetry = { scope.launch { pullAndRefresh() } },
+                    onRetry = {
+                        repository.invalidateConnection()
+                        scope.launch { pullAndRefresh() }
+                    },
                 )
                 Screen.Products -> ProductList(
                     products = products,
@@ -283,9 +305,10 @@ private fun AvatarApp(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
-                        "Emülatör: http://10.0.2.2:8080\n" +
-                            "Fiziksel cihaz: USB’de `adb reverse tcp:8080 tcp:8080` " +
-                            "veya aynı Wi-Fi’da PC LAN IP’si.",
+                        "Fiziksel cihaz: aynı Wi-Fi'da otomatik bulunur " +
+                            "(varsayılan ${SyncRepository.DEFAULT_BASE_URL}).\n" +
+                            "Emülatör: http://10.0.2.2:8080\n" +
+                            "USB: `adb reverse tcp:8080 tcp:8080`",
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }

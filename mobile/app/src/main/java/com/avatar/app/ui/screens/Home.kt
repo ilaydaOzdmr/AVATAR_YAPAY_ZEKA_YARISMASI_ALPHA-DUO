@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.avatar.app.data.SyncRepository
 import com.avatar.app.data.entities.LocalLot
 import com.avatar.app.data.entities.LocalSale
 
@@ -40,7 +41,7 @@ fun Home(
     onShipments: () -> Unit,
     onViewAlerts: () -> Unit,
     connectionMessage: String? = null,
-    serverUrl: String = "http://localhost:8080",
+    serverUrl: String = SyncRepository.DEFAULT_BASE_URL,
     onServerSettings: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {

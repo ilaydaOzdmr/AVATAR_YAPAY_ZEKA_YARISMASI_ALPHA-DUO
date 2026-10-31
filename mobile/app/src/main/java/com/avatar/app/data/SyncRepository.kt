@@ -1,5 +1,6 @@
 package com.avatar.app.data
 
+import com.avatar.app.BuildConfig
 import com.avatar.app.data.entities.LocalLot
 import com.avatar.app.data.entities.LocalMarket
 import com.avatar.app.data.entities.LocalPrediction
@@ -9,11 +10,21 @@ import com.avatar.app.data.entities.LocalSaleLine
 import com.avatar.app.data.entities.Outbox
 import androidx.room.withTransaction
 import java.io.IOException
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.time.Instant
 import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -75,10 +86,12 @@ class SyncRepository(
     private var configuredBaseUrl: String = baseUrl
 
     companion object {
-        // Emülatör: 10.0.2.2 host'un localhost'udur. Fiziksel cihaz:
-        // `adb reverse tcp:8080 tcp:8080` sonrası localhost çalışır veya
-        // aynı Wi-Fi'daki PC'nin LAN IP'si girilir.
-        const val DEFAULT_BASE_URL = "http://localhost:8080"
+        // Fiziksel cihaz varsayılanı: APK derlenirken tespit edilen PC LAN IP'si
+        // (Gradle -> BuildConfig.DEFAULT_BASE_URL). Böylece telefon aynı Wi-Fi'da
+        // olduğunda ekstra ayar gerekmez.
+        // Yedekler: emülatörde 10.0.2.2, USB + `adb reverse` senaryosunda localhost.
+        val DEFAULT_BASE_URL: String = BuildConfig.DEFAULT_BASE_URL
+        const val PORT = 8080
         private const val CLIENT_ID = "android"
         private val JSON = "application/json; charset=utf-8".toMediaType()
     }
@@ -91,45 +104,184 @@ class SyncRepository(
 
     // Persist the user's choice from the UI and force a fresh health probe.
     fun setBaseUrl(url: String) {
-        configuredBaseUrl = url.trim()
+        configuredBaseUrl = normalizeBaseUrl(url) ?: url.trim()
         resolvedBaseUrl = null
     }
 
+    // "Dene" butonu ve başarısız istekler için çözümlenmiş adresi sıfırla.
+    fun invalidateConnection() {
+        resolvedBaseUrl = null
+    }
+
+    private fun normalizeBaseUrl(url: String): String? {
+        val trimmed = url.trim()
+        if (trimmed.isEmpty()) return null
+        val withScheme = when {
+            trimmed.startsWith("http://") || trimmed.startsWith("https://") -> trimmed
+            else -> "http://$trimmed"
+        }
+        return withScheme.trimEnd('/')
+    }
+
     private fun candidateBaseUrls(): List<String> = buildList {
-        if (configuredBaseUrl.isNotBlank()) add(configuredBaseUrl)
-        add("http://10.0.2.2:8080")
-        add("http://localhost:8080")
+        normalizeBaseUrl(configuredBaseUrl)?.let { add(it) }
+        normalizeBaseUrl(DEFAULT_BASE_URL)?.let { add(it) }
+        // Emülatör: host makinenin localhost'u.
+        add("http://10.0.2.2:$PORT")
+        // Fiziksel cihaz + USB: `adb reverse tcp:8080 tcp:8080`.
+        add("http://127.0.0.1:$PORT")
+        add("http://localhost:$PORT")
     }.distinct()
 
-    // Resolve the first reachable backend once and cache it. This makes the app
-    // work on an emulator (10.0.2.2) and on a physical device with adb reverse.
+    // Resolve the first reachable backend once and cache it. Bilinen adresler
+    // paralel denenir (USB/adb reverse, Wi-Fi LAN IP ve emülatör aynı anda),
+    // böylece biri zaman aşımına uğrasa bile açılış beklemez. Hiçbiri
+    // cevaplamazsa yerel ağ /24 taraması yapılır.
     private suspend fun serverBaseUrl(): String {
         resolvedBaseUrl?.let { return it }
+        val candidates = candidateBaseUrls()
         val failures = mutableListOf<String>()
-        for (candidate in candidateBaseUrls()) {
-            try {
-                get("$candidate/health", healthClient).use { response ->
-                    if (response.isSuccessful) {
-                        resolvedBaseUrl = candidate
-                        return candidate
-                    }
-                    failures.add("$candidate -> HTTP ${response.code}")
-                }
-            } catch (error: IOException) {
-                failures.add("$candidate -> ${error.message}")
+
+        val results = withContext(Dispatchers.IO) {
+            coroutineScope {
+                candidates.map { candidate ->
+                    async { candidate to probeHealth(candidate) }
+                }.awaitAll()
             }
         }
+        for ((candidate, failure) in results) {
+            if (failure == null) {
+                resolvedBaseUrl = candidate
+                return candidate
+            }
+            failures.add("$candidate -> $failure")
+        }
+
+        val discovered = discoverLanServer()
+        if (discovered != null) {
+            resolvedBaseUrl = discovered
+            return discovered
+        }
+        failures.add("yerel ağ taraması -> bulunamadı")
+
         throw IOException(
-            "Sunucuya ulaşılamadı. Backend 8080'de çalışıyor mu? " +
-                "Emülatörde 10.0.2.2, fiziksel cihazda `adb reverse tcp:8080 tcp:8080`. " +
+            "Sunucuya ulaşılamadı (port $PORT). Backend çalışıyor mu? " +
+                "Telefon ve PC aynı Wi-Fi'da mı? Windows güvenlik duvarı $PORT portuna izin veriyor mu? " +
+                "USB kullanıyorsan `adb reverse tcp:$PORT tcp:$PORT` çalıştır. " +
                 "Denenen adresler: ${failures.joinToString("; ")}",
         )
     }
+
+    // Returns null when /health is reachable, otherwise a short failure reason.
+    private fun probeHealth(baseUrl: String, httpClient: OkHttpClient = healthClient): String? =
+        try {
+            get("$baseUrl/health", httpClient).use { response ->
+                if (response.isSuccessful) null else "HTTP ${response.code}"
+            }
+        } catch (error: Exception) {
+            error.message ?: error.javaClass.simpleName
+        }
+
+    // Known addresses tutmazsa telefonun bulunduğu /24 ağını tarar. Yalnızca
+    // son çare olarak çalışır ve ilk cevap veren backend'i döndürür.
+    private suspend fun discoverLanServer(): String? = withContext(Dispatchers.IO) {
+        val hosts = lanProbeHosts()
+        if (hosts.isEmpty()) return@withContext null
+
+        val probeClient = client.newBuilder()
+            .connectTimeout(500, TimeUnit.MILLISECONDS)
+            .readTimeout(700, TimeUnit.MILLISECONDS)
+            .callTimeout(1200, TimeUnit.MILLISECONDS)
+            .retryOnConnectionFailure(false)
+            .build()
+        val found = AtomicReference<String?>(null)
+        val semaphore = Semaphore(64)
+
+        // Toplam tarama süresini sınırla: bağlantı yokken kullanıcıyı
+        // saniyelerce bekletmeyelim. Bulunan ilk backend yeterli.
+        withTimeoutOrNull(5_000) {
+            coroutineScope {
+                hosts.forEach { host ->
+                    launch {
+                        semaphore.withPermit {
+                            if (found.get() != null) return@withPermit
+                            val url = "http://$host:$PORT"
+                            if (probeHealth(url, probeClient) == null) {
+                                found.compareAndSet(null, url)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found.get()
+    }
+
+    private fun lanProbeHosts(): List<String> {
+        val hosts = LinkedHashSet<String>()
+        // Hücresel/sanal arayüzlerde tarama yapma; sadece Wi-Fi, hotspot,
+        // Ethernet ve USB tethering arayüzleri anlamlı.
+        val skippedPrefixes = listOf(
+            "ccmni", "rmnet", "pdp", "wwan", "clat", "dummy", "ifb",
+            "sit", "ip6tnl", "ip_vti", "tun", "tap", "p2p", "bluetooth",
+        )
+        try {
+            for (nif in NetworkInterface.getNetworkInterfaces()) {
+                if (!nif.isUp || nif.isLoopback) continue
+                val name = nif.name.lowercase()
+                if (skippedPrefixes.any { name.startsWith(it) }) continue
+                for (interfaceAddress in nif.interfaceAddresses) {
+                    val address = interfaceAddress.address
+                    if (address !is Inet4Address) continue
+                    if (address.isLoopbackAddress || address.isLinkLocalAddress) continue
+                    val ownIp = ipToLong(address.hostAddress ?: continue) ?: continue
+                    if (ownIp == 0L) continue
+                    // Sadece özel ağlarda tara; mobil veride operatör /24'üne
+                    // istek yağdırmayalım.
+                    if (!isPrivateIpv4(ownIp)) continue
+                    // /24 varsayımı: ev/otel Wi-Fi ağlarında yaygın ve hızlı.
+                    val network = ownIp and 0xFFFFFF00L
+                    for (offset in 1..254) {
+                        val candidate = network + offset
+                        if (candidate == ownIp) continue
+                        hosts.add(longToIp(candidate))
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            // Arayüz listesi alınamazsa tarama atlanır; hata mesajı yine döner.
+        }
+        return hosts.toList()
+    }
+
+    private fun isPrivateIpv4(value: Long): Boolean {
+        val first = ((value shr 24) and 0xFF).toInt()
+        val second = ((value shr 16) and 0xFF).toInt()
+        return first == 10 ||
+            (first == 172 && second in 16..31) ||
+            (first == 192 && second == 168)
+    }
+
+    private fun ipToLong(host: String): Long? {
+        val parts = host.split('.')
+        if (parts.size != 4) return null
+        var value = 0L
+        for (part in parts) {
+            val octet = part.toIntOrNull() ?: return null
+            if (octet !in 0..255) return null
+            value = (value shl 8) or octet.toLong()
+        }
+        return value
+    }
+
+    private fun longToIp(value: Long): String =
+        "${(value shr 24) and 0xFF}.${(value shr 16) and 0xFF}.${(value shr 8) and 0xFF}.${value and 0xFF}"
 
     suspend fun connectionStatus(): String = withContext(Dispatchers.IO) {
         try {
             "Bağlı: ${serverBaseUrl()}"
         } catch (error: IOException) {
+            resolvedBaseUrl = null
             error.message ?: "Bağlantı yok"
         }
     }
@@ -161,7 +313,11 @@ class SyncRepository(
         serviceCost: Double,
         laborCost: Double,
     ): PredictionView = withContext(Dispatchers.IO) {
-        val base = serverBaseUrl()
+        val base = try {
+            serverBaseUrl()
+        } catch (error: IOException) {
+            return@withContext offlinePrediction(error)
+        }
         val payload = JSONObject()
             .put("raw_material_kg", rawKg)
             .put("spice_kg", spiceKg)
@@ -181,7 +337,11 @@ class SyncRepository(
         liveWeight: Double,
         carcassWeight: Double?,
     ): PredictionView = withContext(Dispatchers.IO) {
-        val base = serverBaseUrl()
+        val base = try {
+            serverBaseUrl()
+        } catch (error: IOException) {
+            return@withContext offlinePrediction(error)
+        }
         val payload = JSONObject()
             .put("animal_type", animalType)
             .put("live_weight_kg", liveWeight)
@@ -240,16 +400,19 @@ class SyncRepository(
                 }
             }
         } catch (error: IOException) {
-            PredictionView(
-                rows = emptyList(),
-                warnings = emptyList(),
-                modelVersion = "unknown",
-                modelStatus = "offline",
-                offline = true,
-                message = "Çevrimdışı: tahmin için sunucuya ulaşılamadı (${error.message}).",
-            )
+            resolvedBaseUrl = null
+            offlinePrediction(error)
         }
     }
+
+    private fun offlinePrediction(error: IOException): PredictionView = PredictionView(
+        rows = emptyList(),
+        warnings = emptyList(),
+        modelVersion = "unknown",
+        modelStatus = "offline",
+        offline = true,
+        message = "Çevrimdışı: tahmin için sunucuya ulaşılamadı (${error.message}).",
+    )
 
     private fun parsePrediction(body: String): PredictionView {
         val json = JSONObject(body)
@@ -275,6 +438,15 @@ class SyncRepository(
     }
 
     suspend fun pull(): Unit = withContext(Dispatchers.IO) {
+        try {
+            pullOnce()
+        } catch (error: IOException) {
+            resolvedBaseUrl = null
+            throw error
+        }
+    }
+
+    private suspend fun pullOnce() {
         val base = serverBaseUrl()
         val pullBody = get("$base/sync/pull").use { response ->
             if (!response.isSuccessful) {
@@ -339,6 +511,7 @@ class SyncRepository(
                 sections = sections,
             )
         } catch (error: IOException) {
+            resolvedBaseUrl = null
             ReportView(
                 generatedAt = "",
                 sections = emptyList(),
@@ -392,6 +565,7 @@ class SyncRepository(
             }
         } catch (error: IOException) {
             // Çevrimdışı: satış yerelde kalır, push() ile sonra gönderilir.
+            resolvedBaseUrl = null
             PushResult.Failed("offline")
         }
     }

@@ -18,6 +18,10 @@ func EnsureSchema(ctx context.Context, database *sql.DB) error {
 		`ALTER TABLE butchery_items ADD COLUMN allocated_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00`); err != nil {
 		return err
 	}
+	if err := ensureColumn(ctx, database, "production_orders", "expected_qty",
+		`ALTER TABLE production_orders ADD COLUMN expected_qty DECIMAL(12,3) NOT NULL DEFAULT 0.000 AFTER service_qty`); err != nil {
+		return err
+	}
 	if err := ensureTable(ctx, database, "market_redistributions", `CREATE TABLE IF NOT EXISTS market_redistributions (
 		id BIGINT AUTO_INCREMENT PRIMARY KEY,
 		market_id BIGINT NOT NULL,
