@@ -39,6 +39,7 @@ fun Home(
     onStock: () -> Unit,
     onShipments: () -> Unit,
     onViewAlerts: () -> Unit,
+    connectionMessage: String? = null,
 ) {
     Column(
         modifier = Modifier
@@ -62,6 +63,13 @@ fun Home(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (connectionMessage != null) {
+            Text(
+                text = connectionMessage,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (connectionMessage.startsWith("Bağlı") || connectionMessage.startsWith("Sunucu:")) Green else Amber,
+            )
+        }
 
         // Kalite uyarısı
         if (blockedLots.isNotEmpty()) {

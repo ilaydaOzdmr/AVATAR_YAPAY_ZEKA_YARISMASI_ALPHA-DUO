@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import com.avatar.app.data.AppDatabase
 import com.avatar.app.data.PredictionView
 import com.avatar.app.data.PushResult
+import com.avatar.app.data.ReportView
 import com.avatar.app.data.SyncRepository
 import com.avatar.app.data.entities.LocalLot
 import com.avatar.app.data.entities.LocalMarket
@@ -33,6 +34,7 @@ import com.avatar.app.ui.screens.History
 import com.avatar.app.ui.screens.Home
 import com.avatar.app.ui.screens.Prediction
 import com.avatar.app.ui.screens.ProductList
+import com.avatar.app.ui.screens.Reports
 import com.avatar.app.ui.screens.Sale
 import com.avatar.app.ui.theme.AvatarAppTheme
 import kotlinx.coroutines.launch
@@ -49,7 +51,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { Home, Products, Sale, Prediction, History }
+private enum class Screen { Home, Products, Sale, Prediction, Reports, History }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +64,7 @@ private fun AvatarApp(repository: SyncRepository) {
     var predictionHistory by remember { mutableStateOf(emptyList<LocalPrediction>()) }
     var yieldResult by remember { mutableStateOf<PredictionView?>(null) }
     var butcheryResult by remember { mutableStateOf<PredictionView?>(null) }
+    var reportView by remember { mutableStateOf<ReportView?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -76,9 +79,9 @@ private fun AvatarApp(repository: SyncRepository) {
     suspend fun pullAndRefresh() {
         message = try {
             repository.pull()
-            "Synced products and lots."
+            "Sunucu: ${repository.activeBaseUrl() ?: "-"} · ürün, lot ve market senkronize edildi."
         } catch (error: Exception) {
-            "Pull failed: ${error.message}"
+            "Bağlantı hatası: ${error.message}"
         }
         refresh()
     }
@@ -119,6 +122,19 @@ private fun AvatarApp(repository: SyncRepository) {
                     label = { Text("Tahmin") },
                 )
                 NavigationBarItem(
+                    selected = screen == Screen.Reports,
+                    onClick = {
+                        screen = Screen.Reports
+                        scope.launch {
+                            val result = repository.reports()
+                            reportView = result
+                            message = if (result.offline) result.message else "Raporlar MySQL'den alındı."
+                        }
+                    },
+                    icon = {},
+                    label = { Text("Raporlar") },
+                )
+                NavigationBarItem(
                     selected = screen == Screen.History,
                     onClick = { screen = Screen.History },
                     icon = {},
@@ -141,6 +157,7 @@ private fun AvatarApp(repository: SyncRepository) {
                     onStock = { screen = Screen.Products },
                     onShipments = { screen = Screen.History },
                     onViewAlerts = { screen = Screen.Products },
+                    connectionMessage = message,
                 )
                 Screen.Products -> ProductList(
                     products = products,
@@ -193,6 +210,17 @@ private fun AvatarApp(repository: SyncRepository) {
                             } else {
                                 "Parçalama tahmini alındı."
                             }
+                        }
+                    },
+                )
+                Screen.Reports -> Reports(
+                    report = reportView,
+                    message = message,
+                    onRefresh = {
+                        scope.launch {
+                            val result = repository.reports()
+                            reportView = result
+                            message = if (result.offline) result.message else "Raporlar MySQL'den alındı."
                         }
                     },
                 )

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"avatar/backend/internal/config"
 	"avatar/backend/internal/ml"
@@ -25,6 +26,7 @@ type Server struct {
 	butchery *service.ButcheryService
 	recall   *service.RecallService
 	anomaly  *service.AnomalyService
+	reports  *service.ReportService
 	mux      *http.ServeMux
 }
 
@@ -44,9 +46,11 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 		butchery: service.NewButcheryService(r),
 		recall:   service.NewRecallService(r),
 		anomaly:  service.NewAnomalyService(r),
+		reports:  service.NewReportService(r),
 		mux:      http.NewServeMux(),
 	}
 	s.mux.HandleFunc("GET /health", s.handleHealth)
+	s.mux.HandleFunc("GET /{$}", s.handleRoot)
 	s.mux.HandleFunc("GET /materials", s.handleListMaterials)
 	s.mux.HandleFunc("POST /materials", s.handleCreateMaterial)
 	s.mux.HandleFunc("GET /products", s.handleListProducts)
@@ -75,6 +79,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s.mux.HandleFunc("POST /sync/push", s.handleSyncPush)
 	s.mux.HandleFunc("GET /sync/pull", s.handleSyncPull)
 	s.mux.HandleFunc("GET /anomalies", s.handleAnomalies)
+	s.mux.HandleFunc("GET /reports/summary", s.handleReportSummary)
 	s.mux.HandleFunc("POST /ocr/invoice", s.handleOCRInvoice)
 	s.mux.HandleFunc("GET /ml/health", s.handleMLHealth)
 	s.mux.HandleFunc("GET /ml/models", s.handleMLModels)
@@ -99,6 +104,21 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleRoot makes the base URL useful in a browser instead of returning 404.
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"service": "avatar-backend",
+		"status":  "ok",
+		"version": "1.0.0",
+		"endpoints": []string{
+			"/health", "/ml/health", "/ml/models", "/ml/report",
+			"/sync/pull", "/sync/push", "/reports/summary",
+			"/materials", "/products", "/lots", "/sales",
+			"/production-orders", "/butchery-batches", "/recalls/{id}",
+		},
+	})
 }
 
 func (s *Server) handleListMaterials(w http.ResponseWriter, r *http.Request) {
@@ -433,9 +453,22 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		writeRepoError(w, err)
 		return
 	}
+	lots, err := s.repo.ListLots(r.Context(), "")
+	if err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	markets, err := s.repo.ListMarkets(r.Context())
+	if err != nil {
+		writeRepoError(w, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
+		"server_time":       time.Now().UTC().Format(time.RFC3339),
 		"blocked_lot_codes": blocked,
 		"products":          products,
+		"lots":              lots,
+		"markets":           markets,
 	})
 }
 
@@ -446,6 +479,15 @@ func (s *Server) handleAnomalies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, anomalies)
+}
+
+func (s *Server) handleReportSummary(w http.ResponseWriter, r *http.Request) {
+	summary, err := s.reports.Summary(r.Context())
+	if err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
 
 // ocrRequest is the payload for POST /ocr/invoice.

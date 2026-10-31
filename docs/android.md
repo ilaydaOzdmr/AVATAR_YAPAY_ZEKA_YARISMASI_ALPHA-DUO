@@ -46,6 +46,14 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - Başarılı tahminler Room `prediction_history` tablosuna yazılır; model sürümü
   ve `synthetic_only` durumu geçmişte de görünür.
 
+## 6) Sunucu adresi ve raporlar
+- Uygulama `/health` ile erişilebilir backend’i otomatik bulur:
+  emülatörde `http://10.0.2.2:8080`, fiziksel cihazda `adb reverse` sonrası
+  `http://localhost:8080`.
+- **Raporlar** sekmesi MySQL’den `GET /reports/summary` ile alış, üretim,
+  parçalama, lot hareketleri, satış ve geri çağırma bölümlerini gösterir.
+- Senkronizasyon modeli: `docs/mobile-sync.md`.
+
 ## Not
 - Backend `docker compose` ile veya lokal `go run` ile çalışıyor olmalı (port 8080).
 - Web için `http://localhost:5173` (docker) veya `npm run dev`.

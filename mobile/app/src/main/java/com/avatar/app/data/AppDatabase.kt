@@ -71,6 +71,9 @@ interface SaleDao {
     @Query("UPDATE local_sales SET synced = :synced WHERE id = :saleId")
     suspend fun setSynced(saleId: Long, synced: Boolean)
 
+    @Query("UPDATE local_sales SET status = :status WHERE id = :saleId")
+    suspend fun setStatus(saleId: Long, status: String)
+
     @Query("SELECT * FROM local_sale_lines WHERE sale_id = :saleId")
     suspend fun getLines(saleId: Long): List<LocalSaleLine>
 

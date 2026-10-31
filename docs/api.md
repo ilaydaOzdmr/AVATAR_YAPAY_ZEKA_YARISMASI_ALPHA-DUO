@@ -143,3 +143,47 @@ ağırlıktan tahmin edilir ve uyarı üretilir. Cevapta `physical_check` ve
 `warnings` bulunur.
 
 Model kartı ve veri sınırlılıkları: `docs/ml.md`.
+
+---
+
+## Kök, senkronizasyon ve raporlar
+
+### `GET /`
+Tarayıcıda 404 yerine servis bilgisi döner:
+```json
+{"service":"avatar-backend","status":"ok","version":"1.0.0","endpoints":["/health","/ml/health", "..."]}
+```
+
+### `GET /sync/pull`
+Mobil için tek snapshot:
+```json
+{
+  "server_time": "2026-10-31T...",
+  "blocked_lot_codes": ["SUC-2026-045"],
+  "products": [...],
+  "lots": [...],
+  "markets": [...]
+}
+```
+Mobil bu yanıtı tek Room transaction’ında uygular; yarım pull SQLite’ı boşaltmaz.
+Ayrıntı: `docs/mobile-sync.md`.
+
+### `GET /reports/summary`
+MySQL’den altı rapor bölümü:
+```json
+{
+  "generated_at": "2026-10-31T...",
+  "purchases": [...],
+  "production": [...],
+  "butchery": [...],
+  "lot_movements": [...],
+  "sales": [...],
+  "recalls": [...]
+}
+```
+Alanlar: alış lotu/miktar/maliyet, üretim emri/EKP, parçalama fire/parça,
+lot hareketi, satış/market/tutar, recall/bloklu lotlar.
+
+### Satış idempotency
+`POST /sales` aynı `code` ile tekrar çağrılırsa mevcut satışı döndürür; stok
+ikinci kez düşmez. Mobil outbox retry’leri bu sayede güvenlidir.

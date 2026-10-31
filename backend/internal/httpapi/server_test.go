@@ -54,6 +54,9 @@ func (f *fakeRepo) AddStockMovement(_ context.Context, m model.StockMovement) (m
 func (f *fakeRepo) ListStockMovements(_ context.Context, _ int64) ([]model.StockMovement, error) {
 	return nil, nil
 }
+func (f *fakeRepo) ListAllStockMovements(_ context.Context) ([]model.StockMovement, error) {
+	return nil, nil
+}
 func (f *fakeRepo) CreateProductionOrder(_ context.Context, po model.ProductionOrder, _ []model.ProductionOrderInput, _ []model.ProductionOrderOutput) (model.ProductionOrder, error) {
 	return po, f.createProductionErr
 }
@@ -121,6 +124,12 @@ func (f *fakeRepo) CreateSale(_ context.Context, sale model.Sale, _ []model.Sale
 	return sale, f.createSaleErr
 }
 func (f *fakeRepo) ListSales(_ context.Context) ([]model.Sale, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListSaleLines(_ context.Context, _ int64) ([]model.SaleLine, error) {
+	return nil, nil
+}
+func (f *fakeRepo) ListRecallEvents(_ context.Context) ([]model.RecallEvent, error) {
 	return nil, nil
 }
 func (f *fakeRepo) ListMarkets(_ context.Context) ([]model.Market, error) {
@@ -285,5 +294,55 @@ func TestErrorStatusMapping(t *testing.T) {
 				t.Fatalf("status = %d, want %d; body=%s", rec.Code, tc.want, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestRootAndReportSummary(t *testing.T) {
+	handler := NewServerWithML(&fakeRepo{}, nil)
+
+	root := httptest.NewRecorder()
+	handler.ServeHTTP(root, httptest.NewRequest(http.MethodGet, "/", nil))
+	if root.Code != http.StatusOK {
+		t.Fatalf("root status = %d, want 200", root.Code)
+	}
+	var rootBody map[string]any
+	if err := json.Unmarshal(root.Body.Bytes(), &rootBody); err != nil {
+		t.Fatalf("root json: %v", err)
+	}
+	if rootBody["service"] != "avatar-backend" {
+		t.Fatalf("root service = %v", rootBody["service"])
+	}
+
+	report := httptest.NewRecorder()
+	handler.ServeHTTP(report, httptest.NewRequest(http.MethodGet, "/reports/summary", nil))
+	if report.Code != http.StatusOK {
+		t.Fatalf("report status = %d, body=%s", report.Code, report.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(report.Body.Bytes(), &body); err != nil {
+		t.Fatalf("report json: %v", err)
+	}
+	for _, key := range []string{"purchases", "production", "butchery", "lot_movements", "sales", "recalls"} {
+		if _, ok := body[key]; !ok {
+			t.Fatalf("report missing %q: %s", key, report.Body.String())
+		}
+	}
+}
+
+func TestSyncPullIncludesFullReferenceSnapshot(t *testing.T) {
+	handler := NewServerWithML(&fakeRepo{}, nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sync/pull", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("json: %v", err)
+	}
+	for _, key := range []string{"server_time", "blocked_lot_codes", "products", "lots", "markets"} {
+		if _, ok := body[key]; !ok {
+			t.Fatalf("sync pull missing %q: %s", key, rec.Body.String())
+		}
 	}
 }

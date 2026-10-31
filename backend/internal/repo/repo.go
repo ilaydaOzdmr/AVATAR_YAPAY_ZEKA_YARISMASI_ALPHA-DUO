@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ type Repo interface {
 	ListLotLinksByChild(ctx context.Context, childID int64) ([]model.LotLink, error)
 	AddStockMovement(ctx context.Context, m model.StockMovement) (model.StockMovement, error)
 	ListStockMovements(ctx context.Context, lotID int64) ([]model.StockMovement, error)
+	ListAllStockMovements(ctx context.Context) ([]model.StockMovement, error)
 	CreateProductionOrder(ctx context.Context, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) (model.ProductionOrder, error)
 	GetProductionOrder(ctx context.Context, id int64) (model.ProductionOrder, error)
 	ListProductionOrderInputs(ctx context.Context, poID int64) ([]model.ProductionOrderInput, error)
@@ -47,6 +49,8 @@ type Repo interface {
 	ListBlockedLotCodes(ctx context.Context) ([]string, error)
 	CreateSale(ctx context.Context, sale model.Sale, lines []model.SaleLine) (model.Sale, error)
 	ListSales(ctx context.Context) ([]model.Sale, error)
+	ListSaleLines(ctx context.Context, saleID int64) ([]model.SaleLine, error)
+	ListRecallEvents(ctx context.Context) ([]model.RecallEvent, error)
 	CreateRedistribution(ctx context.Context, r model.Redistribution) (model.Redistribution, error)
 	ListRedistributions(ctx context.Context, lotID int64) ([]model.Redistribution, error)
 }
@@ -234,6 +238,35 @@ func (r *mysqlRepo) ListStockMovements(ctx context.Context, lotID int64) ([]mode
 		var refType sql.NullString
 		var refID sql.NullInt64
 		if err := rows.Scan(&m.ID, &m.LotID, &m.MovementType, &m.Qty, &m.UnitCost, &m.TotalCost, &refType, &refID, &m.OccurredAt, &m.CreatedAt); err != nil {
+			return nil, err
+		}
+		if refType.Valid {
+			m.RefType = &refType.String
+		}
+		if refID.Valid {
+			m.RefID = &refID.Int64
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) ListAllStockMovements(ctx context.Context) ([]model.StockMovement, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, lot_id, movement_type, qty, unit_cost, total_cost, ref_type, ref_id, occurred_at, created_at
+		 FROM stock_movements ORDER BY occurred_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.StockMovement
+	for rows.Next() {
+		var m model.StockMovement
+		var refType sql.NullString
+		var refID sql.NullInt64
+		if err := rows.Scan(&m.ID, &m.LotID, &m.MovementType, &m.Qty, &m.UnitCost, &m.TotalCost,
+			&refType, &refID, &m.OccurredAt, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		if refType.Valid {
@@ -1012,6 +1045,29 @@ func (r *mysqlRepo) GetRecallEvent(ctx context.Context, id int64) (model.RecallE
 	return event, nil
 }
 
+func (r *mysqlRepo) ListRecallEvents(ctx context.Context) ([]model.RecallEvent, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, code, reason, source_lot_id, created_at FROM recall_events ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.RecallEvent
+	for rows.Next() {
+		var event model.RecallEvent
+		var reason sql.NullString
+		if err := rows.Scan(&event.ID, &event.Code, &reason, &event.SourceLotID, &event.CreatedAt); err != nil {
+			return nil, err
+		}
+		if reason.Valid {
+			event.Reason = reason.String
+		}
+		out = append(out, event)
+	}
+	return out, rows.Err()
+}
+
 func (r *mysqlRepo) CreateRecallBlock(ctx context.Context, block model.RecallBlock) (model.RecallBlock, error) {
 	if block.BlockedAt == "" {
 		block.BlockedAt = time.Now().Format("2006-01-02 15:04:05")
@@ -1076,6 +1132,23 @@ func (r *mysqlRepo) ListBlockedLotCodes(ctx context.Context) ([]string, error) {
 }
 
 func (r *mysqlRepo) CreateSale(ctx context.Context, sale model.Sale, lines []model.SaleLine) (model.Sale, error) {
+	// Client retries must not create a second sale or deduct stock twice.
+	var existing model.Sale
+	var existingClient sql.NullString
+	err := r.db.QueryRowContext(ctx,
+		`SELECT id, code, market_id, sold_at, status, client_id FROM sales WHERE code = ?`,
+		sale.Code).
+		Scan(&existing.ID, &existing.Code, &existing.MarketID, &existing.SoldAt, &existing.Status, &existingClient)
+	if err == nil {
+		if existingClient.Valid {
+			existing.ClientID = &existingClient.String
+		}
+		return existing, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return model.Sale{}, err
+	}
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.Sale{}, err
@@ -1154,6 +1227,31 @@ func (r *mysqlRepo) ListSales(ctx context.Context) ([]model.Sale, error) {
 			sale.ClientID = &clientID.String
 		}
 		out = append(out, sale)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) ListSaleLines(ctx context.Context, saleID int64) ([]model.SaleLine, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, sale_id, lot_id, qty, unit_price, total_price, stock_movement_id
+		 FROM sale_lines WHERE sale_id = ? ORDER BY id`, saleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.SaleLine
+	for rows.Next() {
+		var line model.SaleLine
+		var movementID sql.NullInt64
+		if err := rows.Scan(&line.ID, &line.SaleID, &line.LotID, &line.Qty,
+			&line.UnitPrice, &line.TotalPrice, &movementID); err != nil {
+			return nil, err
+		}
+		if movementID.Valid {
+			line.StockMovementID = &movementID.Int64
+		}
+		out = append(out, line)
 	}
 	return out, rows.Err()
 }

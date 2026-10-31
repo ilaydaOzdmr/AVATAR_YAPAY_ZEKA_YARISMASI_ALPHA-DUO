@@ -605,3 +605,43 @@ func TestCreateRecallBlocksLotsAndHandlesCodeCollision(t *testing.T) {
 		t.Fatalf("recall events = %d, want 0 after rollback", count)
 	}
 }
+
+func TestCreateSaleIsIdempotent(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+
+	productID := insertProduct(t, db, unique("PRD"), 25)
+	lotID := insertLot(t, db, unique("SUC"), "product", productID, 10, 18)
+	marketID := insertMarket(t, db, unique("MKT"))
+	code := unique("SALE")
+
+	sale := model.Sale{Code: code, MarketID: marketID, Status: "completed"}
+	lines := []model.SaleLine{{LotID: lotID, Qty: 2, UnitPrice: 25, TotalPrice: 50}}
+
+	first, err := r.CreateSale(ctx, sale, lines)
+	if err != nil {
+		t.Fatalf("first CreateSale: %v", err)
+	}
+	second, err := r.CreateSale(ctx, sale, lines)
+	if err != nil {
+		t.Fatalf("second CreateSale: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Fatalf("second sale ID = %d, want %d", second.ID, first.ID)
+	}
+
+	lot, err := r.GetLot(ctx, lotID)
+	if err != nil {
+		t.Fatalf("GetLot: %v", err)
+	}
+	if lot.Qty != 8 {
+		t.Fatalf("lot qty = %v, want 8 (deducted once)", lot.Qty)
+	}
+	movements, err := r.ListStockMovements(ctx, lotID)
+	if err != nil {
+		t.Fatalf("ListStockMovements: %v", err)
+	}
+	if len(movements) != 1 {
+		t.Fatalf("movements = %d, want 1", len(movements))
+	}
+}

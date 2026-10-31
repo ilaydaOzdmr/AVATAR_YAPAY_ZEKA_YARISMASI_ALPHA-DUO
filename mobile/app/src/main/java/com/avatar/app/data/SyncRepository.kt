@@ -7,9 +7,11 @@ import com.avatar.app.data.entities.LocalProduct
 import com.avatar.app.data.entities.LocalSale
 import com.avatar.app.data.entities.LocalSaleLine
 import com.avatar.app.data.entities.Outbox
+import androidx.room.withTransaction
 import java.io.IOException
 import java.time.Instant
 import java.time.LocalDateTime
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -31,6 +33,20 @@ data class PredictionView(
     val warnings: List<String>,
     val modelVersion: String,
     val modelStatus: String,
+    val offline: Boolean = false,
+    val message: String? = null,
+)
+
+data class ReportSection(
+    val title: String,
+    val count: Int,
+    val columns: List<String>,
+    val rows: List<List<String>>,
+)
+
+data class ReportView(
+    val generatedAt: String,
+    val sections: List<ReportSection>,
     val offline: Boolean = false,
     val message: String? = null,
 )
@@ -57,12 +73,56 @@ class SyncRepository(
     private val baseUrl: String = DEFAULT_BASE_URL,
 ) {
     companion object {
-        // Fiziksel cihazda: adb reverse tcp:8080 tcp:8080 ile cihazın localhost:8080'i
-        // host'un backend'ine yönlendirilir (weble aynı yer).
-        // Emülatörde: adb reverse de çalışır; alternatif 10.0.2.2:8080.
+        // Emülatör: 10.0.2.2 host'un localhost'udur. Fiziksel cihaz:
+        // `adb reverse tcp:8080 tcp:8080` sonrası localhost çalışır.
         const val DEFAULT_BASE_URL = "http://localhost:8080"
         private const val CLIENT_ID = "android"
         private val JSON = "application/json; charset=utf-8".toMediaType()
+    }
+
+    private var resolvedBaseUrl: String? = null
+    private val healthClient: OkHttpClient =
+        client.newBuilder().callTimeout(2, TimeUnit.SECONDS).build()
+
+    fun activeBaseUrl(): String? = resolvedBaseUrl
+
+    private fun candidateBaseUrls(): List<String> = buildList {
+        if (baseUrl.isNotBlank()) add(baseUrl)
+        add("http://10.0.2.2:8080")
+        add("http://localhost:8080")
+    }.distinct()
+
+    // Resolve the first reachable backend once and cache it. This makes the app
+    // work on an emulator (10.0.2.2) and on a physical device with adb reverse.
+    private suspend fun serverBaseUrl(): String {
+        resolvedBaseUrl?.let { return it }
+        val failures = mutableListOf<String>()
+        for (candidate in candidateBaseUrls()) {
+            try {
+                get("$candidate/health", healthClient).use { response ->
+                    if (response.isSuccessful) {
+                        resolvedBaseUrl = candidate
+                        return candidate
+                    }
+                    failures.add("$candidate -> HTTP ${response.code}")
+                }
+            } catch (error: IOException) {
+                failures.add("$candidate -> ${error.message}")
+            }
+        }
+        throw IOException(
+            "Sunucuya ulaşılamadı. Backend 8080'de çalışıyor mu? " +
+                "Emülatörde 10.0.2.2, fiziksel cihazda `adb reverse tcp:8080 tcp:8080`. " +
+                "Denenen adresler: ${failures.joinToString("; ")}",
+        )
+    }
+
+    suspend fun connectionStatus(): String = withContext(Dispatchers.IO) {
+        try {
+            "Bağlı: ${serverBaseUrl()}"
+        } catch (error: IOException) {
+            error.message ?: "Bağlantı yok"
+        }
     }
 
     suspend fun products(): List<LocalProduct> = withContext(Dispatchers.IO) {
@@ -92,6 +152,7 @@ class SyncRepository(
         serviceCost: Double,
         laborCost: Double,
     ): PredictionView = withContext(Dispatchers.IO) {
+        val base = serverBaseUrl()
         val payload = JSONObject()
             .put("raw_material_kg", rawKg)
             .put("spice_kg", spiceKg)
@@ -99,7 +160,7 @@ class SyncRepository(
             .put("service_cost", serviceCost)
             .put("labor_cost", laborCost)
         postPrediction(
-            url = "$baseUrl/ml/predict/v2/yield",
+            url = "$base/ml/predict/v2/yield",
             payload = payload,
             kind = "yield",
             inputSummary = "%.1f kg hammadde".format(rawKg),
@@ -111,6 +172,7 @@ class SyncRepository(
         liveWeight: Double,
         carcassWeight: Double?,
     ): PredictionView = withContext(Dispatchers.IO) {
+        val base = serverBaseUrl()
         val payload = JSONObject()
             .put("animal_type", animalType)
             .put("live_weight_kg", liveWeight)
@@ -118,7 +180,7 @@ class SyncRepository(
             payload.put("carcass_weight_kg", carcassWeight)
         }
         postPrediction(
-            url = "$baseUrl/ml/predict/v2/butchery",
+            url = "$base/ml/predict/v2/butchery",
             payload = payload,
             kind = "butchery_$animalType",
             inputSummary = "%.1f kg canlı ağırlık".format(liveWeight),
@@ -204,41 +266,77 @@ class SyncRepository(
     }
 
     suspend fun pull(): Unit = withContext(Dispatchers.IO) {
-        val pullBody = get("$baseUrl/sync/pull").use { response ->
+        val base = serverBaseUrl()
+        val pullBody = get("$base/sync/pull").use { response ->
             if (!response.isSuccessful) {
                 throw IOException("pull failed: HTTP ${response.code}")
             }
             JSONObject(response.body?.string().orEmpty())
         }
-        val products = parseProducts(pullBody.getJSONArray("products"))
+        val products = parseProducts(pullBody.optJSONArray("products") ?: JSONArray())
         val blockedCodes = if (pullBody.isNull("blocked_lot_codes")) {
             emptySet()
         } else {
             pullBody.getJSONArray("blocked_lot_codes").toStringSet()
         }
+        val lots = parseLots(pullBody.optJSONArray("lots") ?: JSONArray(), blockedCodes)
+        val markets = parseMarkets(pullBody.optJSONArray("markets") ?: JSONArray())
 
-        val lotsBody = get("$baseUrl/lots").use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("lots failed: HTTP ${response.code}")
-            }
-            JSONArray(response.body?.string().orEmpty())
+        // Replace the local cache atomically: a failed pull must not leave the
+        // SQLite database half-empty.
+        db.withTransaction {
+            db.productDao().clear()
+            db.productDao().upsertAll(products)
+            db.lotDao().clear()
+            db.lotDao().upsertAll(lots)
+            db.marketDao().clear()
+            db.marketDao().upsertAll(markets)
         }
-        val lots = parseLots(lotsBody, blockedCodes)
+    }
 
-        val marketsBody = get("$baseUrl/markets").use { response ->
-            if (!response.isSuccessful) {
-                throw IOException("markets failed: HTTP ${response.code}")
+    suspend fun reports(): ReportView = withContext(Dispatchers.IO) {
+        try {
+            val base = serverBaseUrl()
+            val body = get("$base/reports/summary").use { response ->
+                if (!response.isSuccessful) {
+                    throw IOException("reports failed: HTTP ${response.code}")
+                }
+                JSONObject(response.body?.string().orEmpty())
             }
-            JSONArray(response.body?.string().orEmpty())
+            val sections = listOf(
+                "purchases" to "Alış",
+                "production" to "Üretim",
+                "butchery" to "Parçalama",
+                "lot_movements" to "Lot Hareketleri",
+                "sales" to "Satış",
+                "recalls" to "Geri Çağırma",
+            ).map { (key, title) ->
+                val array = body.optJSONArray(key) ?: JSONArray()
+                val columns = if (array.length() > 0) {
+                    array.getJSONObject(0).keys().asSequence().toList()
+                } else {
+                    emptyList()
+                }
+                val rows = buildList {
+                    for (index in 0 until array.length()) {
+                        val item = array.getJSONObject(index)
+                        add(columns.map { column -> item.opt(column)?.toString().orEmpty() })
+                    }
+                }
+                ReportSection(title = title, count = rows.size, columns = columns, rows = rows)
+            }
+            ReportView(
+                generatedAt = body.optString("generated_at"),
+                sections = sections,
+            )
+        } catch (error: IOException) {
+            ReportView(
+                generatedAt = "",
+                sections = emptyList(),
+                offline = true,
+                message = error.message ?: "Raporlar alınamadı",
+            )
         }
-        val markets = parseMarkets(marketsBody)
-
-        db.productDao().clear()
-        db.productDao().upsertAll(products)
-        db.lotDao().clear()
-        db.lotDao().upsertAll(lots)
-        db.marketDao().clear()
-        db.marketDao().upsertAll(markets)
     }
 
     suspend fun saveSale(sale: LocalSale, lines: List<LocalSaleLine>): Long = withContext(Dispatchers.IO) {
@@ -263,13 +361,19 @@ class SyncRepository(
         val sale = db.saleDao().getById(saleId) ?: return@withContext PushResult.Failed("sale not found")
         val lines = db.saleDao().getLines(saleId)
         try {
-            post("$baseUrl/sales", salePayload(sale, lines).toString()).use { response ->
+            val base = serverBaseUrl()
+            post("$base/sales", salePayload(sale, lines).toString()).use { response ->
                 when {
                     response.code == 409 -> {
-                        db.saleDao().setSynced(saleId, false)
+                        // Server rejected the sale (blocked lot). Do not retry
+                        // forever: mark it rejected and remove the outbox row.
+                        db.saleDao().setStatus(saleId, "rejected")
+                        db.saleDao().setSynced(saleId, true)
+                        db.outboxDao().deleteByEntity("sale", saleId)
                         PushResult.Blocked("blocked lot: sale rejected")
                     }
                     response.isSuccessful -> {
+                        db.saleDao().setStatus(saleId, "completed")
                         db.saleDao().setSynced(saleId, true)
                         db.outboxDao().deleteByEntity("sale", saleId)
                         PushResult.Success
@@ -289,27 +393,21 @@ class SyncRepository(
             return@withContext PushResult.Success
         }
 
-        val sales = JSONArray()
-        outbox.forEach { sales.put(JSONObject(it.payload)) }
-        val body = JSONObject().put("sales", sales).toString()
-
-        try {
-            post("$baseUrl/sync/push", body).use { response ->
-                when {
-                    response.code == 409 -> {
-                        outbox.forEach { db.saleDao().setSynced(it.entity_id, false) }
-                        PushResult.Blocked("blocked lot: sale rejected")
-                    }
-                    response.isSuccessful -> {
-                        outbox.forEach { db.saleDao().setSynced(it.entity_id, true) }
-                        db.outboxDao().clear()
-                        PushResult.Success
-                    }
-                    else -> PushResult.Failed("HTTP ${response.code}")
-                }
+        var blocked = false
+        var failed = false
+        // Push one sale at a time. The sale code is the idempotency key, so a
+        // retry after a timeout cannot deduct stock twice.
+        for (entry in outbox) {
+            when (submitSale(entry.entity_id)) {
+                is PushResult.Success -> Unit
+                is PushResult.Blocked -> blocked = true
+                is PushResult.Failed -> failed = true
             }
-        } catch (error: IOException) {
-            PushResult.Failed("offline")
+        }
+        when {
+            blocked -> PushResult.Blocked("blocked lot: at least one sale rejected")
+            failed -> PushResult.Failed("offline")
+            else -> PushResult.Success
         }
     }
 
@@ -385,8 +483,8 @@ class SyncRepository(
         }
     }
 
-    private fun get(url: String): Response =
-        client.newCall(Request.Builder().url(url).get().build()).execute()
+    private fun get(url: String, httpClient: OkHttpClient = client): Response =
+        httpClient.newCall(Request.Builder().url(url).get().build()).execute()
 
     private fun post(url: String, body: String): Response =
         client.newCall(Request.Builder().url(url).post(body.toRequestBody(JSON)).build()).execute()
