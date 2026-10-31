@@ -17,7 +17,7 @@ class SaleStatusTest {
     @Test
     fun rejectedSaleIsLabelledAsBlockedLotRejection() {
         assertEquals(SaleDisplayStatus.Rejected, saleDisplayStatus(sale("rejected", true)))
-        assertEquals("Bloklu lot reddedildi", SaleDisplayStatus.Rejected.label)
+        assertEquals("Bloklandı", SaleDisplayStatus.Rejected.label)
     }
 
     @Test

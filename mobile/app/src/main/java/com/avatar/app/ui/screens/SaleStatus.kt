@@ -3,7 +3,7 @@ package com.avatar.app.ui.screens
 import com.avatar.app.data.entities.LocalSale
 
 internal enum class SaleDisplayStatus(val label: String) {
-    Rejected("Bloklu lot reddedildi"),
+    Rejected("Bloklandı"),
     Synced("Senkron"),
     Pending("Bekliyor"),
 }

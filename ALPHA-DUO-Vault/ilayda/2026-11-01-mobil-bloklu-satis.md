@@ -8,7 +8,7 @@ sayfadaki "Son satış" kartı da reddedilen denemeyi son satış sanabiliyordu.
 
 ## Çözüm
 - `SaleStatus.kt` eklendi:
-  - `rejected` → **"Bloklu lot reddedildi"** (kırmızı)
+  - `rejected` → **"Bloklandı"** (kırmızı)
   - `synced` → "Senkron" (yeşil)
   - aksi halde → "Bekliyor" (amber)
 - `History` artık `status` alanını dikkate alıyor.
