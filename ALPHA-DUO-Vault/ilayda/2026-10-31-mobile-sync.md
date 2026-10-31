@@ -66,5 +66,9 @@
 - `scripts/connect-all.ps1`: emülatör + fiziksel cihaz dahil **tüm ADB
   cihazlarına** tek komutla reverse kurar; `-Install` ile APK’yı da kurar.
   Böylece iki ortam için tek yöntem kullanılır.
+- `scripts/install-adb-reverse-autostart.ps1`: arka plan izleyicisini Windows
+  başlangıcına ekler; USB geri takılınca reverse’i 2 saniyede geri kurar.
+  (Zamanlanmış görev izni yoksa Başlangıç klasörüne VBS koyar.)
+- Test: `adb kill-server` sonrası reverse 2 saniyede geri geldi.
 - Hata mesajları artık kırmızı, başarı mesajları yeşil gösteriliyor.
 

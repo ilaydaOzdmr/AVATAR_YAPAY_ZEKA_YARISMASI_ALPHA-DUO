@@ -22,8 +22,18 @@ powershell -ExecutionPolicy Bypass -File scripts/connect-all.ps1
 ```
 
 Script, bağlı **tüm** cihazlara `tcp:8080 -> localhost:8080` yönlendirmesini
-kurar. Uygulama varsayılan `http://localhost:8080` adresini kullanır. USB
-koptuğunda tekrar çalıştırın veya `scripts/adb-reverse-watch.ps1`’i açık bırakın.
+kurar. Uygulama varsayılan `http://localhost:8080` adresini kullanır.
+
+USB her çıkarılıp takıldığında reverse kaybolur. Bunu otomatik düzeltmek için
+**bir kez** şunu çalıştırın:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-adb-reverse-autostart.ps1
+```
+
+Bu, arka plan izleyicisini Windows başlangıcına ekler. USB geri takıldığında
+2 saniye içinde `adb reverse` kendiliğinden kurulur. Log:
+`%TEMP%\avatar-adb-reverse.log`.
 
 Alternatif: telefon + PC aynı Wi-Fi’da ise uygulamadaki **Sunucu → Değiştir**
 alanına `http://<PC-IP>:8080` yazın; bu adres emülatörden de erişilebilir
