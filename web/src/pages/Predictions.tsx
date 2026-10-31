@@ -4,6 +4,7 @@ import { mlGet, mlPost } from "../api";
 interface YieldResult {
   predicted_qty: number;
   predicted_unit_cost: number;
+  warnings: string[];
 }
 
 interface ButcheryPart {
@@ -13,6 +14,7 @@ interface ButcheryPart {
 
 interface ButcheryResult {
   parts: ButcheryPart[];
+  warnings: string[];
 }
 
 interface ModelMetrics {
@@ -53,7 +55,7 @@ export default function Predictions() {
     setYieldResult(null);
 
     const raw = Number.parseFloat(rawMaterialKg);
-    if (Number.isNaN(raw)) {
+    if (!Number.isFinite(raw) || raw <= 0) {
       setYieldError("Enter numeric raw material kg.");
       return;
     }
@@ -75,7 +77,7 @@ export default function Predictions() {
     setButcheryResult(null);
 
     const weight = Number.parseFloat(inputWeight);
-    if (!animalType.trim() || Number.isNaN(weight)) {
+    if (!animalType.trim() || !Number.isFinite(weight) || weight <= 0) {
       setButcheryError("Enter an animal type and numeric input weight.");
       return;
     }
@@ -121,7 +123,8 @@ export default function Predictions() {
         </table>
       )}
 
-      <h3>Butchery prediction</h3>
+      {yieldResult?.warnings.map((warning) => <p key={warning} className="message">{warning}</p>)}
+      <h3>Butchery prediction (measured carcass weight)</h3>
       <form className="inline-form" onSubmit={predictButchery}>
         <input
           value={animalType}
@@ -131,7 +134,7 @@ export default function Predictions() {
         <input
           value={inputWeight}
           onChange={(event) => setInputWeight(event.target.value)}
-          placeholder="Input weight"
+          placeholder="Carcass weight (kg)"
         />
         <button type="submit">Predict parts</button>
       </form>
@@ -155,6 +158,7 @@ export default function Predictions() {
         </table>
       )}
 
+      {butcheryResult?.warnings.map((warning) => <p key={warning} className="message">{warning}</p>)}
       <h3>Model report</h3>
       {reportError && <p className="error">{reportError}</p>}
       {report && (

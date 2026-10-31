@@ -20,8 +20,9 @@ from ml.src.schemas import (
     YieldV2Request,
 )
 from ml.src.service import MLService, ModelUnavailableError
+from ml.src.config import MODEL_VERSION
 
-app = FastAPI(title="AVATAR ML Service", version="1.0.0")
+app = FastAPI(title="AVATAR ML Service", version=MODEL_VERSION)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

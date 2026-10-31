@@ -41,7 +41,7 @@ def test_yield_v2_returns_metadata_and_uncertainty():
     body = response.json()
     assert body["prediction"]["finished_qty"] > 0
     assert 0.5 < body["prediction"]["yield_pct"] < 1.0
-    assert body["model_version"] == "1.0.0"
+    assert body["model_version"] == "1.1.0"
     assert body["model_status"] == "synthetic_only"
     assert body["warnings"]
     assert body["uncertainty"]["finished_qty"]["test_rmse"] >= 0

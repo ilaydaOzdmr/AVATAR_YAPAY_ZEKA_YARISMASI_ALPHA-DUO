@@ -3,11 +3,17 @@
 Bu klasör iki tür veriyi **ayırır**:
 
 1. `raw/usda/` — gerçek, kamuya açık USDA ERS fiyat serileri.
-2. `processed/*_synthetic.csv` — gerçek işletme kaydı olmayan, belgelenmiş
+2. `processed/synthetic_v2/*_synthetic.csv` — gerçek işletme kaydı olmayan, belgelenmiş
    sentetik veri. Her satırda `data_origin = synthetic_calibrated` vardır.
 
 > Sentetik satırlar gerçek üretim emri veya gerçek karkas ölçümü değildir.
 > Bu veriyle elde edilen metrikler gerçek saha başarısı olarak sunulmaz.
+
+3. `raw/verified_real/` ve `real/` — USDA pişirme verimi, North Wyke kuzu ve
+   Hararghe sığır ölçümleri. Güncel doğrulama:
+   [DATA_SOURCES.md](../../docs/DATA_SOURCES.md). Eksik hedefler nedeniyle
+   eğitimde kullanılmazlar. Önceki `processed/` dosyaları tarihsel v1'dir;
+   v1.1 eğitimi onları okumaz.
 
 ## 1. Kaynak doğrulama tablosu (Aşama 2)
 
@@ -15,7 +21,7 @@ Bu klasör iki tür veriyi **ayırır**:
 |---|---|---|---|---|---|---|---|
 | USDA ERS — Meat Price Spreads | [sayfa](https://www.ers.usda.gov/data-products/meat-price-spreads) | CSV/XLSX | ABD kamu malı | — | 13.080 + 800 + 547 + 516 satır | Aylık perakende/toptan fiyat ve marj | **Gerçek, indirildi** |
 | USDA ERS — Livestock & Meat Domestic Data | [sayfa](https://www.ers.usda.gov/data-products/livestock-and-meat-domestic-data) | CSV/XLSX/ZIP | ABD kamu malı | — | 5.156 + 7.093 + 73.846 satır | Canlı/toptan fiyat, üretim, kesim istatistikleri | **Gerçek, indirildi** |
-| North Wyke Farm Platform | [portal](https://nwfp.rothamsted.ac.uk/) | Portal (kayıt gerekli) | NWFP Data Terms of Use | — | Anonim indirme yok | Canlı ağırlık, otlatma, çiftlik olayları; karkas parça ağırlığı yok | **Kısıtlı** |
+| North Wyke sheep V1 | [veri yayını](https://data.mendeley.com/datasets/xy3ndcy8jd/1) | ZIP/CSV | CC BY 4.0 | 2.978 | 2.978 (2.607 geçerli çift) | Canlı/soğuk karkas, parça yok | **Gerçek, indirildi** |
 | NZ Lamb Primal Cuts (Ngo et al. 2016) | [DOI](https://doi.org/10.1016/j.meatsci.2015.10.012) | Makale | Elsevier telif | 792 karkas | 0 | Primal/retail cut ağırlıkları | **İndirilemez** |
 | Irish Cattle Primal Cuts (ICBF/Teagasc) | [ICBF](https://www.icbf.com/) | PDF/sunum | ICBF/Teagasc | ~200.000 (191.847 doğrulanamadı) | 0 | Primal cut ağırlıkları, genetik değerlendirme | **İndirilemez** |
 | Hanwoo carcass (Naserkheil et al. 2021) | [PMC](https://pmc.ncbi.nlm.nih.gov/articles/PMC8701981) | Makale | CC BY (makale) | 3.467 | 0 | 10 primal cut ağırlığı | **İndirilemez** |
@@ -27,9 +33,8 @@ Bu klasör iki tür veriyi **ayırır**:
   ve `reports/dataset_inventory.json` ile doğrulanır. Bunlar hayvan bazlı kesim
   verisi değil, aylık fiyat/istatistik serileridir. Bu yüzden yalnızca fiyat
   girdisi olarak kullanılır; parça ağırlığı hedefi olarak kullanılmaz.
-- **North Wyke** portalı verinin kamuya açık olduğunu söyler, ancak indirme için
-  kayıt/giriş zorunludur. İncelenen veri kategorileri canlı ağırlık ve çiftlik
-  olaylarıdır; but/loin/shoulder gibi karkas parça ağırlıkları yoktur.
+- **North Wyke** için önceki portal incelemesi eksikti: Mendeley V1 anonim
+  indirilebilir. Gerçek canlı/soğuk karkas eşleşmeleri vardır; parça hedefleri yoktur.
 - **Ngo 2016** 792 karkaslık çalışmadır; ham veri makale ekinde açık değildir.
   Makalenin 792 sayısı indirilebilir dosya satır sayısı değildir.
 - **Irish** kaynaklarında ~200.000 hayvandan söz edilir; 191.847 sayısı
@@ -40,7 +45,7 @@ Bu klasör iki tür veriyi **ayırır**:
 
 ## 2. İşlenmiş veri dosyaları
 
-### `processed/production_orders_synthetic.csv`
+### `processed/synthetic_v2/production_orders_synthetic.csv`
 
 | Sütun | Tip | Açıklama |
 |---|---|---|
@@ -52,8 +57,8 @@ Bu klasör iki tür veriyi **ayırır**:
 | `casing_kg` | float | Bağırsak girdisi |
 | `other_material_kg` | float | Diğer girdi |
 | `material_unit_price_*` | float | Girdi birim fiyatları |
-| `service_cost` | float | Hizmet maliyeti |
-| `labor_cost` | float | İşçilik |
+| `service_cost` | float | Planlanan mamule bağlı demo bütçe; model girdisi değil |
+| `labor_cost` | float | Et girdisine bağlı demo bütçe; model girdisi değil |
 | `usda_price_index` | float | USDA boxed beef fiyat endeksi (ort. 1.0) |
 | `expected_qty` | float | Planlanan mamul |
 | `finished_qty` | float | **Hedef** gerçekleşen mamul |
@@ -61,12 +66,12 @@ Bu klasör iki tür veriyi **ayırır**:
 | `actual_total_cost` | float | Gerçek maliyet (muhasebe) |
 | `actual_ekp` | float | **Muhasebe** EKP = toplam maliyet / finished_qty |
 | `data_origin` | string | `synthetic_calibrated` |
-| `generator_version` | string | `synthetic-v1` |
+| `generator_version` | string | `synthetic-v2` |
 
 `actual_ekp` bir model çıktısı değildir; gerçek maliyet kimliğidir. Model
 yalnızca üretim öncesi `finished_qty` / `yield_pct` tahmini yapar.
 
-### `processed/butchery_lamb_synthetic.csv` ve `butchery_cattle_synthetic.csv`
+### `processed/synthetic_v2/butchery_lamb_synthetic.csv` ve `butchery_cattle_synthetic.csv`
 
 | Sütun | Tip | Açıklama |
 |---|---|---|
@@ -75,7 +80,7 @@ yalnızca üretim öncesi `finished_qty` / `yield_pct` tahmini yapar.
 | `animal_type` | kategori | lamb / cattle |
 | `breed`, `sex` | kategori | Irk, cinsiyet |
 | `age_months` | float | Yaş |
-| `live_weight_kg` | float | Canlı ağırlık |
+| `live_weight_kg` | float | Sentetik canlı ağırlık; parçalama model girdisi değil |
 | `carcass_weight_kg` | float | Karkas ağırlığı (girdi) |
 | `conformation_score` | 1–5 | Konformasyon |
 | `fat_score` | 1–5 | Yağ skoru |
@@ -85,7 +90,7 @@ yalnızca üretim öncesi `finished_qty` / `yield_pct` tahmini yapar.
 | `total_saleable_weight` | float | **Hedef** satılabilir toplam |
 | `cutting_yield_pct` | float | **Hedef** verim yüzdesi |
 | `data_origin` | string | `synthetic_calibrated` |
-| `generator_version` | string | `synthetic-v1` |
+| `generator_version` | string | `synthetic-v2` |
 
 Fiziksel kısıt: `leg+loin+shoulder+rib+mince+diced+bone+waste = carcass_weight`
 (1e-6 tolerans) ve `total_saleable ≤ carcass_weight`.
@@ -106,6 +111,8 @@ Fiziksel kısıt: `leg+loin+shoulder+rib+mince+diced+bone+waste = carcass_weight
 ```cmd
 python ml/scripts/download_usda.py
 python ml/scripts/build_datasets.py
+python -m ml.scripts.import_real_data
+python ml/train.py --quick
 python -m pytest ml/tests -q
 ```
 
@@ -113,6 +120,7 @@ python -m pytest ml/tests -q
 
 - Gerçek üretim emri, gerçek karkas parça ölçümü veya gerçek EKP yok.
 - Sentetik veriyle eğitilen modeller **gerçek saha doğrulaması** sayılmaz.
-- North Wyke/Irish/Hanwoo ham verisi erişim/anahtar gerektirir; bu depoda yok.
+- North Wyke açık yayını indirildi; parça hedefleri yok. Diğer kaynakların
+  güncel erişim/uygunluk durumu `docs/DATA_SOURCES.md` içindedir.
 - USDA fiyatları ABD piyasasıdır; işletme fiyat kataloğu ile ölçeklenmiştir.
 - `ml/data/usda_manifest.json` indirilen dosyaların URL, boyut ve SHA-256 kaydıdır.

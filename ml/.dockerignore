@@ -3,3 +3,8 @@ __pycache__
 .venv
 venv
 .git
+data/raw
+data/real
+data/processed/synthetic_v2
+artifacts/reliability_v2
+reports/local

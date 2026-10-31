@@ -4,8 +4,8 @@ Run from the repository root:
 
     python ml/scripts/build_datasets.py
 
-The production and butchery files are synthetic (no public animal-level raw
-data exists); the USDA price files are real public data.
+The production and butchery training files are synthetic. Real measurements
+are imported separately by import_real_data.py; they lack the full targets.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ if str(ML_ROOT) not in sys.path:
 from src.synthetic import build_all  # noqa: E402
 
 RAW_DIR = ML_ROOT / "data" / "raw" / "usda"
-PROCESSED_DIR = ML_ROOT / "data" / "processed"
+PROCESSED_DIR = ML_ROOT / "data" / "processed" / "synthetic_v2"
 REPORTS_DIR = ML_ROOT / "reports"
 
 

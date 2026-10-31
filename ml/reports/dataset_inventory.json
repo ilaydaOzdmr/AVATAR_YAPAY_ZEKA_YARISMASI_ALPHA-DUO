@@ -4,8 +4,8 @@
     "butchery_lamb_synthetic": 800,
     "butchery_cattle_synthetic": 800
   },
-  "usda_price_file_used": "data/raw/usda/livestock_domestic_data/livestock-data-machine-readable-files/WholesalePrices.csv",
-  "price_index_available": true,
+  "usda_price_file_used": null,
+  "price_index_available": false,
   "data_origin": {
     "production_orders_synthetic": "synthetic_calibrated",
     "butchery_lamb_synthetic": "synthetic_calibrated",

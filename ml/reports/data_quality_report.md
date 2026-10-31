@@ -1,5 +1,10 @@
 # Veri kalite raporu — Aşama 2
 
+> Tarihsel v1 raporu. 31 Ekim 2026 araştırması aşağıdaki North Wyke erişim ve
+> hayvan verisi bulunamadı sonuçlarını geçersiz kılmıştır. Güncel kaynaklar:
+> `docs/DATA_SOURCES.md`; sayısal raporlar: `data_quality.json` (sentetik v2),
+> `real_data_inventory.json` (gerçek referans).
+
 Tarih: 2026-10-30
 Üretici: `ml/src/synthetic.py` (`synthetic-v1`)
 Komutlar: `python ml/scripts/download_usda.py`, `python ml/scripts/build_datasets.py`

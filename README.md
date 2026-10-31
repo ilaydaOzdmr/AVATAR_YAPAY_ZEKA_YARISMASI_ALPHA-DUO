@@ -54,7 +54,8 @@ bulur, lotları bloke eder ve satışı engeller.
   parçalama, satış, lot izlenebilirliği, geri çağırma, yapay zekâ, raporlar (CSV indirme),
   fatura OCR ve anomali uyarıları. Tüm ekranlar canlı backend verisi kullanır.
 - **Kotlin Android** — satış, offline SQLite, senkronizasyon (outbox + pull/push).
-- **Python ML** — iki lineer regresyon modeli + baseline karşılaştırma + MAE/RMSE.
+- **Python ML** — üretim ve tür bazında parçalama regresyonları, fiziksel kısıtlar,
+  grup bazlı doğrulama ve baseline karşılaştırması.
 
 ---
 
@@ -161,7 +162,15 @@ Ayrıntılı model kartı: **`docs/ml.md`**.
 Modeller **sürümlü artefaktlardan yüklenir**; API açılışında yeniden eğitim
 yapılmaz. Eğitim verisi `synthetic_calibrated` olduğu için model durumu
 `synthetic_only`’dır ve metrikler gerçek saha başarısı olarak sunulmaz.
-Gerçek kamu verisi olarak yalnız USDA fiyat serileri kullanılmıştır.
+Gerçek USDA pişirme verimleri, North Wyke kuzu ve Hararghe sığır ölçümleri ayrı
+referans tablolarına entegre edilmiştir. Kaynak/lisans ve uygunluk kararı:
+[`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md). Düzeltmeler ve test sonuçları:
+[`docs/ML_AUDIT_AND_IMPROVEMENTS.md`](docs/ML_AUDIT_AND_IMPROVEMENTS.md).
+
+ML servisini ilk çalıştırmadan önce depo kökünde `python ml/scripts/build_datasets.py`
+ve `python ml/train.py --quick` çalıştırın. Yeni model/veri dosyaları Git dışındadır.
+Gerçek ölçümleri indirmek için `python -m ml.scripts.import_real_data` kullanılır;
+bu referanslar eksik yarışma hedefleri nedeniyle eğitim verisine karıştırılmaz.
 
 Lot izlenebilirliği ve geri çağırma **KI tahminine değil**, kesin kayıt
 ilişkilerine dayanır.

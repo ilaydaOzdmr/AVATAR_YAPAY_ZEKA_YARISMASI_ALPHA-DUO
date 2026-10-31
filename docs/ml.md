@@ -6,10 +6,10 @@
 |---|---|
 | Servis | Python 3.12 + FastAPI |
 | Modeller | Üretim verimi/EKP; kuzu parçalama; sığır parçalama |
-| Model sürümü | `1.0.0` |
+| Model sürümü | `1.1.0` |
 | Model durumu | `synthetic_only` |
-| Eğitim verisi | `ml/data/processed/*_synthetic.csv` |
-| Gerçek kamu verisi | USDA ERS fiyat serileri (yalnız fiyat girdisi) |
+| Eğitim verisi | `ml/data/processed/synthetic_v2/*_synthetic.csv` |
+| Gerçek kamu verisi | USDA verim özetleri, North Wyke kuzu, Hararghe sığır; ayrı referanslar |
 | API erişimi | Go backend proxy: `http://localhost:8080/ml/*` |
 | Doğrudan ML portu | `http://localhost:8000` (iç servis) |
 
@@ -19,19 +19,19 @@
 
 ## 2. Veri kaynakları
 
-Ayrıntılı kaynak doğrulaması: `ml/data/README.md`, `ml/reports/data_quality_report.md`.
+Ayrıntılı güncel doğrulama: [DATA_SOURCES.md](DATA_SOURCES.md).
 
-- **Gerçek ve indirilen:** USDA ERS Meat Price Spreads ve Livestock & Meat
-  Domestic Data (aylık fiyat/istatistik serileri).
-- **İndirilemeyen/kısıtlı:** North Wyke (kayıt gerekli), NZ Lamb 792 (ham veri
-  açık değil), Irish Cattle ~200k (ham veri açık değil), Hanwoo (OpenAPI anahtarı
-  gerekli).
+- **Gerçek ve indirilen:** USDA pişirme tablosu (173 özet), North Wyke
+  (2.978 kuzu), Hararghe (61 sığır). Mamul/EKP/parça hedefleri eksik
+  olduğundan eğitimde kullanılmazlar.
 - **Sentetik ve kalibre:** üretim emirleri (480), kuzu (800), sığır (800).
-  Her satırda `data_origin=synthetic_calibrated`, `generator_version=synthetic-v1`.
+  Her satırda `data_origin=synthetic_calibrated`, `generator_version=synthetic-v2`.
 
 ## 3. Modeller ve doğrulama
 
 - **Görev A:** `finished_qty`, `yield_pct`. EKP model hedefi değildir.
+  Fatura/maliyet alanları model girdisi değildir. API mamulü `et × tahmini verim`,
+  EKP'yi ayrı maliyet hesabıyla üretir. Mamul regresyonu ayrıca tanısal amaçlı tutulur.
 - **Görev B:** kuzu ve sığır için ayrı modeller; 10 hedef (parça ağırlıkları,
   toplam satılabilir, parçalama verimi).
 - Adaylar: Dummy, Linear, Ridge, Lasso, RandomForest, ExtraTrees,
@@ -42,15 +42,19 @@ Ayrıntılı kaynak doğrulaması: `ml/data/README.md`, `ml/reports/data_quality
   `production_batch`, parçalamada `farm_id`.
 - CV: `GroupKFold(5)` yalnız eğitim verisi; hiperparametre yalnız CV’de.
 - Test seti seçim/ayarlamada kullanılmaz.
+- `--quick`: Dummy, Linear, Ridge, RandomForest; yine 5 katlı grup CV.
+  Bu oturumda bu aday kümesi yeniden eğitildi. Ham regresyon ve API'nin
+  fiziksel kurallarından sonraki metrikler ayrı raporlanır.
 
 Seçilen modeller ve tüm metrikler: `ml/reports/model_comparison.md`,
-`ml/reports/model_report.md`, `ml/reports/model_performance_report.md`.
-Grafikler: `ml/reports/plots/`. Notebook: `ml/notebooks/model_analysis.ipynb`.
+`ml/reports/model_report.md`, `ml/reports/evaluation_report.json`.
+Eski `model_performance_report.md` ve izlenen `plots/` tarihsel v1'dir.
+Yeni grafikler ve kayıt bazlı hatalar `ml/reports/local/` (Git dışı) içindedir.
 
 ## 4. Artefaktlar
 
 ```
-ml/artifacts/
+ml/artifacts/reliability_v2/
   yield_model/{model.joblib,metadata.json,metrics.json,split.json}
   butchery_lamb_model/{...}
   butchery_cattle_model/{...}
@@ -93,19 +97,23 @@ Cevap:
 
 ```json
 {
-  "prediction": {"finished_qty": 80.3, "yield_pct": 0.796, "estimated_ekp": 13.11},
-  "model_version": "1.0.0",
+  "prediction": {"finished_qty": 84, "yield_pct": 0.84, "estimated_ekp": 18.2476},
+  "model_version": "1.1.0",
   "model_status": "synthetic_only",
   "applicable_input_range": {"raw_material_kg": {"min": 60.1, "max": 159.9}},
   "warnings": ["Model is trained on synthetic_calibrated data..."],
-  "uncertainty": {"finished_qty": {"test_rmse": 1.99}},
-  "cost_breakdown": {"total_cost": 1052.6},
+  "uncertainty": {"finished_qty": {"coverage_validated": false}},
+  "cost_breakdown": {"total_cost": 1532.8},
   "ekp_kind": "estimated_pre_production"
 }
 ```
 
+Yukarıdaki cevap yalnız şema örneğidir; çalıştırılmış tahmin/test metriği değildir.
 `actual_finished_qty` verilirse `accounting_ekp` ve `ekp_kind=actual_accounting`
 döner. Bu, tahmini EKP ile gerçek muhasebe EKP’sini ayırır.
+`service_unit_cost` tarifesi tahminde tahmini, muhasebede fiili mamulle çarpılır;
+sabit toplam `service_cost` ile birlikte verilmez. Eksik alanların demo
+varsayımları uyarıda bildirilir.
 
 ### Parçalama v2 örneği
 
@@ -115,15 +123,18 @@ POST /ml/predict/v2/butchery
 ```
 
 Cevap `prediction` içinde parça ağırlıkları, `physical_check` içinde
-`parts_sum_kg`/`parts_over_carcass` ve `warnings` döner. Fiziksel olarak tutarsız
-değerler sessizce düzeltilmez; uyarı üretilir.
+`parts_sum_kg`/`parts_over_carcass` ve `warnings` döner. Negatif olmayan parça
+oranları karkasa dengelenir; 0,001 kg yuvarlama kalanı dağıtılır. Satılabilir
+toplam ve verim bu parçalardan türetilir; düzeltme uyarıda açıklanır.
+Karkas kg zorunlu, canlı kg opsiyoneldir; sabit dressing oranı yoktur.
+Legacy `input_weight` de karkas kg anlamındadır.
 
 ## 6. Çalıştırma
 
 ```cmd
-python ml/scripts/download_usda.py
+python -m ml.scripts.import_real_data
 python ml/scripts/build_datasets.py
-python ml/train.py
+python ml/train.py --quick
 python ml/evaluate.py
 python -m pytest ml/tests -q
 docker compose -f infra/docker-compose.yml up -d --build
@@ -132,9 +143,9 @@ docker compose -f infra/docker-compose.yml up -d --build
 ## 7. Sınırlılıklar
 
 - Sentetik veri gerçek saha doğrulaması değildir.
-- `yield_pct` R² ≈ 0.69; belirsizlik diğer hedeflerden yüksektir.
+- `yield_pct` test R² ≈ 0.72; yalnız sentetik veri üzerinde ölçülmüştür.
 - Lineer modellerin kazanması üreticinin lineer olmasındandır; gerçek veride
   sıralama değişebilir.
-- USDA fiyatları ABD piyasasıdır; işletme fiyat kataloğuyla ölçeklenmiştir.
-- Gerçek veri geldiğinde aynı hat yeniden çalıştırılmalı ve model durumu
-  `validated_real` olarak güncellenmelidir.
+- Bu eğitimde yerel USDA fiyat dosyası yoktu; fiyat endeksi 1,0 fallback'i kullanıldı.
+- Gerçek verinin gelmesi tek başına `validated_real` statüsü vermez; lisans,
+  kapsam, gözlem kimliği ve bağımsız grup/zaman testi ayrıca doğrulanmalıdır.
