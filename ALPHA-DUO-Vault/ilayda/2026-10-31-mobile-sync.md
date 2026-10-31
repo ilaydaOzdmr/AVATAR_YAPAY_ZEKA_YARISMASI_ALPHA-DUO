@@ -48,3 +48,16 @@
   11 alış, 9 üretim, 9 parçalama, 18 lot hareketi, 9 satış.
 - Go unit + integration + vet → temiz.
 - Android `assembleDebug` → başarılı.
+
+## Fiziksel cihaz doğrulaması
+- Hata bir **fiziksel telefon** üzerindeydi; `localhost` telefonun kendisi,
+  `10.0.2.2` yalnızca emülatör içindir.
+- `adb reverse tcp:8080 tcp:8080` uygulandı; uygulama yeniden başlatıldı.
+- Ana ekran: **“Sunucu: http://localhost:8080 · ürün, lot ve market senkronize
+  edildi.”**
+- Raporlar ekranı cihazda açıldı: **11 alış**, lot hareketleri ve **9 satış**
+  MySQL’den geldi.
+- Kablosuz kullanım için telefon + PC aynı Wi-Fi’da olmalı; PC LAN IP’si
+  (`http://<PC-IP>:8080`) Windows güvenlik duvarında açık olmalı.
+- Hata mesajları artık kırmızı, başarı mesajları yeşil gösteriliyor.
+

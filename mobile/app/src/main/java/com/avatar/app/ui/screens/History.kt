@@ -23,6 +23,7 @@ import com.avatar.app.data.entities.LocalSale
 
 private val Amber = Color(0xFFB97722)
 private val Green = Color(0xFF2C7058)
+private val Red = Color(0xFFB83B35)
 
 @Composable
 fun History(
@@ -72,7 +73,11 @@ fun History(
             Text("Bekleyen satışları senkronla", color = Green)
         }
         if (message != null) {
-            Text(message, style = MaterialTheme.typography.labelMedium, color = Green)
+            val isError = message.contains("offline", ignoreCase = true) ||
+                message.contains("bağlantı", ignoreCase = true) ||
+                message.contains("failed", ignoreCase = true) ||
+                message.contains("reddedildi", ignoreCase = true)
+            Text(message, style = MaterialTheme.typography.labelMedium, color = if (isError) Red else Green)
         }
     }
 }

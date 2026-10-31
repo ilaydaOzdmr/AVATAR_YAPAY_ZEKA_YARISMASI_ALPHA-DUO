@@ -50,6 +50,10 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 - Uygulama `/health` ile erişilebilir backend’i otomatik bulur:
   emülatörde `http://10.0.2.2:8080`, fiziksel cihazda `adb reverse` sonrası
   `http://localhost:8080`.
+- **Fiziksel cihaz:** `10.0.2.2` yalnızca emülatör içindir. USB ile bağlı cihazda
+  `adb reverse tcp:8080 tcp:8080` çalıştırın. Kablosuz kullanacaksanız telefonla
+  PC aynı Wi-Fi’da olmalı ve PC’nin LAN IP’si (`http://<PC-IP>:8080`) Windows
+  güvenlik duvarında açık olmalıdır.
 - **Raporlar** sekmesi MySQL’den `GET /reports/summary` ile alış, üretim,
   parçalama, lot hareketleri, satış ve geri çağırma bölümlerini gösterir.
 - Senkronizasyon modeli: `docs/mobile-sync.md`.

@@ -174,7 +174,12 @@ fun Sale(
                 }
 
                 if (message != null) {
-                    Text(message, style = MaterialTheme.typography.labelMedium, color = if (message.contains("offline") || message.contains("yerel")) Red else Green)
+                    val isError = message.contains("offline", ignoreCase = true) ||
+                        message.contains("yerel", ignoreCase = true) ||
+                        message.contains("bağlantı", ignoreCase = true) ||
+                        message.contains("reddedildi", ignoreCase = true) ||
+                        message.contains("failed", ignoreCase = true)
+                    Text(message, style = MaterialTheme.typography.labelMedium, color = if (isError) Red else Green)
                 }
             }
         }
