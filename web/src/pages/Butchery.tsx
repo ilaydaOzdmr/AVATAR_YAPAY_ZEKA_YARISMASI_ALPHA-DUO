@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { rowKey } from "../rowIdentity";
 import { get } from "../api";
 
 interface Product {
@@ -108,8 +109,8 @@ export default function Butchery() {
               </tr>
             </thead>
             <tbody>
-              {result.items.map((item, index) => (
-                <tr key={`${item.product_id}-${index}`}>
+              {result.items.map((item) => (
+                <tr key={rowKey(item)}>
                   <td>{productLabel(item.product_id)}</td>
                   <td>{item.quantity}</td>
                   <td>{item.weight}</td>

@@ -63,7 +63,7 @@ def save_model_comparison(rows: list[dict], target: str, path: Path) -> None:
 
 def save_feature_importance(
     model,
-    X_test: pd.DataFrame,
+    x_test: pd.DataFrame,
     y_test: pd.Series,
     title: str,
     path: Path,
@@ -72,7 +72,7 @@ def save_feature_importance(
     _ensure(path)
     result = permutation_importance(
         model,
-        X_test,
+        x_test,
         y_test,
         scoring="neg_mean_absolute_error",
         n_repeats=5,
@@ -80,7 +80,7 @@ def save_feature_importance(
         n_jobs=-1,
     )
     order = np.argsort(result.importances_mean)[::-1][:top_n]
-    names = [X_test.columns[i] for i in order]
+    names = [x_test.columns[i] for i in order]
     values = result.importances_mean[order]
     fig, ax = plt.subplots(figsize=(8, max(3, 0.35 * len(names))))
     ax.barh(names[::-1], values[::-1], color="#B97722")
@@ -93,7 +93,7 @@ def save_feature_importance(
 
 def try_shap_summary(
     model,
-    X_test: pd.DataFrame,
+    x_test: pd.DataFrame,
     title: str,
     path: Path,
     max_samples: int = 200,
@@ -105,7 +105,7 @@ def try_shap_summary(
         return False
 
     try:
-        sample = X_test.head(max_samples)
+        sample = x_test.head(max_samples)
         preprocessor = model.named_steps["prep"]
         estimator = model.named_steps["model"]
         transformed = preprocessor.transform(sample)
@@ -124,6 +124,7 @@ def try_shap_summary(
             values = explainer.shap_values(transformed)
         plt.figure(figsize=(8, 5))
         shap.summary_plot(values, transformed, feature_names=list(names), show=False)
+        plt.title(title)
         _ensure(path)
         plt.tight_layout()
         plt.savefig(path, dpi=130, bbox_inches="tight")

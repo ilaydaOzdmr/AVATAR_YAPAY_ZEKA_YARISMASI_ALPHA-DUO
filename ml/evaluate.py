@@ -48,7 +48,7 @@ def evaluate_group(
     split = json.loads((artifact_dir / "split.json").read_text(encoding="utf-8"))
     pipelines = joblib.load(artifact_dir / "model.joblib")
     test_idx = split["test_indices"]
-    X_test = frame[features].iloc[test_idx]
+    x_test = frame[features].iloc[test_idx]
     report: dict = {
         "model_version": metadata["model_version"],
         "model_status": metadata["model_status"],
@@ -56,7 +56,7 @@ def evaluate_group(
         "test_sample_count": len(test_idx),
         "targets": {},
     }
-    raw = {target: pipelines[target].predict(X_test) for target in targets}
+    raw = {target: pipelines[target].predict(x_test) for target in targets}
     predictions = []
     for pos, (_, row) in enumerate(frame.iloc[test_idx].iterrows()):
         values = {target: raw[target][pos] for target in targets}

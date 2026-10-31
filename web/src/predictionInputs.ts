@@ -51,9 +51,7 @@ export function butcheryComparison(items: { product_id: number; weight: number; 
   const actuals = new Map<string, number>();
   for (const item of items) {
     if (item.is_waste) continue;
-    const code = products.find((p) => p.id === item.product_id)?.code;
-    if (!code || (!targets[code] && code !== "PRD-107")) throw new Error("Parça eşlemesi eksik; karşılaştırma yapılamıyor.");
-    if (!Number.isFinite(item.weight) || item.weight < 0) throw new Error("Kayıtlı parça miktarı geçersiz.");
+    const code = comparablePartCode(item, products, targets);
     if (code === "PRD-107") continue;
     actuals.set(code, (actuals.get(code) ?? 0) + item.weight);
   }
@@ -65,4 +63,12 @@ export function butcheryComparison(items: { product_id: number; weight: number; 
   });
   return { parts, actual: parts.reduce((sum, part) => sum + part.actual, 0),
     predicted: parts.reduce((sum, part) => sum + part.predicted, 0) };
+}
+
+function comparablePartCode(item: { product_id: number; weight: number },
+  products: { id: number; code: string }[], targets: Record<string, string>): string {
+  const code = products.find((product) => product.id === item.product_id)?.code;
+  if (!code || (!targets[code] && code !== "PRD-107")) throw new Error("Parça eşlemesi eksik; karşılaştırma yapılamıyor.");
+  if (!Number.isFinite(item.weight) || item.weight < 0) throw new Error("Kayıtlı parça miktarı geçersiz.");
+  return code;
 }

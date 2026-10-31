@@ -3,15 +3,15 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 
-def train_yield(X, y):
+def train_yield(features, y):
     """Train a linear regression model. X: (n, k) ndarray, y: (n,) ndarray."""
     model = LinearRegression()
-    model.fit(X, y)
+    model.fit(features, y)
     return model
 
 
-def predict(model, X):
-    return model.predict(X)
+def predict(model, features):
+    return model.predict(features)
 
 
 def baseline_mean(y):

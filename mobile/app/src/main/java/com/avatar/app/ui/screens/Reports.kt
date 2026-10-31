@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,7 +106,6 @@ fun Reports(
     var exportFailed by remember { mutableStateOf(false) }
 
     val sections = report?.sections.orEmpty()
-    val totalRows = sections.sumOf { it.count }
     val canExport = report != null && !report.offline && sections.isNotEmpty()
     val listState = rememberLazyListState()
 
@@ -131,19 +130,10 @@ fun Reports(
             )
         }
 
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onRefresh,
-                    modifier = Modifier.weight(1f),
-                    enabled = !exporting,
-                    shape = RoundedCornerShape(12.dp),
-                ) { Text("Raporları yenile") }
+        reportActions(canExport, exporting, onRefresh, onExport = export@{
 
-                Button(
-                    onClick = {
-                        if (!canExport || exporting) return@Button
-                        val current = report ?: return@Button
+                        if (!canExport || exporting) return@export
+                        val current = report ?: return@export
                         exporting = true
                         exportMessage = null
                         exportFailed = false
@@ -164,119 +154,17 @@ fun Reports(
                                 },
                             )
                         }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = canExport && !exporting,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Green),
-                ) {
-                    if (exporting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White,
-                        )
-                        Text("  PDF hazırlanıyor", maxLines = 1)
-                    } else {
-                        Text("PDF indir", maxLines = 1)
-                    }
-                }
-            }
-        }
+        })
 
-        if (report != null && !report.offline) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    StatChip("Kayıt", "$totalRows", Modifier.weight(1f))
-                    StatChip("Tablo", "${sections.size}", Modifier.weight(1f))
-                    StatChip(
-                        "Oluşturma",
-                        ReportFormatting.formatDate(report.generatedAt)
-                            ?.substringBefore(' ')
-                            ?: report.generatedAt.ifBlank { "—" },
-                        Modifier.weight(1f),
-                    )
-                }
-            }
-        }
+        reportStats(report, sections)
 
-        if (exportMessage != null) {
-            item {
-                Surface(
-                    color = if (exportFailed) RedSoft else GreenSoft,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        exportMessage.orEmpty(),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (exportFailed) Red else Green,
-                    )
-                }
-            }
-        }
+        reportExportMessage(exportMessage, exportFailed)
 
-        if (report?.offline == true) {
-            item {
-                Card(
-                    shape = RoundedCornerShape(14.dp),
-                    colors = CardDefaults.cardColors(containerColor = RedSoft),
-                ) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(
-                            "Raporlar alınamadı",
-                            fontWeight = FontWeight.Bold,
-                            color = Red,
-                        )
-                        Text(
-                            report.message ?: "Sunucuya bağlanılamadı.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Red,
-                        )
-                        Text(
-                            "Mağaza biriminde ağ bağlantısını kontrol edip yeniden deneyin.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
+        reportOfflineCard(report)
 
-        if (message != null && report?.offline != true) {
-            item {
-                val isError = message.startsWith("Bağlantı") ||
-                    message.contains("çevrimdışı", ignoreCase = true) ||
-                    message.contains("alınamadı", ignoreCase = true)
-                Text(
-                    message,
-                    color = if (isError) Red else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
-        }
+        reportConnectionMessage(message, report)
 
-        if (report == null) {
-            item {
-                Card(shape = RoundedCornerShape(14.dp)) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text("Rapor henüz yüklenmedi", fontWeight = FontWeight.Bold)
-                        Text(
-                            "“Raporları yenile” düğmesine basarak sunucudan son verileri çekin.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
+        reportPlaceholder(report)
 
         items(sections.size) { index ->
             val section = sections[index]
@@ -454,3 +342,146 @@ private fun TableCell(
 
 private fun columnWidth(key: String): Dp =
     columnWidths[key] ?: if (ReportFormatting.isNumeric(key)) 100.dp else 124.dp
+
+private fun LazyListScope.reportStats(report: ReportView?, sections: List<ReportSection>) {
+    val totalRows = sections.sumOf { it.count }
+    if (report != null && !report.offline) {
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatChip("Kayıt", "$totalRows", Modifier.weight(1f))
+                StatChip("Tablo", "${sections.size}", Modifier.weight(1f))
+                StatChip(
+                    "Oluşturma",
+                    ReportFormatting.formatDate(report.generatedAt)
+                        ?.substringBefore(' ')
+                        ?: report.generatedAt.ifBlank { "—" },
+                    Modifier.weight(1f),
+                )
+            }
+        }
+    }
+
+}
+
+private fun LazyListScope.reportExportMessage(exportMessage: String?, exportFailed: Boolean) {
+    if (exportMessage != null) {
+        item {
+            Surface(
+                color = if (exportFailed) RedSoft else GreenSoft,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    exportMessage.orEmpty(),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (exportFailed) Red else Green,
+                )
+            }
+        }
+    }
+
+}
+
+private fun LazyListScope.reportOfflineCard(report: ReportView?) {
+    if (report?.offline == true) {
+        item {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = RedSoft),
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        "Raporlar alınamadı",
+                        fontWeight = FontWeight.Bold,
+                        color = Red,
+                    )
+                    Text(
+                        report.message ?: "Sunucuya bağlanılamadı.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Red,
+                    )
+                    Text(
+                        "Mağaza biriminde ağ bağlantısını kontrol edip yeniden deneyin.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+
+}
+
+private fun LazyListScope.reportConnectionMessage(message: String?, report: ReportView?) {
+    if (message != null && report?.offline != true) {
+        item {
+            val isError = message.startsWith("Bağlantı") ||
+                message.contains("çevrimdışı", ignoreCase = true) ||
+                message.contains("alınamadı", ignoreCase = true)
+            Text(
+                message,
+                color = if (isError) Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+    }
+
+}
+
+private fun LazyListScope.reportPlaceholder(report: ReportView?) {
+    if (report == null) {
+        item {
+            Card(shape = RoundedCornerShape(14.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("Rapor henüz yüklenmedi", fontWeight = FontWeight.Bold)
+                    Text(
+                        "“Raporları yenile” düğmesine basarak sunucudan son verileri çekin.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+    }
+
+}
+
+private fun LazyListScope.reportActions(canExport: Boolean, exporting: Boolean, onRefresh: () -> Unit, onExport: () -> Unit) {
+    item {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = onRefresh,
+                modifier = Modifier.weight(1f),
+                enabled = !exporting,
+                shape = RoundedCornerShape(12.dp),
+            ) { Text("Raporları yenile") }
+
+            Button(
+                onClick = onExport,
+                modifier = Modifier.weight(1f),
+                enabled = canExport && !exporting,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Green),
+            ) {
+                if (exporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White,
+                    )
+                    Text("  PDF hazırlanıyor", maxLines = 1)
+                } else {
+                    Text("PDF indir", maxLines = 1)
+                }
+            }
+        }
+    }
+
+}

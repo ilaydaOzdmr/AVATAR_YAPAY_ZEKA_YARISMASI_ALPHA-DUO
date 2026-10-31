@@ -208,9 +208,9 @@ def run(quick: bool = False) -> dict[str, dict]:
             else butchery_frame(group.removeprefix("butchery_"))
         )
         test_idx = payload["test_indices"]
-        X_test = payload["X_test"]
+        x_test = payload["X_test"]
         y_test = frame[target].astype(float).iloc[test_idx]
-        prediction = pipeline.predict(X_test)
+        prediction = pipeline.predict(x_test)
         title = f"{group} — {target} ({report['selected_model']})"
         save_actual_vs_predicted(
             y_test, prediction, title, PLOTS_DIR / f"{group}_{target}_actual_vs_predicted.png"
@@ -223,14 +223,14 @@ def run(quick: bool = False) -> dict[str, dict]:
         )
         save_feature_importance(
             pipeline,
-            X_test,
+            x_test,
             y_test,
             title,
             PLOTS_DIR / f"{group}_{target}_feature_importance.png",
         )
         try_shap_summary(
             pipeline,
-            X_test,
+            x_test,
             title,
             PLOTS_DIR / f"{group}_{target}_shap.png",
         )

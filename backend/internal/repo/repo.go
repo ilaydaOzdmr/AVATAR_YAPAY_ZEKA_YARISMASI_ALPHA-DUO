@@ -61,6 +61,10 @@ type Repo interface {
 }
 
 // NewMySQLRepo returns a MySQL-backed implementation of Repo.
+const sqlDateTimeLayout = "2006-01-02 15:04:05"
+const sqlDateLayout = "2006-01-02"
+const midnightSuffix = " 00:00:00"
+
 func NewMySQLRepo(db *sql.DB) Repo { return &mysqlRepo{db: db} }
 
 type mysqlRepo struct{ db *sql.DB }
@@ -177,52 +181,9 @@ func (r *mysqlRepo) UpdateProductShelfLife(ctx context.Context, id int64, days i
 }
 
 func (r *mysqlRepo) CreateLot(ctx context.Context, l model.Lot) (model.Lot, error) {
-	if l.Code == "" || l.ItemType == "" || l.Qty < 0 {
-		return model.Lot{}, ErrInvalidLot
-	}
-	if l.Status == "" {
-		l.Status = "active"
-	}
-	if l.ReceivedAt == nil || *l.ReceivedAt == "" {
-		now := time.Now().Format("2006-01-02 15:04:05")
-		l.ReceivedAt = &now
-	}
-
-	var shelfLifeDays int
-	switch l.ItemType {
-	case "product":
-		product, err := r.GetProduct(ctx, l.ItemID)
-		if err != nil {
-			return model.Lot{}, err
-		}
-		shelfLifeDays = product.ShelfLifeDays
-		if l.Unit == "" {
-			l.Unit = product.Unit
-		}
-		if l.UnitCost == 0 {
-			l.UnitCost = product.ListPrice
-		}
-	case "material":
-		material, err := r.GetMaterial(ctx, l.ItemID)
-		if err != nil {
-			return model.Lot{}, err
-		}
-		shelfLifeDays = material.ShelfLifeDays
-		if l.Unit == "" {
-			l.Unit = material.Unit
-		}
-		if l.UnitCost == 0 {
-			l.UnitCost = material.DefaultPurchasePrice
-		}
-		if l.PurchasePrice == 0 {
-			l.PurchasePrice = material.DefaultPurchasePrice
-		}
-	default:
-		return model.Lot{}, ErrInvalidLot
-	}
-	if shelfLifeDays > 0 && (l.ExpiryDate == nil || *l.ExpiryDate == "") {
-		expiry := addDays(*l.ReceivedAt, shelfLifeDays)
-		l.ExpiryDate = &expiry
+	l, err := r.prepareLot(ctx, l)
+	if err != nil {
+		return model.Lot{}, err
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -269,13 +230,13 @@ func (r *mysqlRepo) CreateLot(ctx context.Context, l model.Lot) (model.Lot, erro
 }
 
 func addDays(dateTime string, days int) string {
-	layouts := []string{"2006-01-02 15:04:05", "2006-01-02T15:04:05", "2006-01-02"}
+	layouts := []string{sqlDateTimeLayout, "2006-01-02T15:04:05", sqlDateLayout}
 	for _, layout := range layouts {
 		if parsed, err := time.Parse(layout, dateTime); err == nil {
-			return parsed.AddDate(0, 0, days).Format("2006-01-02")
+			return parsed.AddDate(0, 0, days).Format(sqlDateLayout)
 		}
 	}
-	return time.Now().AddDate(0, 0, days).Format("2006-01-02")
+	return time.Now().AddDate(0, 0, days).Format(sqlDateLayout)
 }
 
 func (r *mysqlRepo) ListLots(ctx context.Context, itemType string) ([]model.Lot, error) {
@@ -466,21 +427,8 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 	if po.Status == "" {
 		po.Status = "draft"
 	}
-	if po.Status == "completed" && (len(inputs) == 0 || len(outputs) == 0) {
-		return model.ProductionOrder{}, ErrInvalidOrder
-	}
-	if (len(inputs) == 0) != (len(outputs) == 0) {
-		return model.ProductionOrder{}, ErrInvalidOrder
-	}
-	for _, input := range inputs {
-		if input.Qty <= 0 {
-			return model.ProductionOrder{}, ErrInvalidOrder
-		}
-	}
-	for _, output := range outputs {
-		if output.Qty <= 0 {
-			return model.ProductionOrder{}, ErrInvalidOrder
-		}
+	if err := validateProductionOrder(po, inputs, outputs); err != nil {
+		return model.ProductionOrder{}, err
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -502,25 +450,14 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 		return model.ProductionOrder{}, err
 	}
 
-	for _, input := range inputs {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO production_order_inputs (production_order_id, material_lot_id, qty) VALUES (?, ?, ?)`,
-			po.ID, input.MaterialLotID, input.Qty); err != nil {
-			return model.ProductionOrder{}, err
-		}
-	}
-	for _, output := range outputs {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO production_order_outputs (production_order_id, product_lot_id, qty) VALUES (?, ?, ?)`,
-			po.ID, output.ProductLotID, output.Qty); err != nil {
-			return model.ProductionOrder{}, err
-		}
+	if err := insertProductionItemsTx(ctx, tx, po, inputs, outputs); err != nil {
+		return model.ProductionOrder{}, err
 	}
 
 	// A draft is only a plan: stock and lot links are applied when the order is
 	// completed, so an in-progress order never consumes raw material twice.
 	if po.Status == "completed" {
-		occurredAt := time.Now().Format("2006-01-02 15:04:05")
+		occurredAt := time.Now().Format(sqlDateTimeLayout)
 		if po.FinishedAt != nil && *po.FinishedAt != "" {
 			occurredAt = *po.FinishedAt
 		}
@@ -538,7 +475,6 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 // applyProductionOrderTx consumes inputs, stocks outputs and writes runtime lot
 // links. It is shared by create-completed and the explicit complete transition.
 func applyProductionOrderTx(ctx context.Context, tx *sql.Tx, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput, occurredAt string) error {
-	refType := "production_order"
 
 	var inputCost float64
 	for _, input := range inputs {
@@ -561,68 +497,17 @@ func applyProductionOrderTx(ctx context.Context, tx *sql.Tx, po model.Production
 	outputUnitCost := roundMoney((inputCost + po.ServiceUnitCost*po.ServiceQty) / totalOutputQty)
 
 	for _, output := range outputs {
-		var shelfLifeDays int
-		if err := tx.QueryRowContext(ctx,
-			`SELECT p.shelf_life_days
-			 FROM lots l JOIN products p ON p.id = l.item_id
-			 WHERE l.id = ?`, output.ProductLotID).Scan(&shelfLifeDays); err != nil {
-			return err
-		}
-		if shelfLifeDays > 0 {
-			expiryDate := addDays(occurredAt, shelfLifeDays)
-			if _, err := tx.ExecContext(ctx,
-				`UPDATE lots SET unit_cost = ?, received_at = COALESCE(received_at, ?),
-				 expiry_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-				outputUnitCost, occurredAt, expiryDate, output.ProductLotID); err != nil {
-				return err
-			}
-		} else if _, err := tx.ExecContext(ctx,
-			`UPDATE lots SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-			outputUnitCost, output.ProductLotID); err != nil {
-			return err
-		}
-		if _, err := applyMovementTx(ctx, tx, model.StockMovement{
-			LotID:        output.ProductLotID,
-			MovementType: "production_output",
-			Qty:          output.Qty,
-			UnitCost:     outputUnitCost,
-			RefType:      &refType,
-			RefID:        &po.ID,
-			OccurredAt:   occurredAt,
-		}); err != nil {
+		if err := stockProductionOutputTx(ctx, tx, po, output, outputUnitCost, occurredAt); err != nil {
 			return err
 		}
 	}
 
 	for _, input := range inputs {
-		if _, err := applyMovementTx(ctx, tx, model.StockMovement{
-			LotID:        input.MaterialLotID,
-			MovementType: "production_consume",
-			Qty:          -input.Qty,
-			RefType:      &refType,
-			RefID:        &po.ID,
-			OccurredAt:   occurredAt,
-		}); err != nil {
+		if err := consumeProductionInputTx(ctx, tx, po, input, outputs, totalOutputQty, occurredAt); err != nil {
 			return err
 		}
-
-		remaining := input.Qty
-		for i, output := range outputs {
-			linkQty := roundQty(input.Qty * output.Qty / totalOutputQty)
-			if i == len(outputs)-1 {
-				linkQty = roundQty(remaining)
-			}
-			if linkQty < 0 {
-				linkQty = 0
-			}
-			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO lot_links (parent_lot_id, child_lot_id, qty, link_type) VALUES (?, ?, ?, 'production')`,
-				input.MaterialLotID, output.ProductLotID, linkQty); err != nil {
-				return err
-			}
-			remaining -= linkQty
-		}
 	}
+
 	return nil
 }
 
@@ -635,75 +520,29 @@ func (r *mysqlRepo) CompleteProductionOrder(ctx context.Context, id int64, finis
 	}
 	defer tx.Rollback()
 
-	var po model.ProductionOrder
-	var startedAt, existingFinished, notes, serviceName sql.NullString
-	if err := tx.QueryRowContext(ctx,
-		`SELECT id, code, status, started_at, finished_at, notes, service_name,
-		        service_unit_cost, service_qty, expected_qty
-		 FROM production_orders WHERE id = ? FOR UPDATE`, id).
-		Scan(&po.ID, &po.Code, &po.Status, &startedAt, &existingFinished,
-			&notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty, &po.ExpectedQty); err != nil {
+	po, err := productionOrderForUpdate(ctx, tx, id)
+	if err != nil {
 		return model.ProductionOrder{}, err
-	}
-	if startedAt.Valid {
-		po.StartedAt = &startedAt.String
-	}
-	if existingFinished.Valid {
-		po.FinishedAt = &existingFinished.String
-	}
-	if notes.Valid {
-		po.Notes = &notes.String
-	}
-	if serviceName.Valid {
-		po.ServiceName = &serviceName.String
 	}
 	if po.Status == "completed" {
 		return po, nil
 	}
 
-	inputRows, err := tx.QueryContext(ctx,
-		`SELECT id, production_order_id, material_lot_id, qty
-		 FROM production_order_inputs WHERE production_order_id = ? ORDER BY id`, id)
+	inputs, err := productionInputsTx(ctx, tx, id)
 	if err != nil {
 		return model.ProductionOrder{}, err
 	}
-	var inputs []model.ProductionOrderInput
-	for inputRows.Next() {
-		var input model.ProductionOrderInput
-		if err := inputRows.Scan(&input.ID, &input.ProductionOrderID, &input.MaterialLotID, &input.Qty); err != nil {
-			inputRows.Close()
-			return model.ProductionOrder{}, err
-		}
-		inputs = append(inputs, input)
-	}
-	inputRows.Close()
 
-	outputRows, err := tx.QueryContext(ctx,
-		`SELECT id, production_order_id, product_lot_id, qty
-		 FROM production_order_outputs WHERE production_order_id = ? ORDER BY id`, id)
+	outputs, err := productionOutputsTx(ctx, tx, id)
 	if err != nil {
 		return model.ProductionOrder{}, err
 	}
-	var outputs []model.ProductionOrderOutput
-	for outputRows.Next() {
-		var output model.ProductionOrderOutput
-		if err := outputRows.Scan(&output.ID, &output.ProductionOrderID, &output.ProductLotID, &output.Qty); err != nil {
-			outputRows.Close()
-			return model.ProductionOrder{}, err
-		}
-		outputs = append(outputs, output)
-	}
-	outputRows.Close()
+
 	if len(inputs) == 0 || len(outputs) == 0 {
 		return model.ProductionOrder{}, ErrInvalidOrder
 	}
 
-	occurredAt := time.Now().Format("2006-01-02 15:04:05")
-	if finishedAt != nil && *finishedAt != "" {
-		occurredAt = *finishedAt
-	} else if po.FinishedAt != nil && *po.FinishedAt != "" {
-		occurredAt = *po.FinishedAt
-	}
+	occurredAt := productionFinishedAt(po, finishedAt)
 
 	// Old drafts may have been created by the previous buggy path; do not
 	// double-consume stock if movements already exist for this order.
@@ -739,27 +578,9 @@ func (r *mysqlRepo) RejectProductionOrder(ctx context.Context, id int64, reason 
 	}
 	defer tx.Rollback()
 
-	var po model.ProductionOrder
-	var startedAt, finishedAt, notes, serviceName sql.NullString
-	if err := tx.QueryRowContext(ctx,
-		`SELECT id, code, status, started_at, finished_at, notes, service_name,
-		        service_unit_cost, service_qty, expected_qty
-		 FROM production_orders WHERE id = ? FOR UPDATE`, id).
-		Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt,
-			&notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty, &po.ExpectedQty); err != nil {
+	po, err := productionOrderForUpdate(ctx, tx, id)
+	if err != nil {
 		return model.ProductionOrder{}, err
-	}
-	if startedAt.Valid {
-		po.StartedAt = &startedAt.String
-	}
-	if finishedAt.Valid {
-		po.FinishedAt = &finishedAt.String
-	}
-	if notes.Valid {
-		po.Notes = &notes.String
-	}
-	if serviceName.Valid {
-		po.ServiceName = &serviceName.String
 	}
 	if po.Status == "completed" {
 		return model.ProductionOrder{}, ErrInvalidOrder
@@ -780,16 +601,7 @@ func (r *mysqlRepo) RejectProductionOrder(ctx context.Context, id int64, reason 
 		return model.ProductionOrder{}, ErrInvalidOrder
 	}
 
-	newNotes := ""
-	if notes.Valid {
-		newNotes = notes.String
-	}
-	if reason != nil && strings.TrimSpace(*reason) != "" {
-		if newNotes != "" {
-			newNotes += "\n"
-		}
-		newNotes += "Ret: " + strings.TrimSpace(*reason)
-	}
+	newNotes := rejectionNotes(po, reason)
 	var notesArg any
 	if newNotes != "" {
 		notesArg = newNotes
@@ -936,49 +748,10 @@ func (r *mysqlRepo) GetSupplier(ctx context.Context, id int64) (model.Supplier, 
 }
 
 func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.ButcheryBatch, items []model.ButcheryItem) (model.ButcheryBatch, error) {
-	if batch.Code == "" || batch.InputWeight <= 0 || batch.UnitCost < 0 {
-		return model.ButcheryBatch{}, ErrInvalidOrder
+	batch, fire, allocated, err := prepareButcheryBatch(batch, items)
+	if err != nil {
+		return model.ButcheryBatch{}, err
 	}
-	if batch.Status == "" {
-		batch.Status = "draft"
-	}
-	if batch.BatchDate == "" {
-		batch.BatchDate = time.Now().Format("2006-01-02")
-	}
-
-	hasPart := false
-	var partWeight float64
-	for _, item := range items {
-		if item.Weight < 0 {
-			return model.ButcheryBatch{}, ErrInvalidOrder
-		}
-		if !item.IsWaste && item.Weight > 0 {
-			hasPart = true
-			partWeight += item.Weight
-		}
-	}
-	if batch.Status == "completed" && (batch.InputLotID == nil || !hasPart) {
-		return model.ButcheryBatch{}, ErrInvalidOrder
-	}
-	fire := roundQty(batch.InputWeight - partWeight)
-	if fire < -0.0005 {
-		return model.ButcheryBatch{}, ErrInvalidOrder
-	}
-	if fire < 0 {
-		fire = 0
-	}
-	if batch.TotalCost <= 0 {
-		batch.TotalCost = roundMoney(batch.InputWeight * batch.UnitCost)
-	}
-	allocated := allocateByWeight(batch.TotalCost, items)
-
-	// Persist the consistency results so the API and any later report can rely
-	// on them without re-deriving the checks.
-	checks := butchery.Compute(batch, items)
-	batch.ExpectedCost = checks.ExpectedCost
-	batch.CostDifference = checks.CostDifference
-	batch.CostCheckStatus = checks.CostCheckStatus
-	batch.WeightCheckStatus = checks.WeightCheckStatus
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -986,20 +759,8 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 	}
 	defer tx.Rollback()
 
-	if batch.InputLotID != nil {
-		var itemType string
-		var lotQty float64
-		if err := tx.QueryRowContext(ctx,
-			`SELECT item_type, qty FROM lots WHERE id = ? FOR UPDATE`, *batch.InputLotID).
-			Scan(&itemType, &lotQty); err != nil {
-			return model.ButcheryBatch{}, err
-		}
-		if itemType != "material" {
-			return model.ButcheryBatch{}, ErrInvalidOrder
-		}
-		if lotQty+0.0005 < batch.InputWeight {
-			return model.ButcheryBatch{}, ErrInsufficientStock
-		}
+	if err := lockButcheryInputTx(ctx, tx, batch); err != nil {
+		return model.ButcheryBatch{}, err
 	}
 
 	res, err := tx.ExecContext(ctx,
@@ -1020,14 +781,8 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 	// A draft without an input lot is a planning record: keep the parts but do
 	// not create stock or lot links until the batch is completed.
 	if batch.InputLotID == nil {
-		for i, item := range items {
-			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
-				 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-				batch.ID, item.ProductID, nullInt64(item.ProductLotID), item.Weight,
-				item.Quantity, item.IsWaste, allocated[i]); err != nil {
-				return model.ButcheryBatch{}, err
-			}
+		if err := insertDraftButcheryItemsTx(ctx, tx, batch, items, allocated); err != nil {
+			return model.ButcheryBatch{}, err
 		}
 		if err := tx.Commit(); err != nil {
 			return model.ButcheryBatch{}, err
@@ -1035,133 +790,14 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 		return batch, nil
 	}
 
-	refType := "butchery_batch"
-	occurredAt := batch.BatchDate + " 00:00:00"
 	for i, item := range items {
-		if item.IsWaste {
-			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
-				 VALUES (?, ?, NULL, ?, ?, TRUE, 0)`,
-				batch.ID, item.ProductID, item.Weight, item.Quantity); err != nil {
-				return model.ButcheryBatch{}, err
-			}
-			continue
-		}
-
-		lotID := int64(0)
-		var productCode string
-		var shelfLifeDays int
-		if err := tx.QueryRowContext(ctx,
-			`SELECT code, shelf_life_days FROM products WHERE id = ?`, item.ProductID).
-			Scan(&productCode, &shelfLifeDays); err != nil {
-			return model.ButcheryBatch{}, err
-		}
-		receivedAt := batch.BatchDate + " 00:00:00"
-		expiryDate := ""
-		if shelfLifeDays > 0 {
-			expiryDate = addDays(receivedAt, shelfLifeDays)
-		}
-		var expiryArg any
-		if expiryDate != "" {
-			expiryArg = expiryDate
-		}
-		if item.ProductLotID != nil {
-			lotID = *item.ProductLotID
-			var lotType string
-			if err := tx.QueryRowContext(ctx,
-				`SELECT item_type FROM lots WHERE id = ? FOR UPDATE`, lotID).Scan(&lotType); err != nil {
-				return model.ButcheryBatch{}, err
-			}
-			if lotType != "product" {
-				return model.ButcheryBatch{}, ErrInvalidOrder
-			}
-		} else {
-			lotCode, err := uniqueLotCodeTx(ctx, tx, batch.Code+"-"+productCode)
-			if err != nil {
-				return model.ButcheryBatch{}, err
-			}
-			res, err := tx.ExecContext(ctx,
-				`INSERT INTO lots (code, item_type, item_id, qty, unit, unit_cost, received_at, expiry_date, status)
-				 VALUES (?, 'product', ?, 0, 'kg', 0, ?, ?, 'active')`,
-				lotCode, item.ProductID, receivedAt, expiryArg)
-			if err != nil {
-				return model.ButcheryBatch{}, err
-			}
-			lotID, err = res.LastInsertId()
-			if err != nil {
-				return model.ButcheryBatch{}, err
-			}
-		}
-		if shelfLifeDays > 0 {
-			if _, err := tx.ExecContext(ctx,
-				`UPDATE lots SET received_at = COALESCE(received_at, ?),
-				 expiry_date = COALESCE(expiry_date, ?), updated_at = CURRENT_TIMESTAMP
-				 WHERE id = ?`, receivedAt, expiryDate, lotID); err != nil {
-				return model.ButcheryBatch{}, err
-			}
-		}
-
-		unitCost := 0.0
-		if item.Weight > 0 {
-			unitCost = roundMoney(allocated[i] / item.Weight)
-		}
-		if _, err := tx.ExecContext(ctx,
-			`UPDATE lots SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-			unitCost, lotID); err != nil {
-			return model.ButcheryBatch{}, err
-		}
-		if _, err := applyMovementTx(ctx, tx, model.StockMovement{
-			LotID:        lotID,
-			MovementType: "butchery_output",
-			Qty:          item.Weight,
-			UnitCost:     unitCost,
-			RefType:      &refType,
-			RefID:        &batch.ID,
-			OccurredAt:   occurredAt,
-		}); err != nil {
-			return model.ButcheryBatch{}, err
-		}
-		if batch.InputLotID != nil {
-			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO lot_links (parent_lot_id, child_lot_id, qty, link_type) VALUES (?, ?, ?, 'butchery')`,
-				*batch.InputLotID, lotID, item.Weight); err != nil {
-				return model.ButcheryBatch{}, err
-			}
-		}
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
-			 VALUES (?, ?, ?, ?, ?, FALSE, ?)`,
-			batch.ID, item.ProductID, lotID, item.Weight, item.Quantity, allocated[i]); err != nil {
+		if err := stockButcheryItemTx(ctx, tx, batch, item, allocated[i]); err != nil {
 			return model.ButcheryBatch{}, err
 		}
 	}
 
-	if batch.InputLotID != nil {
-		consumeQty := roundQty(-(batch.InputWeight - fire))
-		if consumeQty != 0 {
-			if _, err := applyMovementTx(ctx, tx, model.StockMovement{
-				LotID:        *batch.InputLotID,
-				MovementType: "butchery_consume",
-				Qty:          consumeQty,
-				RefType:      &refType,
-				RefID:        &batch.ID,
-				OccurredAt:   occurredAt,
-			}); err != nil {
-				return model.ButcheryBatch{}, err
-			}
-		}
-		if fire > 0 {
-			if _, err := applyMovementTx(ctx, tx, model.StockMovement{
-				LotID:        *batch.InputLotID,
-				MovementType: "waste",
-				Qty:          -fire,
-				RefType:      &refType,
-				RefID:        &batch.ID,
-				OccurredAt:   occurredAt,
-			}); err != nil {
-				return model.ButcheryBatch{}, err
-			}
-		}
+	if err := consumeButcheryInputTx(ctx, tx, batch, fire); err != nil {
+		return model.ButcheryBatch{}, err
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -1370,7 +1006,7 @@ func (r *mysqlRepo) CreateRecall(ctx context.Context, event model.RecallEvent, b
 	}
 	event.Code = code
 
-	blockedAt := time.Now().Format("2006-01-02 15:04:05")
+	blockedAt := time.Now().Format(sqlDateTimeLayout)
 	for _, block := range blocks {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO recall_blocks (recall_event_id, lot_id, blocked_at) VALUES (?, ?, ?)`,
@@ -1466,7 +1102,7 @@ func (r *mysqlRepo) ListRecallEvents(ctx context.Context) ([]model.RecallEvent, 
 
 func (r *mysqlRepo) CreateRecallBlock(ctx context.Context, block model.RecallBlock) (model.RecallBlock, error) {
 	if block.BlockedAt == "" {
-		block.BlockedAt = time.Now().Format("2006-01-02 15:04:05")
+		block.BlockedAt = time.Now().Format(sqlDateTimeLayout)
 	}
 	res, err := r.db.ExecContext(ctx,
 		`INSERT INTO recall_blocks (recall_event_id, lot_id, blocked_at) VALUES (?, ?, ?)`,
@@ -1552,7 +1188,7 @@ func (r *mysqlRepo) CreateSale(ctx context.Context, sale model.Sale, lines []mod
 	defer tx.Rollback()
 
 	if sale.SoldAt == "" {
-		sale.SoldAt = time.Now().Format("2006-01-02 15:04:05")
+		sale.SoldAt = time.Now().Format(sqlDateTimeLayout)
 	}
 	res, err := tx.ExecContext(ctx,
 		`INSERT INTO sales (code, market_id, sold_at, status, client_id) VALUES (?, ?, ?, ?, ?)`,
@@ -1566,34 +1202,7 @@ func (r *mysqlRepo) CreateSale(ctx context.Context, sale model.Sale, lines []mod
 	}
 
 	for _, line := range lines {
-		var blocked bool
-		if err := tx.QueryRowContext(ctx,
-			`SELECT EXISTS(SELECT 1 FROM lots WHERE id = ? AND status = 'blocked')
-			    OR EXISTS(SELECT 1 FROM recall_blocks WHERE lot_id = ?)`,
-			line.LotID, line.LotID).Scan(&blocked); err != nil {
-			return model.Sale{}, err
-		}
-		if blocked {
-			return model.Sale{}, ErrLotBlocked
-		}
-
-		// Satış fiyatı line.unit_price'ta kalır; stok hareketi lot maliyetini kullanır.
-		refType := "sale"
-		movement, err := applyMovementTx(ctx, tx, model.StockMovement{
-			LotID:        line.LotID,
-			MovementType: "sale",
-			Qty:          -line.Qty,
-			RefType:      &refType,
-			RefID:        &sale.ID,
-			OccurredAt:   sale.SoldAt,
-		})
-		if err != nil {
-			return model.Sale{}, err
-		}
-
-		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO sale_lines (sale_id, lot_id, qty, unit_price, total_price, stock_movement_id) VALUES (?, ?, ?, ?, ?, ?)`,
-			sale.ID, line.LotID, line.Qty, line.UnitPrice, line.TotalPrice, movement.ID); err != nil {
+		if err := createSaleLineTx(ctx, tx, sale, line); err != nil {
 			return model.Sale{}, err
 		}
 	}
@@ -1703,4 +1312,541 @@ func (r *mysqlRepo) ListRedistributions(ctx context.Context, lotID int64) ([]mod
 		out = append(out, red)
 	}
 	return out, rows.Err()
+}
+
+func (r *mysqlRepo) lotCardDefaults(ctx context.Context, l *model.Lot) (int, error) {
+	switch l.ItemType {
+	case "product":
+		product, err := r.GetProduct(ctx, l.ItemID)
+		if err != nil {
+			return 0, err
+		}
+		if l.Unit == "" {
+			l.Unit = product.Unit
+		}
+		if l.UnitCost == 0 {
+			l.UnitCost = product.ListPrice
+		}
+		return product.ShelfLifeDays, nil
+	case "material":
+		material, err := r.GetMaterial(ctx, l.ItemID)
+		if err != nil {
+			return 0, err
+		}
+		if l.Unit == "" {
+			l.Unit = material.Unit
+		}
+		if l.UnitCost == 0 {
+			l.UnitCost = material.DefaultPurchasePrice
+		}
+		if l.PurchasePrice == 0 {
+			l.PurchasePrice = material.DefaultPurchasePrice
+		}
+		return material.ShelfLifeDays, nil
+	default:
+		return 0, ErrInvalidLot
+	}
+
+}
+
+func validateProductionOrder(po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) error {
+	if po.Status == "completed" && (len(inputs) == 0 || len(outputs) == 0) {
+		return ErrInvalidOrder
+	}
+	if (len(inputs) == 0) != (len(outputs) == 0) {
+		return ErrInvalidOrder
+	}
+	for _, input := range inputs {
+		if input.Qty <= 0 {
+			return ErrInvalidOrder
+		}
+	}
+	for _, output := range outputs {
+		if output.Qty <= 0 {
+			return ErrInvalidOrder
+		}
+	}
+	return nil
+}
+
+func insertProductionItemsTx(ctx context.Context, tx *sql.Tx, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) error {
+	for _, input := range inputs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO production_order_inputs (production_order_id, material_lot_id, qty) VALUES (?, ?, ?)`,
+			po.ID, input.MaterialLotID, input.Qty); err != nil {
+			return err
+		}
+	}
+	for _, output := range outputs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO production_order_outputs (production_order_id, product_lot_id, qty) VALUES (?, ?, ?)`,
+			po.ID, output.ProductLotID, output.Qty); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func stockProductionOutputTx(ctx context.Context, tx *sql.Tx, po model.ProductionOrder, output model.ProductionOrderOutput, outputUnitCost float64, occurredAt string) error {
+	refType := "production_order"
+	var shelfLifeDays int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT p.shelf_life_days
+		 FROM lots l JOIN products p ON p.id = l.item_id
+		 WHERE l.id = ?`, output.ProductLotID).Scan(&shelfLifeDays); err != nil {
+		return err
+	}
+	if shelfLifeDays > 0 {
+		expiryDate := addDays(occurredAt, shelfLifeDays)
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE lots SET unit_cost = ?, received_at = COALESCE(received_at, ?),
+			 expiry_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+			outputUnitCost, occurredAt, expiryDate, output.ProductLotID); err != nil {
+			return err
+		}
+	} else if _, err := tx.ExecContext(ctx,
+		`UPDATE lots SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		outputUnitCost, output.ProductLotID); err != nil {
+		return err
+	}
+	if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+		LotID:        output.ProductLotID,
+		MovementType: "production_output",
+		Qty:          output.Qty,
+		UnitCost:     outputUnitCost,
+		RefType:      &refType,
+		RefID:        &po.ID,
+		OccurredAt:   occurredAt,
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func consumeProductionInputTx(ctx context.Context, tx *sql.Tx, po model.ProductionOrder, input model.ProductionOrderInput, outputs []model.ProductionOrderOutput, totalOutputQty float64, occurredAt string) error {
+	refType := "production_order"
+	if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+		LotID:        input.MaterialLotID,
+		MovementType: "production_consume",
+		Qty:          -input.Qty,
+		RefType:      &refType,
+		RefID:        &po.ID,
+		OccurredAt:   occurredAt,
+	}); err != nil {
+		return err
+	}
+
+	remaining := input.Qty
+	for i, output := range outputs {
+		linkQty := roundQty(input.Qty * output.Qty / totalOutputQty)
+		if i == len(outputs)-1 {
+			linkQty = roundQty(remaining)
+		}
+		if linkQty < 0 {
+			linkQty = 0
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO lot_links (parent_lot_id, child_lot_id, qty, link_type) VALUES (?, ?, ?, 'production')`,
+			input.MaterialLotID, output.ProductLotID, linkQty); err != nil {
+			return err
+		}
+		remaining -= linkQty
+	}
+	return nil
+}
+
+func productionOrderForUpdate(ctx context.Context, tx *sql.Tx, id int64) (model.ProductionOrder, error) {
+	var po model.ProductionOrder
+	var startedAt, finishedAt, notes, serviceName sql.NullString
+	if err := tx.QueryRowContext(ctx,
+		`SELECT id, code, status, started_at, finished_at, notes, service_name,
+		        service_unit_cost, service_qty, expected_qty
+		 FROM production_orders WHERE id = ? FOR UPDATE`, id).
+		Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt,
+			&notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty, &po.ExpectedQty); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	if startedAt.Valid {
+		po.StartedAt = &startedAt.String
+	}
+	if finishedAt.Valid {
+		po.FinishedAt = &finishedAt.String
+	}
+	if notes.Valid {
+		po.Notes = &notes.String
+	}
+	if serviceName.Valid {
+		po.ServiceName = &serviceName.String
+	}
+	return po, nil
+}
+
+func rejectionNotes(po model.ProductionOrder, reason *string) string {
+	newNotes := ""
+	if po.Notes != nil {
+		newNotes = *po.Notes
+	}
+	if reason != nil && strings.TrimSpace(*reason) != "" {
+		if newNotes != "" {
+			newNotes += "\n"
+		}
+		newNotes += "Ret: " + strings.TrimSpace(*reason)
+	}
+	return newNotes
+}
+
+func productionInputsTx(ctx context.Context, tx *sql.Tx, id int64) ([]model.ProductionOrderInput, error) {
+	inputRows, err := tx.QueryContext(ctx,
+		`SELECT id, production_order_id, material_lot_id, qty
+		 FROM production_order_inputs WHERE production_order_id = ? ORDER BY id`, id)
+	if err != nil {
+		return nil, err
+	}
+	var inputs []model.ProductionOrderInput
+	for inputRows.Next() {
+		var input model.ProductionOrderInput
+		if err := inputRows.Scan(&input.ID, &input.ProductionOrderID, &input.MaterialLotID, &input.Qty); err != nil {
+			inputRows.Close()
+			return nil, err
+		}
+		inputs = append(inputs, input)
+	}
+	inputRows.Close()
+	return inputs, inputRows.Err()
+}
+
+func productionOutputsTx(ctx context.Context, tx *sql.Tx, id int64) ([]model.ProductionOrderOutput, error) {
+	outputRows, err := tx.QueryContext(ctx,
+		`SELECT id, production_order_id, product_lot_id, qty
+		 FROM production_order_outputs WHERE production_order_id = ? ORDER BY id`, id)
+	if err != nil {
+		return nil, err
+	}
+	var outputs []model.ProductionOrderOutput
+	for outputRows.Next() {
+		var output model.ProductionOrderOutput
+		if err := outputRows.Scan(&output.ID, &output.ProductionOrderID, &output.ProductLotID, &output.Qty); err != nil {
+			outputRows.Close()
+			return nil, err
+		}
+		outputs = append(outputs, output)
+	}
+	outputRows.Close()
+	return outputs, outputRows.Err()
+}
+
+func createSaleLineTx(ctx context.Context, tx *sql.Tx, sale model.Sale, line model.SaleLine) error {
+	var blocked bool
+	if err := tx.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM lots WHERE id = ? AND status = 'blocked')
+		    OR EXISTS(SELECT 1 FROM recall_blocks WHERE lot_id = ?)`,
+		line.LotID, line.LotID).Scan(&blocked); err != nil {
+		return err
+	}
+	if blocked {
+		return ErrLotBlocked
+	}
+
+	// Satış fiyatı line.unit_price'ta kalır; stok hareketi lot maliyetini kullanır.
+	refType := "sale"
+	movement, err := applyMovementTx(ctx, tx, model.StockMovement{
+		LotID:        line.LotID,
+		MovementType: "sale",
+		Qty:          -line.Qty,
+		RefType:      &refType,
+		RefID:        &sale.ID,
+		OccurredAt:   sale.SoldAt,
+	})
+	if err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO sale_lines (sale_id, lot_id, qty, unit_price, total_price, stock_movement_id) VALUES (?, ?, ?, ?, ?, ?)`,
+		sale.ID, line.LotID, line.Qty, line.UnitPrice, line.TotalPrice, movement.ID); err != nil {
+		return err
+	}
+	return nil
+}
+
+func butcheryPartWeight(items []model.ButcheryItem) (float64, bool, error) {
+	hasPart := false
+	var partWeight float64
+	for _, item := range items {
+		if item.Weight < 0 {
+			return 0, false, ErrInvalidOrder
+		}
+		if !item.IsWaste && item.Weight > 0 {
+			hasPart = true
+			partWeight += item.Weight
+		}
+	}
+	return partWeight, hasPart, nil
+}
+
+func prepareButcheryBatch(batch model.ButcheryBatch, items []model.ButcheryItem) (model.ButcheryBatch, float64, []float64, error) {
+	if batch.Code == "" || batch.InputWeight <= 0 || batch.UnitCost < 0 {
+		return model.ButcheryBatch{}, 0, nil, ErrInvalidOrder
+	}
+	if batch.Status == "" {
+		batch.Status = "draft"
+	}
+	if batch.BatchDate == "" {
+		batch.BatchDate = time.Now().Format(sqlDateLayout)
+	}
+
+	partWeight, hasPart, err := butcheryPartWeight(items)
+	if err != nil {
+		return model.ButcheryBatch{}, 0, nil, err
+	}
+	if batch.Status == "completed" && (batch.InputLotID == nil || !hasPart) {
+		return model.ButcheryBatch{}, 0, nil, ErrInvalidOrder
+	}
+	fire := roundQty(batch.InputWeight - partWeight)
+	if fire < -0.0005 {
+		return model.ButcheryBatch{}, 0, nil, ErrInvalidOrder
+	}
+	if fire < 0 {
+		fire = 0
+	}
+	if batch.TotalCost <= 0 {
+		batch.TotalCost = roundMoney(batch.InputWeight * batch.UnitCost)
+	}
+	allocated := allocateByWeight(batch.TotalCost, items)
+
+	// Persist the consistency results so the API and any later report can rely
+	// on them without re-deriving the checks.
+	checks := butchery.Compute(batch, items)
+	batch.ExpectedCost = checks.ExpectedCost
+	batch.CostDifference = checks.CostDifference
+	batch.CostCheckStatus = checks.CostCheckStatus
+	batch.WeightCheckStatus = checks.WeightCheckStatus
+	return batch, fire, allocated, nil
+}
+
+func lockButcheryInputTx(ctx context.Context, tx *sql.Tx, batch model.ButcheryBatch) error {
+	if batch.InputLotID == nil {
+		return nil
+	}
+	var itemType string
+	var lotQty float64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT item_type, qty FROM lots WHERE id = ? FOR UPDATE`, *batch.InputLotID).
+		Scan(&itemType, &lotQty); err != nil {
+		return err
+	}
+	if itemType != "material" {
+		return ErrInvalidOrder
+	}
+	if lotQty+0.0005 < batch.InputWeight {
+		return ErrInsufficientStock
+	}
+	return nil
+}
+
+func insertDraftButcheryItemsTx(ctx context.Context, tx *sql.Tx, batch model.ButcheryBatch, items []model.ButcheryItem, allocated []float64) error {
+	for i, item := range items {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			batch.ID, item.ProductID, nullInt64(item.ProductLotID), item.Weight,
+			item.Quantity, item.IsWaste, allocated[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func butcheryProductLotTx(ctx context.Context, tx *sql.Tx, batch model.ButcheryBatch, item model.ButcheryItem) (int64, error) {
+	lotID := int64(0)
+	var err error
+	var productCode string
+	var shelfLifeDays int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT code, shelf_life_days FROM products WHERE id = ?`, item.ProductID).
+		Scan(&productCode, &shelfLifeDays); err != nil {
+		return 0, err
+	}
+	receivedAt := batch.BatchDate + midnightSuffix
+	expiryDate := ""
+	if shelfLifeDays > 0 {
+		expiryDate = addDays(receivedAt, shelfLifeDays)
+	}
+	var expiryArg any
+	if expiryDate != "" {
+		expiryArg = expiryDate
+	}
+	if item.ProductLotID != nil {
+		lotID, err = existingButcheryLotTx(ctx, tx, item)
+	} else {
+		lotID, err = newButcheryLotTx(ctx, tx, batch, item, productCode, receivedAt, expiryArg)
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	if shelfLifeDays > 0 {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE lots SET received_at = COALESCE(received_at, ?),
+			 expiry_date = COALESCE(expiry_date, ?), updated_at = CURRENT_TIMESTAMP
+			 WHERE id = ?`, receivedAt, expiryDate, lotID); err != nil {
+			return 0, err
+		}
+	}
+	return lotID, nil
+}
+
+func stockButcheryItemTx(ctx context.Context, tx *sql.Tx, batch model.ButcheryBatch, item model.ButcheryItem, allocatedCost float64) error {
+	refType := "butchery_batch"
+	occurredAt := batch.BatchDate + midnightSuffix
+	if item.IsWaste {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
+			 VALUES (?, ?, NULL, ?, ?, TRUE, 0)`,
+			batch.ID, item.ProductID, item.Weight, item.Quantity); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	lotID, err := butcheryProductLotTx(ctx, tx, batch, item)
+	if err != nil {
+		return err
+	}
+
+	unitCost := 0.0
+	if item.Weight > 0 {
+		unitCost = roundMoney(allocatedCost / item.Weight)
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE lots SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+		unitCost, lotID); err != nil {
+		return err
+	}
+	if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+		LotID:        lotID,
+		MovementType: "butchery_output",
+		Qty:          item.Weight,
+		UnitCost:     unitCost,
+		RefType:      &refType,
+		RefID:        &batch.ID,
+		OccurredAt:   occurredAt,
+	}); err != nil {
+		return err
+	}
+	if batch.InputLotID != nil {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO lot_links (parent_lot_id, child_lot_id, qty, link_type) VALUES (?, ?, ?, 'butchery')`,
+			*batch.InputLotID, lotID, item.Weight); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO butchery_items (batch_id, product_id, product_lot_id, weight, quantity, is_waste, allocated_cost)
+		 VALUES (?, ?, ?, ?, ?, FALSE, ?)`,
+		batch.ID, item.ProductID, lotID, item.Weight, item.Quantity, allocatedCost); err != nil {
+		return err
+	}
+	return nil
+}
+
+func consumeButcheryInputTx(ctx context.Context, tx *sql.Tx, batch model.ButcheryBatch, fire float64) error {
+	refType := "butchery_batch"
+	occurredAt := batch.BatchDate + midnightSuffix
+	if batch.InputLotID != nil {
+		consumeQty := roundQty(-(batch.InputWeight - fire))
+		if consumeQty != 0 {
+			if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+				LotID:        *batch.InputLotID,
+				MovementType: "butchery_consume",
+				Qty:          consumeQty,
+				RefType:      &refType,
+				RefID:        &batch.ID,
+				OccurredAt:   occurredAt,
+			}); err != nil {
+				return err
+			}
+		}
+		if fire > 0 {
+			if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+				LotID:        *batch.InputLotID,
+				MovementType: "waste",
+				Qty:          -fire,
+				RefType:      &refType,
+				RefID:        &batch.ID,
+				OccurredAt:   occurredAt,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func existingButcheryLotTx(ctx context.Context, tx *sql.Tx, item model.ButcheryItem) (int64, error) {
+	lotID := *item.ProductLotID
+	var lotType string
+	if err := tx.QueryRowContext(ctx,
+		`SELECT item_type FROM lots WHERE id = ? FOR UPDATE`, lotID).Scan(&lotType); err != nil {
+		return 0, err
+	}
+	if lotType != "product" {
+		return 0, ErrInvalidOrder
+	}
+	return lotID, nil
+}
+
+func newButcheryLotTx(ctx context.Context, tx *sql.Tx, batch model.ButcheryBatch, item model.ButcheryItem, productCode string, receivedAt string, expiryArg any) (int64, error) {
+	lotID := int64(0)
+	lotCode, err := uniqueLotCodeTx(ctx, tx, batch.Code+"-"+productCode)
+	if err != nil {
+		return 0, err
+	}
+	res, err := tx.ExecContext(ctx,
+		`INSERT INTO lots (code, item_type, item_id, qty, unit, unit_cost, received_at, expiry_date, status)
+		 VALUES (?, 'product', ?, 0, 'kg', 0, ?, ?, 'active')`,
+		lotCode, item.ProductID, receivedAt, expiryArg)
+	if err != nil {
+		return 0, err
+	}
+	lotID, err = res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return lotID, nil
+}
+
+func (r *mysqlRepo) prepareLot(ctx context.Context, l model.Lot) (model.Lot, error) {
+	if l.Code == "" || l.ItemType == "" || l.Qty < 0 {
+		return model.Lot{}, ErrInvalidLot
+	}
+	if l.Status == "" {
+		l.Status = "active"
+	}
+	if l.ReceivedAt == nil || *l.ReceivedAt == "" {
+		now := time.Now().Format(sqlDateTimeLayout)
+		l.ReceivedAt = &now
+	}
+
+	shelfLifeDays, err := r.lotCardDefaults(ctx, &l)
+	if err != nil {
+		return model.Lot{}, err
+	}
+	if shelfLifeDays > 0 && (l.ExpiryDate == nil || *l.ExpiryDate == "") {
+		expiry := addDays(*l.ReceivedAt, shelfLifeDays)
+		l.ExpiryDate = &expiry
+	}
+
+	return l, nil
+}
+
+func productionFinishedAt(po model.ProductionOrder, finishedAt *string) string {
+	occurredAt := time.Now().Format(sqlDateTimeLayout)
+	if finishedAt != nil && *finishedAt != "" {
+		occurredAt = *finishedAt
+	} else if po.FinishedAt != nil && *po.FinishedAt != "" {
+		occurredAt = *po.FinishedAt
+	}
+
+	return occurredAt
 }

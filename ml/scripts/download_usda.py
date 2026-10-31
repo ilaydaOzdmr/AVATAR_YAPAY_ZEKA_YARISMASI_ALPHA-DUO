@@ -20,41 +20,44 @@ from typing import Any
 ML_ROOT = Path(__file__).resolve().parents[1]
 RAW_DIR = ML_ROOT / "data" / "raw" / "usda"
 
+MEAT_PRICE_SPREADS = "Meat Price Spreads"
+LIVESTOCK_DOMESTIC_DATA = "Livestock and Meat Domestic Data"
+
 SOURCES: list[dict[str, str]] = [
     {
         "name": "historical_monthly_price_spreads.csv",
         "url": "https://www.ers.usda.gov/media/5028/historical-monthly-price-spread-data-for-beef-pork-broilers.csv?v=98757",
-        "product": "Meat Price Spreads",
+        "product": MEAT_PRICE_SPREADS,
     },
     {
         "name": "retail_prices.csv",
         "url": "https://www.ers.usda.gov/media/5024/retail-prices-for-beef-pork-poultry-cuts-eggs-and-dairy-products.csv?v=25627",
-        "product": "Meat Price Spreads",
+        "product": MEAT_PRICE_SPREADS,
     },
     {
         "name": "choice_beef_values.csv",
         "url": "https://www.ers.usda.gov/media/5020/choice-beef-values-and-spreads-and-the-all-fresh-retail-value.csv?v=29592",
-        "product": "Meat Price Spreads",
+        "product": MEAT_PRICE_SPREADS,
     },
     {
         "name": "summary_retail_spreads.csv",
         "url": "https://www.ers.usda.gov/media/5025/summary-of-retail-prices-and-price-spreads.csv?v=31589",
-        "product": "Meat Price Spreads",
+        "product": MEAT_PRICE_SPREADS,
     },
     {
         "name": "livestock_prices.xlsx",
         "url": "https://www.ers.usda.gov/media/5536/livestock-prices.xlsx?v=37005",
-        "product": "Livestock and Meat Domestic Data",
+        "product": LIVESTOCK_DOMESTIC_DATA,
     },
     {
         "name": "wholesale_prices.xlsx",
         "url": "https://www.ers.usda.gov/media/5538/wholesale-prices.xlsx?v=79003",
-        "product": "Livestock and Meat Domestic Data",
+        "product": LIVESTOCK_DOMESTIC_DATA,
     },
     {
         "name": "livestock_domestic_data.zip",
         "url": "https://www.ers.usda.gov/media/5539/livestock-domestic-data-machine-readable-files.zip?v=88464",
-        "product": "Livestock and Meat Domestic Data",
+        "product": LIVESTOCK_DOMESTIC_DATA,
     },
 ]
 

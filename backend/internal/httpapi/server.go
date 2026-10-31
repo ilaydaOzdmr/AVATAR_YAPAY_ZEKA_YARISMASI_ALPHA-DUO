@@ -32,6 +32,8 @@ type Server struct {
 
 // NewServer builds the HTTP handler with all routes registered and the ML
 // service address taken from configuration.
+const contentTypeHeader = "Content-Type"
+
 func NewServer(r repo.Repo) http.Handler {
 	return NewServerWithML(r, ml.NewClient(config.Load().MLBaseURL))
 }
@@ -98,7 +100,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Headers", contentTypeHeader)
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -743,14 +745,14 @@ func (s *Server) handleMLPredict(w http.ResponseWriter, r *http.Request, path st
 
 func writeMLResult(w http.ResponseWriter, raw []byte, err error) {
 	if err == nil {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(contentTypeHeader, "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(raw)
 		return
 	}
 	var statusErr *ml.StatusError
 	if errors.As(err, &statusErr) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(contentTypeHeader, "application/json")
 		w.WriteHeader(statusErr.Status)
 		_, _ = w.Write(statusErr.Body)
 		return

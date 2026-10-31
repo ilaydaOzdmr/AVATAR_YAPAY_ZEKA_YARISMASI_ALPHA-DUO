@@ -180,9 +180,9 @@ def _cv_splits(groups: pd.Series) -> int:
 
 
 def train_target(
-    X_train: pd.DataFrame,
+    x_train: pd.DataFrame,
     y_train: pd.Series,
-    X_test: pd.DataFrame,
+    x_test: pd.DataFrame,
     y_test: pd.Series,
     groups: pd.Series,
     *,
@@ -194,7 +194,7 @@ def train_target(
     fitted: dict[str, Pipeline] = {}
 
     for candidate in candidate_models(quick=quick):
-        pipeline = make_pipeline(candidate, X_train)
+        pipeline = make_pipeline(candidate, x_train)
         try:
             if candidate.params:
                 search = RandomizedSearchCV(
@@ -207,7 +207,7 @@ def train_target(
                     n_jobs=-1,
                     refit=True,
                 )
-                search.fit(X_train, y_train, groups=groups)
+                search.fit(x_train, y_train, groups=groups)
                 best_index = int(search.best_index_)
                 cv_mean = -float(search.cv_results_["mean_test_score"][best_index])
                 cv_std = float(search.cv_results_["std_test_score"][best_index])
@@ -215,7 +215,7 @@ def train_target(
             else:
                 scores = cross_val_score(
                     pipeline,
-                    X_train,
+                    x_train,
                     y_train,
                     groups=groups,
                     cv=cv,
@@ -224,7 +224,7 @@ def train_target(
                 )
                 cv_mean = float(-np.mean(scores))
                 cv_std = float(np.std(scores))
-                model = pipeline.fit(X_train, y_train)
+                model = pipeline.fit(x_train, y_train)
         except Exception as exc:  # noqa: BLE001 - report failed candidates
             rows.append(
                 {
@@ -235,9 +235,9 @@ def train_target(
             )
             continue
 
-        prediction = model.predict(X_test)
+        prediction = model.predict(x_test)
         test_metrics = rounded(regression_metrics(y_test, prediction))
-        train_metrics = rounded(regression_metrics(y_train, model.predict(X_train)))
+        train_metrics = rounded(regression_metrics(y_train, model.predict(x_train)))
         fitted[candidate.name] = model
         rows.append(
             {
@@ -275,6 +275,30 @@ def _space_size(params: dict[str, list[Any]]) -> int:
     return size
 
 
+
+def _reference_prediction(row, training, dataset_name):
+    if dataset_name == "yield":
+        product_rows = training.loc[training["product_type"].eq(row["product_type"])]
+        ratio = float(product_rows["yield_pct"].mean() if len(product_rows) else training["yield_pct"].mean())
+        return production_prediction(float(row["raw_material_kg"]), {"yield_pct": ratio})
+    ratios = training[PART_COLUMNS].div(training["carcass_weight_kg"], axis=0).mean().to_dict()
+    return butchery_prediction(float(row["carcass_weight_kg"]), ratios)
+
+
+def _constrained_predictions(frame, indices, features, targets, pipelines, training, dataset_name):
+    rows = frame.iloc[indices]
+    raw = pd.DataFrame({target: pipelines[target].predict(rows[features]) for target in targets}, index=rows.index)
+    output, baseline = [], []
+    for idx, row in rows.iterrows():
+        if dataset_name == "yield":
+            predictor = production_prediction(float(row["raw_material_kg"]), raw.loc[idx].to_dict())
+        else:
+            predictor = butchery_prediction(float(row["carcass_weight_kg"]), raw.loc[idx].to_dict())
+        output.append(predictor)
+        baseline.append(_reference_prediction(row, training, dataset_name))
+    return rows, pd.DataFrame(output, index=rows.index), pd.DataFrame(baseline, index=rows.index)
+
+
 def train_group(
     *,
     dataset_name: str,
@@ -295,14 +319,14 @@ def train_group(
         raise ValueError("missing split group")
     if set(features) & set(targets):
         raise ValueError("target columns cannot be features")
-    X = frame[features]
+    feature_frame = frame[features]
     groups = frame[group_column].astype(str)
     splitter = GroupShuffleSplit(
         n_splits=1, test_size=TEST_SIZE, random_state=RANDOM_STATE
     )
-    train_idx, test_idx = next(splitter.split(X, groups=groups))
+    train_idx, test_idx = next(splitter.split(feature_frame, groups=groups))
 
-    X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+    x_train, x_test = feature_frame.iloc[train_idx], feature_frame.iloc[test_idx]
     train_groups = groups.iloc[train_idx]
     if train_groups.nunique() < 2:
         raise ValueError("at least two training groups required for grouped validation")
@@ -314,9 +338,9 @@ def train_group(
     for target in targets:
         y = frame[target].astype(float)
         result = train_target(
-            X_train,
+            x_train,
             y.iloc[train_idx],
-            X_test,
+            x_test,
             y.iloc[test_idx],
             train_groups,
             quick=quick,
@@ -326,27 +350,11 @@ def train_group(
 
     # Evaluate the SAME physical identities deployed by the service, together
     # with a train-only proportional baseline, in addition to raw regressions.
-    def constrained(indices):
-        rows = frame.iloc[indices]
-        raw = pd.DataFrame({target: pipelines[target].predict(rows[features]) for target in targets}, index=rows.index)
-        output, baseline = [], []
-        training = frame.iloc[train_idx]
-        for idx, row in rows.iterrows():
-            if dataset_name == "yield":
-                predictor = production_prediction(float(row["raw_material_kg"]), raw.loc[idx].to_dict())
-                product_rows = training.loc[training["product_type"].eq(row["product_type"])]
-                ratio = float(product_rows["yield_pct"].mean() if len(product_rows) else training["yield_pct"].mean())
-                reference = production_prediction(float(row["raw_material_kg"]), {"yield_pct": ratio})
-            else:
-                predictor = butchery_prediction(float(row["carcass_weight_kg"]), raw.loc[idx].to_dict())
-                ratios = training[PART_COLUMNS].div(training["carcass_weight_kg"], axis=0).mean().to_dict()
-                reference = butchery_prediction(float(row["carcass_weight_kg"]), ratios)
-            output.append(predictor)
-            baseline.append(reference)
-        return rows, pd.DataFrame(output, index=rows.index), pd.DataFrame(baseline, index=rows.index)
-
-    train_rows, deployed_train, _ = constrained(train_idx)
-    test_rows, deployed_test, baseline_test = constrained(test_idx)
+    training = frame.iloc[train_idx]
+    train_rows, deployed_train, _ = _constrained_predictions(
+        frame, train_idx, features, targets, pipelines, training, dataset_name)
+    test_rows, deployed_test, baseline_test = _constrained_predictions(
+        frame, test_idx, features, targets, pipelines, training, dataset_name)
     deployed_metrics = {}
     for target in targets:
         train_metrics = rounded(regression_metrics(train_rows[target], deployed_train[target]))
@@ -373,7 +381,7 @@ def train_group(
         "target_names": targets,
         "training_sample_count": int(len(train_idx)),
         "test_sample_count": int(len(test_idx)),
-        "validation_sample_counts": [len(valid) for _, valid in GroupKFold(n_splits=_cv_splits(train_groups)).split(X_train, groups=train_groups)],
+        "validation_sample_counts": [len(valid) for _, valid in GroupKFold(n_splits=_cv_splits(train_groups)).split(x_train, groups=train_groups)],
         "validation_kind": "CV folds within training partition; no extra standalone validation set",
         "validation_method": (
             f"GroupShuffleSplit(test_size={TEST_SIZE}, seed={RANDOM_STATE}) + "
@@ -423,6 +431,6 @@ def train_group(
         "artifacts": str(artifact_dir),
         "metadata": metadata,
         "pipelines": pipelines,
-        "X_test": X_test,
+        "X_test": x_test,
         "test_indices": test_idx,
     }

@@ -1,5 +1,6 @@
 package com.avatar.app.data.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -9,5 +10,5 @@ data class LocalProduct(
     val code: String,
     val name: String,
     val unit: String,
-    val list_price: Double,
+    @ColumnInfo(name = "list_price") val listPrice: Double,
 )

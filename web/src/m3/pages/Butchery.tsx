@@ -1,3 +1,4 @@
+import { newRowKey, rowKey } from "../../rowIdentity";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { get, post } from "../../api";
 
@@ -48,6 +49,7 @@ interface ButcheryResult {
 }
 
 interface ItemDraft {
+  clientKey: string;
   product_id: string;
   weight: string;
   quantity: string;
@@ -142,6 +144,10 @@ export default function Butchery() {
     }
   }
 
+  function updateItem(key: string, patch: Partial<ItemDraft>) {
+    setItems((previous) => previous.map((item) => item.clientKey === key ? { ...item, ...patch } : item));
+  }
+
   return (
     <section>
       <div className="pagehead">
@@ -168,23 +174,23 @@ export default function Butchery() {
               </div>
               <div>
                 {items.map((item, index) => (
-                  <div key={index} className="inline-form" style={{ marginBottom: 8 }}>
+                  <div key={item.clientKey} className="inline-form" style={{ marginBottom: 8 }}>
                     <select
                       value={item.product_id}
-                      onChange={(e) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, product_id: e.target.value } : it)))}
+                      onChange={(e) => updateItem(item.clientKey, { product_id: e.target.value })}
                     >
                       <option value="">Ürün...</option>
                       {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     <input
                       value={item.weight}
-                      onChange={(e) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, weight: e.target.value } : it)))}
+                      onChange={(e) => updateItem(item.clientKey, { weight: e.target.value })}
                       placeholder="Ağırlık"
                       style={{ width: 90 }}
                     />
                     <input
                       value={item.quantity}
-                      onChange={(e) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, quantity: e.target.value } : it)))}
+                      onChange={(e) => updateItem(item.clientKey, { quantity: e.target.value })}
                       placeholder="Adet"
                       style={{ width: 70 }}
                     />
@@ -192,7 +198,7 @@ export default function Butchery() {
                       <input
                         type="checkbox"
                         checked={item.is_waste}
-                        onChange={(e) => setItems((prev) => prev.map((it, i) => (i === index ? { ...it, is_waste: e.target.checked } : it)))}
+                        onChange={(e) => updateItem(item.clientKey, { is_waste: e.target.checked })}
                         style={{ width: "auto", height: "auto" }}
                       />
                       Yan ürün
@@ -200,7 +206,7 @@ export default function Butchery() {
                     <button className="btn btn-secondary" type="button" onClick={() => setItems((prev) => prev.filter((_, i) => i !== index))}>✕</button>
                   </div>
                 ))}
-                <button className="btn btn-secondary" type="button" onClick={() => setItems((prev) => [...prev, { product_id: "", weight: "", quantity: "", is_waste: false }])}>
+                <button className="btn btn-secondary" type="button" onClick={() => setItems((prev) => [...prev, { clientKey: newRowKey(), product_id: "", weight: "", quantity: "", is_waste: false }])}>
                   ＋ Parça ekle
                 </button>
               </div>
@@ -320,8 +326,8 @@ export default function Butchery() {
                     <tr><th>Ürün</th><th>Adet</th><th>Ağırlık</th><th>Yan ürün</th><th>Maliyet</th></tr>
                   </thead>
                   <tbody>
-                    {result.items.map((item, index) => (
-                      <tr key={`${item.product_id}-${index}`}>
+                    {result.items.map((item) => (
+                      <tr key={rowKey(item)}>
                         <td>{productName(item.product_id)}</td>
                         <td>{item.quantity}</td>
                         <td>{item.weight} kg</td>

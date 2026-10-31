@@ -204,17 +204,21 @@ class SyncRepository(
                 hosts.forEach { host ->
                     launch {
                         semaphore.withPermit {
-                            if (found.get() != null) return@withPermit
-                            val url = "http://$host:$PORT"
-                            if (probeHealth(url, probeClient) == null) {
-                                found.compareAndSet(null, url)
-                            }
+                            probeCandidate(host, probeClient, found)
                         }
                     }
                 }
             }
         }
         found.get()
+    }
+
+    private fun probeCandidate(host: String, probeClient: OkHttpClient, found: AtomicReference<String?>) {
+    if (found.get() != null) return
+    val url = "http://$host:$PORT"
+    if (probeHealth(url, probeClient) == null) {
+        found.compareAndSet(null, url)
+    }
     }
 
     private fun lanProbeHosts(): List<String> {
@@ -230,28 +234,36 @@ class SyncRepository(
                 if (!nif.isUp || nif.isLoopback) continue
                 val name = nif.name.lowercase()
                 if (skippedPrefixes.any { name.startsWith(it) }) continue
-                for (interfaceAddress in nif.interfaceAddresses) {
-                    val address = interfaceAddress.address
-                    if (address !is Inet4Address) continue
-                    if (address.isLoopbackAddress || address.isLinkLocalAddress) continue
-                    val ownIp = ipToLong(address.hostAddress ?: continue) ?: continue
-                    if (ownIp == 0L) continue
-                    // Sadece özel ağlarda tara; mobil veride operatör /24'üne
-                    // istek yağdırmayalım.
-                    if (!isPrivateIpv4(ownIp)) continue
-                    // /24 varsayımı: ev/otel Wi-Fi ağlarında yaygın ve hızlı.
-                    val network = ownIp and 0xFFFFFF00L
-                    for (offset in 1..254) {
-                        val candidate = network + offset
-                        if (candidate == ownIp) continue
-                        hosts.add(longToIp(candidate))
-                    }
-                }
+                addInterfaceHosts(nif, hosts)
             }
         } catch (_: Exception) {
             // Arayüz listesi alınamazsa tarama atlanır; hata mesajı yine döner.
         }
         return hosts.toList()
+    }
+
+    private fun addInterfaceHosts(nif: NetworkInterface, hosts: MutableSet<String>) {
+    for (interfaceAddress in nif.interfaceAddresses) {
+        val ownIp = probeAddress(interfaceAddress.address) ?: continue
+        // /24 varsayımı: ev/otel Wi-Fi ağlarında yaygın ve hızlı.
+        val network = ownIp and 0xFFFFFF00L
+        for (offset in 1..254) {
+            val candidate = network + offset
+            if (candidate == ownIp) continue
+            hosts.add(longToIp(candidate))
+        }
+    }
+    }
+
+    private fun probeAddress(address: java.net.InetAddress): Long? {
+        if (address !is Inet4Address) return null
+    if (address.isLoopbackAddress || address.isLinkLocalAddress) return null
+    val ownIp = ipToLong(address.hostAddress ?: return null) ?: return null
+    if (ownIp == 0L) return null
+    // Sadece özel ağlarda tara; mobil veride operatör /24'üne
+    // istek yağdırmayalım.
+    if (!isPrivateIpv4(ownIp)) return null
+        return ownIp
     }
 
     private fun isPrivateIpv4(value: Long): Boolean {
@@ -371,12 +383,12 @@ class SyncRepository(
                         if (!view.offline && view.modelStatus != "unavailable") {
                             db.predictionDao().insert(
                                 LocalPrediction(
-                                    created_at = LocalDateTime.now().toString(),
+                                    createdAt = LocalDateTime.now().toString(),
                                     kind = kind,
-                                    input_summary = inputSummary,
-                                    result_summary = view.rows.joinToString(" | ") { "${it.first}=${it.second}" },
-                                    model_version = view.modelVersion,
-                                    model_status = view.modelStatus,
+                                    inputSummary = inputSummary,
+                                    resultSummary = view.rows.joinToString(" | ") { "${it.first}=${it.second}" },
+                                    modelVersion = view.modelVersion,
+                                    modelStatus = view.modelStatus,
                                     warnings = view.warnings.joinToString(" | "),
                                 ),
                             )
@@ -523,19 +535,19 @@ class SyncRepository(
 
     suspend fun saveSale(sale: LocalSale, lines: List<LocalSaleLine>): Long = withContext(Dispatchers.IO) {
         val saleId = db.saleDao().insert(sale.copy(synced = false))
-        val savedLines = lines.map { it.copy(sale_id = saleId) }
+        val savedLines = lines.map { it.copy(saleId = saleId) }
         db.saleDao().insertLines(savedLines)
         db.outboxDao().insert(
             Outbox(
                 entity = "sale",
-                entity_id = saleId,
+                entityId = saleId,
                 operation = "create",
                 payload = salePayload(sale.copy(id = saleId), savedLines).toString(),
-                created_at = Instant.now().toString(),
+                createdAt = Instant.now().toString(),
             ),
         )
         // Yerel stok hareketi: satılan miktar lot bakiyesinden düşülür.
-        savedLines.forEach { line -> db.lotDao().adjustQty(line.lot_id, -line.qty) }
+        savedLines.forEach { line -> db.lotDao().adjustQty(line.lotId, -line.qty) }
         saleId
     }
 
@@ -581,7 +593,7 @@ class SyncRepository(
         // Push one sale at a time. The sale code is the idempotency key, so a
         // retry after a timeout cannot deduct stock twice.
         for (entry in outbox) {
-            when (submitSale(entry.entity_id)) {
+            when (submitSale(entry.entityId)) {
                 is PushResult.Success -> Unit
                 is PushResult.Blocked -> blocked = true
                 is PushResult.Failed -> failed = true
@@ -599,16 +611,16 @@ class SyncRepository(
         lines.forEach { line ->
             lineArray.put(
                 JSONObject()
-                    .put("lot_id", line.lot_id)
+                    .put("lot_id", line.lotId)
                     .put("qty", line.qty)
-                    .put("unit_price", line.unit_price)
-                    .put("total_price", line.total_price),
+                    .put("unit_price", line.unitPrice)
+                    .put("total_price", line.totalPrice),
             )
         }
         return JSONObject()
             .put("code", sale.code)
-            .put("market_id", sale.market_id)
-            .put("sold_at", sale.sold_at)
+            .put("market_id", sale.marketId)
+            .put("sold_at", sale.soldAt)
             .put("status", sale.status)
             .put("client_id", CLIENT_ID)
             .put("lines", lineArray)
@@ -623,7 +635,7 @@ class SyncRepository(
                     code = item.getString("code"),
                     name = item.getString("name"),
                     unit = item.getString("unit"),
-                    list_price = item.getDouble("list_price"),
+                    listPrice = item.getDouble("list_price"),
                 ),
             )
         }
@@ -637,8 +649,8 @@ class SyncRepository(
                 LocalLot(
                     id = item.getLong("id"),
                     code = code,
-                    item_type = item.getString("item_type"),
-                    item_id = item.getLong("item_id"),
+                    itemType = item.getString("item_type"),
+                    itemId = item.getLong("item_id"),
                     qty = item.getDouble("qty"),
                     unit = item.getString("unit"),
                     blocked = blockedCodes.contains(code),

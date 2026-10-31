@@ -10,7 +10,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -58,7 +57,7 @@ fun Sale(
     // Yalnızca seçilen ürünle eşleşen (item_id) mamul lotları satılabilir.
     val sellableLots = lots.filter { lot ->
         val currentProduct = selectedProduct
-        lot.item_type == "product" && (currentProduct == null || lot.item_id == currentProduct.id)
+        lot.itemType == "product" && (currentProduct == null || lot.itemId == currentProduct.id)
     }
 
     Column(
@@ -102,7 +101,7 @@ fun Sale(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow, contentColor = MaterialTheme.colorScheme.onSurface),
                 ) {
-                    Text(selectedLot?.let { if (it.blocked) "${it.code} (bloke)" else it.code } ?: "Lot seç")
+                    Text(lotLabel(selectedLot))
                 }
                 DropdownMenu(expanded = lotMenu, onDismissRequest = { lotMenu = false }) {
                     sellableLots.forEach { lot ->
@@ -148,23 +147,7 @@ fun Sale(
 
                 Button(
                     onClick = {
-                        if (product != null && lot != null && market != null && qty != null) {
-                            val sale = LocalSale(
-                                code = "AND-${System.currentTimeMillis()}",
-                                market_id = market.id,
-                                sold_at = LocalDateTime.now().format(SOLD_AT_FORMAT),
-                                status = "completed",
-                                synced = false,
-                            )
-                            val line = LocalSaleLine(
-                                sale_id = 0,
-                                lot_id = lot.id,
-                                qty = qty,
-                                unit_price = product.list_price,
-                                total_price = product.list_price * qty,
-                            )
-                            onCreateSale(sale, line)
-                        }
+                        buildSaleDraft(product, lot, market, qty)?.let { (sale, line) -> onCreateSale(sale, line) }
                     },
                     enabled = canSell,
                     modifier = Modifier.fillMaxWidth(),
@@ -173,15 +156,36 @@ fun Sale(
                     Text("Satışı kaydet")
                 }
 
-                if (message != null) {
-                    val isError = message.contains("offline", ignoreCase = true) ||
-                        message.contains("yerel", ignoreCase = true) ||
-                        message.contains("bağlantı", ignoreCase = true) ||
-                        message.contains("reddedildi", ignoreCase = true) ||
-                        message.contains("failed", ignoreCase = true)
-                    Text(message, style = MaterialTheme.typography.labelMedium, color = if (isError) Red else Green)
-                }
+                SaleMessage(message)
             }
         }
+    }
+}
+
+private fun lotLabel(lot: LocalLot?): String {
+    if (lot == null) return "Lot seç"
+    return if (lot.blocked) "${lot.code} (bloke)" else lot.code
+}
+
+internal fun buildSaleDraft(product: LocalProduct?, lot: LocalLot?, market: LocalMarket?, qty: Double?): Pair<LocalSale, LocalSaleLine>? {
+    if (product == null || lot == null || market == null || qty == null) return null
+    if (lot.blocked || !qty.isFinite() || qty <= 0) return null
+    if (lot.itemType != "product" || lot.itemId != product.id) return null
+    val sale = LocalSale(code = "AND-${System.currentTimeMillis()}", marketId = market.id,
+        soldAt = LocalDateTime.now().format(SOLD_AT_FORMAT), status = "completed", synced = false)
+    val line = LocalSaleLine(saleId = 0, lotId = lot.id, qty = qty,
+        unitPrice = product.listPrice, totalPrice = product.listPrice * qty)
+    return sale to line
+}
+
+@Composable
+private fun SaleMessage(message: String?) {
+    if (message != null) {
+        val isError = message.contains("offline", ignoreCase = true) ||
+            message.contains("yerel", ignoreCase = true) ||
+            message.contains("bağlantı", ignoreCase = true) ||
+            message.contains("reddedildi", ignoreCase = true) ||
+            message.contains("failed", ignoreCase = true)
+        Text(message, style = MaterialTheme.typography.labelMedium, color = if (isError) Red else Green)
     }
 }

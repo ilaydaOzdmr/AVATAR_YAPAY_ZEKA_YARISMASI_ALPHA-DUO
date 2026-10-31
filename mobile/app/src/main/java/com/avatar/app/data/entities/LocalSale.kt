@@ -1,5 +1,6 @@
 package com.avatar.app.data.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -7,8 +8,8 @@ import androidx.room.PrimaryKey
 data class LocalSale(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val code: String,
-    val market_id: Long,
-    val sold_at: String,
+    @ColumnInfo(name = "market_id") val marketId: Long,
+    @ColumnInfo(name = "sold_at") val soldAt: String,
     val status: String,
     val synced: Boolean,
 )

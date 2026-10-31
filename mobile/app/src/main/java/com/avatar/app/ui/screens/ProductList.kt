@@ -64,7 +64,7 @@ fun ProductList(
                             Text("${product.code} · ${product.name}", fontWeight = FontWeight.Bold)
                             Text(product.unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text("${product.list_price} ₺", color = Green, fontWeight = FontWeight.Bold)
+                        Text("${product.listPrice} ₺", color = Green, fontWeight = FontWeight.Bold)
                     }
                 }
             }

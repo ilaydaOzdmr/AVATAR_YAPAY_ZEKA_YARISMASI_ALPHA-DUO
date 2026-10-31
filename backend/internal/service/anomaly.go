@@ -29,7 +29,19 @@ func NewAnomalyService(r repo.Repo) *AnomalyService {
 // Detect scans the current data and returns all anomalies found.
 func (s *AnomalyService) Detect(ctx context.Context) ([]Anomaly, error) {
 	anomalies := []Anomaly{}
+	checks := []func(context.Context) ([]Anomaly, error){s.butcheryAnomalies, s.productionAnomalies, s.stockAnomalies}
+	for _, check := range checks {
+		found, err := check(ctx)
+		if err != nil {
+			return nil, err
+		}
+		anomalies = append(anomalies, found...)
+	}
+	return anomalies, nil
+}
 
+func (s *AnomalyService) butcheryAnomalies(ctx context.Context) ([]Anomaly, error) {
+	anomalies := []Anomaly{}
 	// 1) Unexpected fire (butchery)
 	batches, err := s.repo.ListButcheryBatches(ctx)
 	if err != nil {
@@ -54,14 +66,15 @@ func (s *AnomalyService) Detect(ctx context.Context) ([]Anomaly, error) {
 		}
 	}
 
+	return anomalies, nil
+}
+
+func (s *AnomalyService) productionAnomalies(ctx context.Context) ([]Anomaly, error) {
+	anomalies := []Anomaly{}
 	// 2) Cost increase (EKP above average) + 3) low yield
 	orders, err := s.repo.ListProductionOrders(ctx)
 	if err != nil {
 		return nil, err
-	}
-	type orderStat struct {
-		code string
-		ekp  float64
 	}
 	var stats []orderStat
 	var ekpTotal, ekpCount float64
@@ -76,17 +89,7 @@ func (s *AnomalyService) Detect(ctx context.Context) ([]Anomaly, error) {
 			ekpCount++
 		}
 
-		var inputQty, outputQty float64
-		if inputs, err := s.repo.ListProductionOrderInputs(ctx, order.ID); err == nil {
-			for _, in := range inputs {
-				inputQty += in.Qty
-			}
-		}
-		if outputs, err := s.repo.ListProductionOrderOutputs(ctx, order.ID); err == nil {
-			for _, out := range outputs {
-				outputQty += out.Qty
-			}
-		}
+		inputQty, outputQty := s.productionQuantities(ctx, order.ID)
 		if inputQty > 0 && outputQty/inputQty < 0.80 {
 			anomalies = append(anomalies, Anomaly{
 				Type: "yield", Severity: "warning",
@@ -94,18 +97,12 @@ func (s *AnomalyService) Detect(ctx context.Context) ([]Anomaly, error) {
 			})
 		}
 	}
-	if ekpCount > 0 {
-		avg := ekpTotal / ekpCount
-		for _, stat := range stats {
-			if stat.ekp > avg*1.10 {
-				anomalies = append(anomalies, Anomaly{
-					Type: "cost", Severity: "warning",
-					Message: "Birim maliyet ortalamanın üzerinde", Ref: stat.code,
-				})
-			}
-		}
-	}
+	anomalies = append(anomalies, costAnomalies(stats, ekpTotal, ekpCount)...)
+	return anomalies, nil
+}
 
+func (s *AnomalyService) stockAnomalies(ctx context.Context) ([]Anomaly, error) {
+	anomalies := []Anomaly{}
 	// 4) Inconsistent lot movements (negative balance)
 	lots, err := s.repo.ListLots(ctx, "")
 	if err != nil {
@@ -129,4 +126,41 @@ func (s *AnomalyService) Detect(ctx context.Context) ([]Anomaly, error) {
 	}
 
 	return anomalies, nil
+}
+
+func (s *AnomalyService) productionQuantities(ctx context.Context, orderID int64) (float64, float64) {
+	var inputQty, outputQty float64
+	if inputs, err := s.repo.ListProductionOrderInputs(ctx, orderID); err == nil {
+		for _, in := range inputs {
+			inputQty += in.Qty
+		}
+	}
+	if outputs, err := s.repo.ListProductionOrderOutputs(ctx, orderID); err == nil {
+		for _, out := range outputs {
+			outputQty += out.Qty
+		}
+	}
+	return inputQty, outputQty
+}
+
+type orderStat struct {
+	code string
+	ekp  float64
+}
+
+func costAnomalies(stats []orderStat, ekpTotal, ekpCount float64) []Anomaly {
+	anomalies := []Anomaly{}
+	if ekpCount > 0 {
+		avg := ekpTotal / ekpCount
+		for _, stat := range stats {
+			if stat.ekp > avg*1.10 {
+				anomalies = append(anomalies, Anomaly{
+					Type: "cost", Severity: "warning",
+					Message: "Birim maliyet ortalamanın üzerinde", Ref: stat.code,
+				})
+			}
+		}
+	}
+
+	return anomalies
 }
