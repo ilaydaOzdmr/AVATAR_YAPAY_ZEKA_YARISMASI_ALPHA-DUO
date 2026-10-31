@@ -55,6 +55,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s.mux.HandleFunc("POST /materials", s.handleCreateMaterial)
 	s.mux.HandleFunc("GET /products", s.handleListProducts)
 	s.mux.HandleFunc("POST /products", s.handleCreateProduct)
+	s.mux.HandleFunc("PUT /products/{id}", s.handleUpdateProductShelfLife)
 	s.mux.HandleFunc("GET /lots", s.handleListLots)
 	s.mux.HandleFunc("POST /lots", s.handleCreateLot)
 	s.mux.HandleFunc("GET /lots/{code}", s.handleGetLot)
@@ -151,6 +152,29 @@ func (s *Server) handleListProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) handleUpdateProductShelfLife(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var body struct {
+		ShelfLifeDays int `json:"shelf_life_days"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.repo.UpdateProductShelfLife(r.Context(), id, body.ShelfLifeDays); err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":              id,
+		"shelf_life_days": body.ShelfLifeDays,
+	})
 }
 
 func (s *Server) handleCreateProduct(w http.ResponseWriter, r *http.Request) {

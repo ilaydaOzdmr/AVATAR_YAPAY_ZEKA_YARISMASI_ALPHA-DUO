@@ -18,6 +18,7 @@ type Repo interface {
 	GetMaterial(ctx context.Context, id int64) (model.Material, error)
 	CreateProduct(ctx context.Context, p model.Product) (model.Product, error)
 	ListProducts(ctx context.Context) ([]model.Product, error)
+	UpdateProductShelfLife(ctx context.Context, id int64, days int) error
 	CreateLot(ctx context.Context, l model.Lot) (model.Lot, error)
 	ListLots(ctx context.Context, itemType string) ([]model.Lot, error)
 	GetLotByCode(ctx context.Context, code string) (model.Lot, error)
@@ -151,6 +152,25 @@ func (r *mysqlRepo) ListProducts(ctx context.Context) ([]model.Product, error) {
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+func (r *mysqlRepo) UpdateProductShelfLife(ctx context.Context, id int64, days int) error {
+	if days < 0 {
+		return ErrInvalidLot
+	}
+	res, err := r.db.ExecContext(ctx,
+		`UPDATE products SET shelf_life_days = ? WHERE id = ?`, days, id)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (r *mysqlRepo) CreateLot(ctx context.Context, l model.Lot) (model.Lot, error) {

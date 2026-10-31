@@ -704,3 +704,28 @@ func TestCreateLotComputesExpiryAndStockMovement(t *testing.T) {
 		t.Fatalf("product lot qty = %v, want 4", productLot.Qty)
 	}
 }
+
+func TestUpdateProductShelfLife(t *testing.T) {
+	r, _ := testRepo(t)
+	ctx := context.Background()
+	product, err := r.CreateProduct(ctx, model.Product{
+		Code: unique("PRD"), Name: "Raf ömrü test", Unit: "kg",
+		ListPrice: 10, Category: "finished", IsFinished: true, ShelfLifeDays: 0,
+	})
+	if err != nil {
+		t.Fatalf("CreateProduct: %v", err)
+	}
+	if err := r.UpdateProductShelfLife(ctx, product.ID, 21); err != nil {
+		t.Fatalf("UpdateProductShelfLife: %v", err)
+	}
+	updated, err := r.GetProduct(ctx, product.ID)
+	if err != nil {
+		t.Fatalf("GetProduct: %v", err)
+	}
+	if updated.ShelfLifeDays != 21 {
+		t.Fatalf("shelf_life_days = %d, want 21", updated.ShelfLifeDays)
+	}
+	if err := r.UpdateProductShelfLife(ctx, product.ID, -1); !errors.Is(err, ErrInvalidLot) {
+		t.Fatalf("negative shelf life error = %v, want ErrInvalidLot", err)
+	}
+}

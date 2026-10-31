@@ -31,6 +31,14 @@ export function post<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+export function put<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(API_BASE, path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 // ML is always reached through the Go backend; the browser never needs the
 // Python service address.
 export function mlGet<T>(path: string): Promise<T> {

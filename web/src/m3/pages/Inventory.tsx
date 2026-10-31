@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { get, post } from "../../api";
+import { get, post, put } from "../../api";
 
 interface Material {
   id: number;
@@ -73,6 +73,7 @@ export default function Inventory() {
   const [lotQty, setLotQty] = useState("");
   const [lotUnitCost, setLotUnitCost] = useState("");
   const [lotProductionDate, setLotProductionDate] = useState(today());
+  const [shelfEdits, setShelfEdits] = useState<Record<number, string>>({});
 
   const load = useCallback(() => {
     get<Material[]>("/materials").then(setMaterials).catch(() => {});
@@ -150,8 +151,24 @@ export default function Inventory() {
     }
   }
 
-  async function createStock(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveShelfLife(product: Product) {
+    setFeedback(null);
+    const raw = shelfEdits[product.id] ?? String(product.shelf_life_days);
+    const days = Number.parseInt(raw, 10);
+    if (Number.isNaN(days) || days < 0) {
+      setFeedback("Raf ömrü 0 veya pozitif bir gün olmalı.");
+      return;
+    }
+    try {
+      await put(`/products/${product.id}`, { shelf_life_days: days });
+      setFeedback(`${product.code} raf ömrü ${days} gün olarak güncellendi.`);
+      load();
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function createStock(event: FormEvent<HTMLFormElement>) {    event.preventDefault();
     setFeedback(null);
     const lot = lots.find((l) => l.id === Number.parseInt(stockLotId, 10));
     const qty = Number.parseFloat(stockQty);
@@ -371,7 +388,18 @@ export default function Inventory() {
                     <td className="id">{product.code}</td>
                     <td>{product.name}</td>
                     <td>{product.category}</td>
-                    <td>{product.shelf_life_days}</td>
+                    <td>
+                      <input
+                        type="number"
+                        min={0}
+                        value={shelfEdits[product.id] ?? String(product.shelf_life_days)}
+                        onChange={(e) => setShelfEdits((prev) => ({ ...prev, [product.id]: e.target.value }))}
+                        style={{ width: 70 }}
+                      />
+                      <button className="btn btn-secondary" type="button" onClick={() => void saveShelfLife(product)}>
+                        Kaydet
+                      </button>
+                    </td>
                     <td>{product.created_at ?? "—"}</td>
                     <td>€ {product.list_price.toFixed(2)}</td>
                   </tr>

@@ -39,9 +39,10 @@ func (f *fakeRepo) GetMaterial(_ context.Context, _ int64) (model.Material, erro
 func (f *fakeRepo) CreateProduct(_ context.Context, p model.Product) (model.Product, error) {
 	return p, nil
 }
-func (f *fakeRepo) ListProducts(_ context.Context) ([]model.Product, error)     { return nil, nil }
-func (f *fakeRepo) CreateLot(_ context.Context, l model.Lot) (model.Lot, error) { return l, nil }
-func (f *fakeRepo) ListLots(_ context.Context, _ string) ([]model.Lot, error)   { return nil, nil }
+func (f *fakeRepo) ListProducts(_ context.Context) ([]model.Product, error)        { return nil, nil }
+func (f *fakeRepo) UpdateProductShelfLife(_ context.Context, _ int64, _ int) error { return nil }
+func (f *fakeRepo) CreateLot(_ context.Context, l model.Lot) (model.Lot, error)    { return l, nil }
+func (f *fakeRepo) ListLots(_ context.Context, _ string) ([]model.Lot, error)      { return nil, nil }
 func (f *fakeRepo) GetLotByCode(_ context.Context, _ string) (model.Lot, error) {
 	return model.Lot{}, f.getLotByCodeErr
 }
