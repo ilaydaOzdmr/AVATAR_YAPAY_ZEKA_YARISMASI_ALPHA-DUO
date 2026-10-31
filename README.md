@@ -25,8 +25,6 @@ Lot bazında depo transferi, sevkiyat, iade ve yeniden işleme hareketleri deste
 
 ## Ekranlar
 
-Web ve mobilin önemli işlevleri aşağıda, **aynı konuya ait ekranlar birleştirilerek** gösterilmiştir. Görselleri açarak ayrıntıları büyütebilirsiniz. Ekranlar 1 Kasım 2026 tarihli demo oturumundan alınmıştır; örnek miktarlar yeni kurulumda farklı olabilir.
-
 ### Web · Yapay zekâ tahmin sayfası
 
 ![Üretim ve parçalama tahminleri, model–gerçek grafiği, parçalama sapmaları ve doğruluk tabloları aynı görselde](docs/screenshots/web-yapay-zeka.png)
