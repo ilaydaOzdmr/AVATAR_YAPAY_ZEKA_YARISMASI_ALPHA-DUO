@@ -64,6 +64,12 @@ interface Market {
   name: string;
 }
 
+interface ReportData {
+  title: string;
+  columns: string[];
+  rows: (string | number)[][];
+}
+
 export default function Reports({ onNavigate }: { onNavigate: (view: string) => void }) {
   const [productionCount, setProductionCount] = useState(0);
   const [saleCount, setSaleCount] = useState(0);
@@ -72,6 +78,7 @@ export default function Reports({ onNavigate }: { onNavigate: (view: string) => 
   const [productCount, setProductCount] = useState(0);
   const [movementCount, setMovementCount] = useState(0);
   const [anomalyCount, setAnomalyCount] = useState(0);
+  const [preview, setPreview] = useState<ReportData | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -96,131 +103,124 @@ export default function Reports({ onNavigate }: { onNavigate: (view: string) => 
     load();
   }, [load]);
 
-  async function exportCostReport() {
+  function showReport(data: ReportData) {
     setFeedback(null);
-    try {
-      const orders = await get<ProductionOrder[]>("/production-orders");
-      const rows: (string | number)[][] = [];
-      for (const order of orders) {
-        try {
-          const cost = await get<CostSummary>(`/production-orders/${order.id}`);
-          rows.push([order.code, cost.ekp.toFixed(2), cost.total_cost.toFixed(2), cost.finished_qty]);
-        } catch {
-          rows.push([order.code, "—", "—", "—"]);
-        }
+    setPreview(data);
+  }
+
+  async function generateCostReport(): Promise<ReportData> {
+    const orders = await get<ProductionOrder[]>("/production-orders");
+    const rows: (string | number)[][] = [];
+    for (const order of orders) {
+      try {
+        const cost = await get<CostSummary>(`/production-orders/${order.id}`);
+        rows.push([order.code, `€ ${cost.ekp.toFixed(2)}`, `€ ${cost.total_cost.toFixed(2)}`, cost.finished_qty]);
+      } catch {
+        rows.push([order.code, "—", "—", "—"]);
       }
-      downloadCsv("uretim-maliyet-raporu.csv", ["Üretim emri", "EKP", "Toplam maliyet", "Mamul miktarı"], rows);
-      setFeedback("Üretim maliyet raporu indirildi.");
-    } catch (err) {
-      setFeedback(err instanceof Error ? err.message : String(err));
     }
+    return { title: "Gerçek Üretim Maliyeti Raporu", columns: ["Üretim emri", "EKP", "Toplam maliyet", "Mamul miktarı"], rows };
   }
 
-  async function exportLotHistory() {
-    setFeedback(null);
-    try {
-      const lots = await get<Lot[]>("/lots");
-      const rows: (string | number)[][] = [];
-      for (const lot of lots) {
-        try {
-          const movements = await get<Movement[]>(`/lots/${lot.id}/movements`);
-          for (const movement of movements) {
-            rows.push([lot.code, movement.movement_type, movement.qty, movement.occurred_at]);
-          }
-        } catch {
-          /* skip lot with no movements */
+  async function generatePurchaseReport(): Promise<ReportData> {
+    const [lots, materials] = await Promise.all([
+      get<{ id: number; code: string; item_id: number; qty: number; unit_cost: number }[]>("/lots?item_type=material"),
+      get<Material[]>("/materials"),
+    ]);
+    const nameById = new Map(materials.map((m) => [m.id, m.name]));
+    const rows: (string | number)[][] = lots.map((lot) => [
+      lot.code,
+      nameById.get(lot.item_id) ?? "—",
+      `${lot.qty} kg`,
+      `€ ${lot.unit_cost.toFixed(2)}`,
+      `€ ${(lot.qty * lot.unit_cost).toFixed(2)}`,
+    ]);
+    return { title: "Alış Raporu", columns: ["Lot", "Hammadde", "Miktar", "Birim maliyet", "Toplam"], rows };
+  }
+
+  async function generateButcheryReport(): Promise<ReportData> {
+    const batches = await get<ButcheryBatch[]>("/butchery-batches");
+    const rows: (string | number)[][] = batches.map((batch) => [
+      batch.code,
+      batch.animal_type,
+      `${batch.input_weight} kg`,
+      `€ ${batch.total_cost.toFixed(2)}`,
+    ]);
+    return { title: "Parçalama Raporu", columns: ["Parti", "Hayvan", "Giriş ağırlığı", "Toplam maliyet"], rows };
+  }
+
+  async function generateSalesReport(): Promise<ReportData> {
+    const [sales, markets] = await Promise.all([get<Sale[]>("/sales"), get<Market[]>("/markets")]);
+    const nameById = new Map(markets.map((m) => [m.id, m.name]));
+    const rows: (string | number)[][] = sales.map((sale) => [
+      sale.code,
+      nameById.get(sale.market_id) ?? `Market #${sale.market_id}`,
+      sale.sold_at,
+      sale.status,
+    ]);
+    return { title: "Satış Raporu", columns: ["Satış", "Market", "Tarih", "Durum"], rows };
+  }
+
+  async function generateLotHistory(): Promise<ReportData> {
+    const lots = await get<Lot[]>("/lots");
+    const rows: (string | number)[][] = [];
+    for (const lot of lots) {
+      try {
+        const movements = await get<Movement[]>(`/lots/${lot.id}/movements`);
+        for (const movement of movements) {
+          rows.push([lot.code, movement.movement_type, movement.qty, movement.occurred_at]);
         }
+      } catch {
+        /* skip */
       }
-      downloadCsv("lot-hareket-gecmisi.csv", ["Lot", "Hareket türü", "Miktar", "Tarih"], rows);
-      setFeedback("Lot hareket geçmişi indirildi.");
-    } catch (err) {
-      setFeedback(err instanceof Error ? err.message : String(err));
     }
+    return { title: "Lot Hareket Geçmişi", columns: ["Lot", "Hareket türü", "Miktar", "Tarih"], rows };
   }
 
-  async function exportAiReport() {
+  async function generateAiReport(): Promise<ReportData> {
+    const report = await mlGet<MlReport>("/report");
+    const rows: (string | number)[][] = [
+      ["Üretim MAE", report.yield.model_mae, report.yield.baseline_mae],
+      ["Üretim RMSE", report.yield.model_rmse, report.yield.baseline_rmse],
+      ["Parçalama MAE", report.butchery.model_mae, report.butchery.baseline_mae],
+      ["Parçalama RMSE", report.butchery.model_rmse, report.butchery.baseline_rmse],
+    ];
+    return { title: "AI Tahmin Hata Raporu", columns: ["Metrik", "Model", "Referans"], rows };
+  }
+
+  async function run(action: () => Promise<ReportData>) {
     setFeedback(null);
     try {
-      const report = await mlGet<MlReport>("/report");
-      const rows: (string | number)[][] = [
-        ["Üretim MAE", report.yield.model_mae, report.yield.baseline_mae],
-        ["Üretim RMSE", report.yield.model_rmse, report.yield.baseline_rmse],
-        ["Parçalama MAE", report.butchery.model_mae, report.butchery.baseline_mae],
-        ["Parçalama RMSE", report.butchery.model_rmse, report.butchery.baseline_rmse],
-      ];
-      downloadCsv("ai-tahmin-hata-raporu.csv", ["Metrik", "Model", "Referans"], rows);
-      setFeedback("AI tahmin raporu indirildi.");
+      showReport(await action());
     } catch (err) {
       setFeedback(err instanceof Error ? err.message : String(err));
     }
   }
 
-  async function exportPurchaseReport() {
-    setFeedback(null);
-    try {
-      const [lots, materials] = await Promise.all([
-        get<{ id: number; code: string; item_id: number; qty: number; unit_cost: number }[]>("/lots?item_type=material"),
-        get<Material[]>("/materials"),
-      ]);
-      const nameById = new Map(materials.map((m) => [m.id, m.name]));
-      const rows: (string | number)[][] = lots.map((lot) => [
-        lot.code,
-        nameById.get(lot.item_id) ?? "—",
-        lot.qty,
-        lot.unit_cost.toFixed(2),
-        (lot.qty * lot.unit_cost).toFixed(2),
-      ]);
-      downloadCsv("alis-raporu.csv", ["Lot", "Hammadde", "Miktar", "Birim maliyet", "Toplam"], rows);
-      setFeedback("Alış raporu indirildi.");
-    } catch (err) {
-      setFeedback(err instanceof Error ? err.message : String(err));
-    }
+  function downloadPdf() {
+    window.print();
   }
 
-  async function exportButcheryReport() {
-    setFeedback(null);
-    try {
-      const batches = await get<ButcheryBatch[]>("/butchery-batches");
-      const rows: (string | number)[][] = batches.map((batch) => [
-        batch.code,
-        batch.animal_type,
-        batch.input_weight,
-        batch.total_cost.toFixed(2),
-      ]);
-      downloadCsv("parcalama-raporu.csv", ["Parti", "Hayvan", "Giriş ağırlığı", "Toplam maliyet"], rows);
-      setFeedback("Parçalama raporu indirildi.");
-    } catch (err) {
-      setFeedback(err instanceof Error ? err.message : String(err));
-    }
+  function downloadCsvCurrent() {
+    if (!preview) return;
+    downloadCsv(
+      "rapor.csv",
+      preview.columns,
+      preview.rows.map((row) => row.map((cell) => String(cell).replace(/^€ /, ""))),
+    );
   }
 
-  async function exportSalesReport() {
-    setFeedback(null);
-    try {
-      const [sales, markets] = await Promise.all([get<Sale[]>("/sales"), get<Market[]>("/markets")]);
-      const nameById = new Map(markets.map((m) => [m.id, m.name]));
-      const rows: (string | number)[][] = sales.map((sale) => [
-        sale.code,
-        nameById.get(sale.market_id) ?? `Market #${sale.market_id}`,
-        sale.sold_at,
-        sale.status,
-      ]);
-      downloadCsv("satis-raporu.csv", ["Satış", "Market", "Tarih", "Durum"], rows);
-      setFeedback("Satış raporu indirildi.");
-    } catch (err) {
-      setFeedback(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  const catalog = [
-    { name: "Gerçek üretim maliyeti", scope: "Hammadde + hizmet + EKP", format: "CSV", action: exportCostReport },
-    { name: "Alış raporu", scope: "Hammadde lotları ve maliyet", format: "CSV", action: exportPurchaseReport },
-    { name: "Parçalama raporu", scope: "Kuzu parçalama kayıtları", format: "CSV", action: exportButcheryReport },
-    { name: "Satış raporu", scope: "Satış ve sevkiyat kayıtları", format: "CSV", action: exportSalesReport },
-    { name: "Lot hareket geçmişi", scope: "Giriş, transfer, üretim, satış", format: "CSV", action: exportLotHistory },
-    { name: "Geri çağırma alıcı listesi", scope: "Market ve miktar bazında", format: "CSV", action: () => onNavigate("recall") },
-    { name: "AI tahmin hata raporu", scope: "Gerçek / tahmin / MAE / RMSE", format: "CSV", action: exportAiReport },
+  const catalog: { name: string; scope: string; action: () => void }[] = [
+    { name: "Gerçek üretim maliyeti", scope: "Hammadde + hizmet + EKP", action: () => run(generateCostReport) },
+    { name: "Alış raporu", scope: "Hammadde lotları ve maliyet", action: () => run(generatePurchaseReport) },
+    { name: "Parçalama raporu", scope: "Kuzu parçalama kayıtları", action: () => run(generateButcheryReport) },
+    { name: "Satış raporu", scope: "Satış ve sevkiyat kayıtları", action: () => run(generateSalesReport) },
+    { name: "Lot hareket geçmişi", scope: "Giriş, transfer, üretim, satış", action: () => run(generateLotHistory) },
+    { name: "Geri çağırma alıcı listesi", scope: "Market ve miktar bazında", action: () => onNavigate("recall") },
+    { name: "AI tahmin hata raporu", scope: "Gerçek / tahmin / MAE / RMSE", action: () => run(generateAiReport) },
   ];
+
+  const today = new Date().toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" });
 
   return (
     <section>
@@ -285,7 +285,7 @@ export default function Reports({ onNavigate }: { onNavigate: (view: string) => 
                 <tr key={report.name}>
                   <td><b>{report.name}</b></td>
                   <td>{report.scope}</td>
-                  <td>{report.format}</td>
+                  <td>PDF / CSV</td>
                   <td><button className="btn btn-secondary" type="button" onClick={report.action}>Oluştur</button></td>
                 </tr>
               ))}
@@ -293,6 +293,54 @@ export default function Reports({ onNavigate }: { onNavigate: (view: string) => 
           </table>
         </div>
       </div>
+
+      {preview && (
+        <>
+          <div className="panel" style={{ marginTop: 16 }}>
+            <div className="panel-head">
+              <h2>Rapor önizleme</h2>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn btn-primary" type="button" onClick={downloadPdf}>PDF indir</button>
+                <button className="btn btn-secondary" type="button" onClick={downloadCsvCurrent}>CSV indir</button>
+              </div>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>{preview.columns.map((column) => <th key={column}>{column}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {preview.rows.map((row, index) => (
+                    <tr key={index}>
+                      {row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}
+                    </tr>
+                  ))}
+                  {preview.rows.length === 0 && (
+                    <tr><td colSpan={preview.columns.length} className="muted">Kayıt bulunamadı.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Yazdırma/PDF için temiz rapor şablonu */}
+          <div className="report-sheet">
+            <div className="report-sheet__brand">AVATAR — Food Intelligence</div>
+            <h2 className="report-sheet__title">{preview.title}</h2>
+            <div className="report-sheet__meta">Oluşturma tarihi: {today}</div>
+            <table className="report-sheet__table">
+              <thead>
+                <tr>{preview.columns.map((column) => <th key={column}>{column}</th>)}</tr>
+              </thead>
+              <tbody>
+                {preview.rows.map((row, index) => (
+                  <tr key={index}>{row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </section>
   );
 }
