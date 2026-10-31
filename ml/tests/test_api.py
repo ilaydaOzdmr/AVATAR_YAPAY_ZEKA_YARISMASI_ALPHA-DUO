@@ -32,6 +32,29 @@ def test_models_and_report_are_available():
     assert "synthetic" in body["note"].lower()
 
 
+def test_web_metadata_and_report_use_the_loaded_artifacts():
+    from ml.app import SERVICE
+    models = {item["name"]: item for item in client.get("/models").json()}
+    reports = client.get("/report").json()["model_reports"]
+    assert set(reports) == {"yield", "butchery_lamb", "butchery_cattle"}
+    for name, model in models.items():
+        bundle = SERVICE.require(name)
+        assert model["data_origin"] == bundle.metadata["data_origin"]
+        assert model["training_date"] == bundle.metadata["training_date"]
+        assert model["feature_names"] == bundle.metadata["feature_names"]
+        assert model["input_ranges"] == bundle.metadata["input_ranges"]
+        assert reports[name]["model_version"] == model["model_version"]
+        assert reports[name]["dataset_version"] == model["dataset_version"]
+        assert reports[name]["metrics"] == bundle.metadata["deployed_metrics"]
+    assert "finished_qty" in reports["yield"]["metrics"]
+    assert client.get("/report").json()["production_quantity"]["model_mae"] == reports["yield"]["metrics"]["finished_qty"]["test"]["mae"]
+
+
+def test_health_reports_missing_models_as_degraded(tmp_path):
+    from ml.src.service import MLService
+    assert MLService(tmp_path).health() == {"status": "degraded", "models_loaded": 0, "models": []}
+
+
 def test_yield_v2_returns_metadata_and_uncertainty():
     response = client.post(
         "/predict/v2/yield",
@@ -42,6 +65,7 @@ def test_yield_v2_returns_metadata_and_uncertainty():
     assert body["prediction"]["finished_qty"] > 0
     assert 0.5 < body["prediction"]["yield_pct"] < 1.0
     assert body["model_version"] == "1.1.0"
+    assert body["dataset_version"] == next(model for model in client.get("/models").json() if model["name"] == "yield")["dataset_version"]
     assert body["model_status"] == "synthetic_only"
     assert body["warnings"]
     assert body["uncertainty"]["finished_qty"]["test_rmse"] >= 0
@@ -79,6 +103,7 @@ def test_butchery_v2_returns_physical_check():
     assert response.status_code == 200
     body = response.json()
     assert body["prediction"]["leg_weight"] > 0
+    assert body["dataset_version"] == next(model for model in client.get("/models").json() if model["name"] == "butchery_lamb")["dataset_version"]
     assert body["prediction"]["total_saleable_weight"] > 0
     assert body["physical_check"]["carcass_weight_kg"] == 21
     assert "parts_over_carcass" in body["physical_check"]

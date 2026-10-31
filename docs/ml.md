@@ -149,3 +149,67 @@ docker compose -f infra/docker-compose.yml up -d --build
 - Bu eğitimde yerel USDA fiyat dosyası yoktu; fiyat endeksi 1,0 fallback'i kullanıldı.
 - Gerçek verinin gelmesi tek başına `validated_real` statüsü vermez; lisans,
   kapsam, gözlem kimliği ve bağımsız grup/zaman testi ayrıca doğrulanmalıdır.
+
+## 8. Web ekranı ve güncel model bağlantısı — 31 Ekim 2026
+
+Main dalı `4660010` commit'ine kadar çekildikten sonra iki web girişindeki
+yapay zekâ ekranı ortak `web/src/components/MLPredictions.tsx` bileşenine alındı.
+Ham panel ve Food Intelligence aynı V2 sözleşmesini kullanır. Model yeniden
+eğitilmedi; mevcut v1.1.0 artefaktlarının metadata ve metrikleri gösterilir.
+
+- Ekran sürüm, veri kaynağı, eğitim/test sayıları ve girdi aralıklarını
+  `/ml/health` üzerinden; fiziksel kısıt sonrası hataları `/ml/report` içindeki
+  `model_reports` üzerinden alır. Sürüm, skor veya örnek tahmin sabit yazılmaz.
+- Üretim, kuzu ve sığırın üç ayrı test kartı vardır. Mamul hatası kg, üretim
+  verim hatası yüzde puan, MAPE yüzde ve R² ayrı etiketlenir. R² bir doğruluk
+  yüzdesi olarak sunulmaz. Sentetik veri ve saha doğrulaması eksikliği belirtilir.
+- Üretim formu ürün tipini, bütün miktarları/fiyatları, sabit veya kg başına
+  hizmet bedelini, ek işçiliği ve opsiyonel fiili mamulü gönderir. PDF örneği
+  yalnız formu doldurur; kullanıcı tahmin düğmesiyle gerçek modeli çağırır.
+- Parçalama formu ölçülmüş karkası zorunlu tutar; canlı ağırlık opsiyoneldir.
+  Irk, cinsiyet, yaş ve skorlar girilebilir; eksik değerlerin demo varsayımı
+  ve fiziksel dengeleme uyarıları Türkçe açıklanır.
+- Tahmin yanıtının model ve veri sürümleri metadata ile uyuşmazsa sonuç
+  gösterilmez. Bağlantı hatasında eski skorlar korunmaz, eksik değerler sıfır
+  veya tahmini başarı oranı gibi sunulmaz. Pydantic alan hataları okunabilir döner.
+- Mobil kontrolde mevcut yan menünün kapatma düğmesini örttüğü görüldü.
+  Dar ekranda menü kapalı başlar; görünür kapatma düğmesi/arka planı eklendi,
+  sayfa seçildiğinde kapanır. Böylece tahmin formlarına erişim engellenmez.
+- Kayıt karşılaştırmaları tamamlanmış emirlerde çıkış ürününü doğrular; 1 kg ve
+  500 g paketler açık ürün ağırlığıyla kg'ye çevrilir. Bilinmeyen ürün/birimlerde
+  hata gösterilir. Geçmiş kayıtların bugünkü modelle yeniden tahmini,
+  üretim öncesinde kaydedilmiş bir tahmin veya saha testi olarak gösterilmez.
+- Docker Compose'daki `ml/artifacts` bind mount'u image içinde üretilen yeni
+  artefaktları örttüğü için kaldırıldı. Varsayılan servis image build sırasında
+  üretilen modelleri yükler; healthcheck üç modelin yüklü olmasını doğrular.
+  Yerel eğitim dosyaları yine Git dışındadır.
+
+Çalışan Docker servislerine kaynak değişikliğini uygulama komutu:
+
+```powershell
+docker compose -f infra/docker-compose.yml up -d --build ml backend web web-m3
+```
+
+Bu görevde Docker Compose söz dizimi doğrulandı; image build/deployment ve
+MySQL entegrasyon testleri çalıştırılmadı. Doğrulama:
+
+- 46 Python testi başarılı; 10 Node form/sözleşme/birim testi başarılı.
+- TypeScript ve iki girişin Vite üretim derlemesi başarılı.
+- `go test ./...` başarılı. `AVATAR_ML_TEST_URL` ile ek canlı model smoke testi,
+  gerçek Python modellerini Go proxy üzerinden çağırarak çalıştırıldı.
+- Headless Chrome'da iki giriş, dinamik metrikler, PDF sucuk örneği, kuzu/sığır
+  ağırlık dengesi, 500 g paket karşılaştırması, mobil taşma, eski model/veri
+  sürümünün reddi ve çevrimdışı servis durumu kontrol edildi. Tarayıcı konsolunda
+  uygulama hatası yoktu. İşletme kayıtları bu kontrolde açıkça yapay QA
+  fixture'larıydı; model tahminleri gerçek yerel artefaktlardan alındı.
+
+Tarayıcı QA araçları, fixture sunucusu ve ekran görüntüleri yalnız
+`ml/reports/local/` altında tutulur; veritabanı/kullanıcı kayıtları değiştirilmez.
+Normal testler canlı servis istemez. Canlı proxy kontrolü için test URL'si
+yalnız açıkça belirtildiğinde kullanılır:
+
+```powershell
+$env:AVATAR_ML_TEST_URL='http://localhost:8000'
+cd backend
+go test ./internal/httpapi -run TestMLLiveWebContract -v
+```

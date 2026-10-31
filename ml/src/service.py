@@ -87,13 +87,18 @@ class MLService:
                     "training_sample_count": metadata.get("training_sample_count", 0),
                     "test_sample_count": metadata.get("test_sample_count", 0),
                     "warnings": metadata.get("warnings", []),
+                    "data_origin": metadata.get("data_origin", "unknown"),
+                    "training_date": metadata.get("training_date", ""),
+                    "feature_names": metadata.get("feature_names", []),
+                    "validation_method": metadata.get("validation_method", ""),
+                    "input_ranges": self.input_ranges(bundle),
                 }
             )
         return out
 
     def health(self) -> dict[str, Any]:
         return {
-            "status": "ok",
+            "status": "ok" if len(self.bundles) == 3 else "degraded",
             "models_loaded": len(self.bundles),
             "models": self.models(),
         }
@@ -116,6 +121,7 @@ class MLService:
             "butchery": legacy_metrics(lamb, "total_saleable_weight"),
             "butchery_lamb": legacy_metrics(lamb, "total_saleable_weight"),
             "butchery_cattle": legacy_metrics(cattle, "total_saleable_weight"),
+            "production_quantity": legacy_metrics(yield_bundle, "finished_qty"),
             "note": WARNING_SYNTHETIC,
             "model_version": yield_bundle.model_version,
             "model_status": "synthetic_only",
@@ -124,6 +130,17 @@ class MLService:
                 "yield": yield_bundle.metadata["targets"],
                 "butchery_lamb": lamb.metadata["targets"],
                 "butchery_cattle": cattle.metadata["targets"],
+            },
+            # The web consumes deployed metrics from the loaded model bundle,
+            # never a bundled/stale JSON report or raw unconstrained regression.
+            "model_reports": {
+                name: {
+                    "model_version": bundle.model_version,
+                    "dataset_version": bundle.metadata["dataset_version"],
+                    "validation_sample_counts": bundle.metadata.get("validation_sample_counts", []),
+                    "metrics": bundle.metadata["deployed_metrics"],
+                }
+                for name, bundle in self.bundles.items()
             },
         }
 
@@ -273,6 +290,7 @@ class MLService:
                 "estimated_ekp": round(estimated_ekp, 4),
             },
             "model_version": bundle.model_version,
+            "dataset_version": bundle.metadata["dataset_version"],
             "model_status": bundle.status,
             "data_origin": DATA_ORIGIN,
             "applicable_input_range": self.input_ranges(bundle),
@@ -361,6 +379,7 @@ class MLService:
         return {
             "prediction": predictions,
             "model_version": bundle.model_version,
+            "dataset_version": bundle.metadata["dataset_version"],
             "model_status": bundle.status,
             "data_origin": DATA_ORIGIN,
             "applicable_input_range": self.input_ranges(bundle),
