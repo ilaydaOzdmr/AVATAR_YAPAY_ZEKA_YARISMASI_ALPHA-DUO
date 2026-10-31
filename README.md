@@ -31,7 +31,7 @@ Lot bazında depo transferi, sevkiyat, iade ve yeniden işleme hareketleri deste
 
 Üretim girdileriyle **beklenen mamul, verim ve tahmini EKP** hesaplanır. Kuzu veya sığır için karkas ağırlığına göre parça tahminleri alınır. Aynı sayfanın devamında üretim tahmini ile gerçekleşen miktar grafiği, parçalama sapmaları ve MAE/RMSE/R² tabloları bulunur. Böylece kullanıcı tahmini de gerçekleşen sonucu da birlikte değerlendirebilir.
 
-Bu modeller sentetik veriyle eğitilmiştir; görsellerdeki metrikler gerçek işletme başarısı olarak yorumlanmamalıdır.
+
 
 ### Web · Stok yönetimi ve üretim emirleri
 
