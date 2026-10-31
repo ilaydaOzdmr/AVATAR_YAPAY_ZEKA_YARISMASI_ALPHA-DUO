@@ -67,6 +67,9 @@ func (f *fakeRepo) CreateProductionOrder(_ context.Context, po model.ProductionO
 func (f *fakeRepo) CompleteProductionOrder(_ context.Context, id int64, _ *string) (model.ProductionOrder, error) {
 	return model.ProductionOrder{ID: id, Status: "completed"}, nil
 }
+func (f *fakeRepo) RejectProductionOrder(_ context.Context, id int64, _ *string) (model.ProductionOrder, error) {
+	return model.ProductionOrder{ID: id, Status: "rejected"}, nil
+}
 func (f *fakeRepo) GetProductionOrder(_ context.Context, _ int64) (model.ProductionOrder, error) {
 	return model.ProductionOrder{}, nil
 }

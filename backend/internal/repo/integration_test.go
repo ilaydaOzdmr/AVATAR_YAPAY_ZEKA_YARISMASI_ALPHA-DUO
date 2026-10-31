@@ -790,3 +790,56 @@ func TestCompleteProductionOrderAppliesStockOnce(t *testing.T) {
 		t.Fatalf("second completion changed output qty = %v, want 8", outputAgain.Qty)
 	}
 }
+
+func TestRejectProductionOrderKeepsStockAndExpectedQty(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+
+	materialID := insertMaterial(t, db, unique("MAT"), 10)
+	inputLotID := insertLot(t, db, unique("ET"), "material", materialID, 10, 10)
+	productID := insertProduct(t, db, unique("PRD"), 25)
+	outputLotID := insertLot(t, db, unique("SUC"), "product", productID, 0, 0)
+
+	order, err := r.CreateProductionOrder(ctx, model.ProductionOrder{
+		Code: unique("URT"), Status: "draft", ExpectedQty: 42,
+	}, []model.ProductionOrderInput{{
+		MaterialLotID: inputLotID, Qty: 10,
+	}}, []model.ProductionOrderOutput{{
+		ProductLotID: outputLotID, Qty: 8,
+	}})
+	if err != nil {
+		t.Fatalf("CreateProductionOrder: %v", err)
+	}
+	if order.ExpectedQty != 42 {
+		t.Fatalf("expected_qty = %v, want 42", order.ExpectedQty)
+	}
+
+	loaded, err := r.GetProductionOrder(ctx, order.ID)
+	if err != nil {
+		t.Fatalf("GetProductionOrder: %v", err)
+	}
+	if loaded.ExpectedQty != 42 {
+		t.Fatalf("loaded expected_qty = %v, want 42", loaded.ExpectedQty)
+	}
+
+	reason := "kalite reddi"
+	rejected, err := r.RejectProductionOrder(ctx, order.ID, &reason)
+	if err != nil {
+		t.Fatalf("RejectProductionOrder: %v", err)
+	}
+	if rejected.Status != "rejected" {
+		t.Fatalf("status = %q, want rejected", rejected.Status)
+	}
+	inputAfter, _ := r.GetLot(ctx, inputLotID)
+	if inputAfter.Qty != 10 {
+		t.Fatalf("input qty after reject = %v, want 10", inputAfter.Qty)
+	}
+	outputAfter, _ := r.GetLot(ctx, outputLotID)
+	if outputAfter.Qty != 0 {
+		t.Fatalf("output qty after reject = %v, want 0", outputAfter.Qty)
+	}
+	// Reject is idempotent.
+	if _, err := r.RejectProductionOrder(ctx, order.ID, nil); err != nil {
+		t.Fatalf("second RejectProductionOrder: %v", err)
+	}
+}

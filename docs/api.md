@@ -225,3 +225,19 @@ veya bitiş zamanı ile:
   ve SKT işlenir; emir `completed` olur.
 - Aynı emir ikinci kez tamamlanırsa stok tekrar düşmez (idempotent).
 - Girdi/çıktı satırı yoksa `400`.
+
+### Üretim emri reddetme
+`POST /production-orders/{id}/reject`
+
+```json
+{"reason":"kalite reddi"}
+```
+
+- Yalnızca `completed` olmayan ve stok hareketi uygulanmamış emirler reddedilebilir.
+- Durum `rejected` olur; ret gerekçesi `notes` alanına yazılır.
+- Stok, lot bağı ve SKT değişmez.
+- Tamamlanmış emir reddedilemez (`400`).
+
+### Beklenen mamul miktarı
+`POST /production-orders` gövdesinde `expected_qty` gönderilmelidir. Web formu
+artık bu alanı gönderiyor; liste ve maliyet özetinde görünür.

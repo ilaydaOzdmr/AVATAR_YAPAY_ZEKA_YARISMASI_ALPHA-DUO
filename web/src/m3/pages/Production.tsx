@@ -45,6 +45,7 @@ export default function Production() {
   const [serviceName, setServiceName] = useState("");
   const [serviceUnitCost, setServiceUnitCost] = useState("");
   const [serviceQty, setServiceQty] = useState("");
+  const [expectedQty, setExpectedQty] = useState("");
   const [materialLots, setMaterialLots] = useState<Lot[]>([]);
   const [productLots, setProductLots] = useState<Lot[]>([]);
   const [inputs, setInputs] = useState<OrderLine[]>([]);
@@ -68,8 +69,9 @@ export default function Production() {
     get<CostSummary>(`/production-orders/${selectedId}`).then(setSummary).catch(() => setSummary(null));
   }, [selectedId]);
 
-  const openOrders = orders.filter((o) => o.status !== "completed").length;
+  const openOrders = orders.filter((o) => o.status !== "completed" && o.status !== "rejected").length;
   const completedOrders = orders.filter((o) => o.status === "completed").length;
+  const rejectedOrders = orders.filter((o) => o.status === "rejected").length;
   const avgEkp = useMemo(() => {
     // Ekp is derived on demand; here we show the selected order's EKP.
     return summary?.ekp ?? 0;
@@ -84,6 +86,19 @@ export default function Production() {
       if (selectedId === String(order.id)) {
         get<CostSummary>(`/production-orders/${order.id}`).then(setSummary).catch(() => {});
       }
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function rejectOrder(order: ProductionOrder) {
+    const reason = window.prompt(`Ret gerekçesi (${order.code})`, "");
+    if (reason === null) return;
+    setFeedback(null);
+    try {
+      await post(`/production-orders/${order.id}/reject`, { reason: reason || null });
+      setFeedback(`${order.code} reddedildi. Stok hareketi oluşturulmadı.`);
+      load();
     } catch (err) {
       setFeedback(err instanceof Error ? err.message : String(err));
     }
@@ -104,6 +119,7 @@ export default function Production() {
         service_name: serviceName,
         service_unit_cost: Number.parseFloat(serviceUnitCost) || 0,
         service_qty: Number.parseFloat(serviceQty) || 0,
+        expected_qty: Number.parseFloat(expectedQty) || 0,
         inputs: parsedInputs,
         outputs: parsedOutputs,
       });
@@ -111,6 +127,7 @@ export default function Production() {
       setServiceName("");
       setServiceUnitCost("");
       setServiceQty("");
+      setExpectedQty("");
       setInputs([]);
       setOutputs([]);
       setShowForm(false);
@@ -142,6 +159,7 @@ export default function Production() {
                 <input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="Hizmet adı" />
                 <input value={serviceUnitCost} onChange={(e) => setServiceUnitCost(e.target.value)} placeholder="Hizmet birim maliyeti" style={{ width: 150 }} />
                 <input value={serviceQty} onChange={(e) => setServiceQty(e.target.value)} placeholder="Hizmet miktarı" style={{ width: 120 }} />
+                <input value={expectedQty} onChange={(e) => setExpectedQty(e.target.value)} placeholder="Beklenen mamul" style={{ width: 130 }} />
               </div>
               <div>
                 <b style={{ fontSize: 13 }}>Hammadde girişleri (inputs)</b>
@@ -188,7 +206,7 @@ export default function Production() {
         <div className="metric">
           <div className="metric-top">Tamamlanan <span className="metric-icon">✓</span></div>
           <strong>{completedOrders}</strong>
-          <div className="metric-foot">Toplam {orders.length} kayıt</div>
+          <div className="metric-foot">{completedOrders} tamamlandı · {rejectedOrders} ret</div>
         </div>
         <div className="metric">
           <div className="metric-top">Seçili EKP <span className="metric-icon">€</span></div>
@@ -219,15 +237,26 @@ export default function Production() {
                     <td>{order.expected_qty}</td>
                     <td>{order.service_qty}</td>
                     <td>
-                      {order.status === "completed" ? <span className="status ok">Tamamlandı</span> : <span className="status progress">İşlemde</span>}
+                      {order.status === "completed" ? (
+                        <span className="status ok">Tamamlandı</span>
+                      ) : order.status === "rejected" ? (
+                        <span className="status block">Reddedildi</span>
+                      ) : (
+                        <span className="status progress">İşlemde</span>
+                      )}
                     </td>
                     <td onClick={(event) => event.stopPropagation()}>
-                      {order.status === "completed" ? (
+                      {order.status === "completed" || order.status === "rejected" ? (
                         <span className="muted">—</span>
                       ) : (
-                        <button className="btn btn-primary" type="button" onClick={() => void completeOrder(order)}>
-                          Tamamla
-                        </button>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button className="btn btn-primary" type="button" onClick={() => void completeOrder(order)}>
+                            Tamamla
+                          </button>
+                          <button className="btn btn-secondary" type="button" onClick={() => void rejectOrder(order)}>
+                            Reddet
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

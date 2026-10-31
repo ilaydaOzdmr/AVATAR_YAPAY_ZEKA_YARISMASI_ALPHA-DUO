@@ -63,6 +63,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s.mux.HandleFunc("POST /stock-movements", s.handleAddStockMovement)
 	s.mux.HandleFunc("POST /production-orders", s.handleCreateProductionOrder)
 	s.mux.HandleFunc("POST /production-orders/{id}/complete", s.handleCompleteProductionOrder)
+	s.mux.HandleFunc("POST /production-orders/{id}/reject", s.handleRejectProductionOrder)
 	s.mux.HandleFunc("GET /production-orders", s.handleListProductionOrders)
 	s.mux.HandleFunc("GET /production-orders/{id}", s.handleGetProductionOrder)
 	s.mux.HandleFunc("GET /production-orders/{id}/inputs", s.handleListProductionOrderInputs)
@@ -300,6 +301,27 @@ func (s *Server) handleCompleteProductionOrder(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, http.StatusOK, completed)
+}
+
+func (s *Server) handleRejectProductionOrder(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var body struct {
+		Reason *string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	rejected, err := s.repo.RejectProductionOrder(r.Context(), id, body.Reason)
+	if err != nil {
+		writeRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rejected)
 }
 
 func (s *Server) handleGetProductionOrder(w http.ResponseWriter, r *http.Request) {

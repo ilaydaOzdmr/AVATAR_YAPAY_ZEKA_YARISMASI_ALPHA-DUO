@@ -29,6 +29,7 @@ type Repo interface {
 	ListAllStockMovements(ctx context.Context) ([]model.StockMovement, error)
 	CreateProductionOrder(ctx context.Context, po model.ProductionOrder, inputs []model.ProductionOrderInput, outputs []model.ProductionOrderOutput) (model.ProductionOrder, error)
 	CompleteProductionOrder(ctx context.Context, id int64, finishedAt *string) (model.ProductionOrder, error)
+	RejectProductionOrder(ctx context.Context, id int64, reason *string) (model.ProductionOrder, error)
 	GetProductionOrder(ctx context.Context, id int64) (model.ProductionOrder, error)
 	ListProductionOrderInputs(ctx context.Context, poID int64) ([]model.ProductionOrderInput, error)
 	ListProductionOrderCodesByInputLot(ctx context.Context, lotID int64) ([]string, error)
@@ -727,6 +728,83 @@ func (r *mysqlRepo) CompleteProductionOrder(ctx context.Context, id int64, finis
 	}
 	po.Status = "completed"
 	po.FinishedAt = &occurredAt
+	return po, nil
+}
+
+func (r *mysqlRepo) RejectProductionOrder(ctx context.Context, id int64, reason *string) (model.ProductionOrder, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.ProductionOrder{}, err
+	}
+	defer tx.Rollback()
+
+	var po model.ProductionOrder
+	var startedAt, finishedAt, notes, serviceName sql.NullString
+	if err := tx.QueryRowContext(ctx,
+		`SELECT id, code, status, started_at, finished_at, notes, service_name,
+		        service_unit_cost, service_qty, expected_qty
+		 FROM production_orders WHERE id = ? FOR UPDATE`, id).
+		Scan(&po.ID, &po.Code, &po.Status, &startedAt, &finishedAt,
+			&notes, &serviceName, &po.ServiceUnitCost, &po.ServiceQty, &po.ExpectedQty); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	if startedAt.Valid {
+		po.StartedAt = &startedAt.String
+	}
+	if finishedAt.Valid {
+		po.FinishedAt = &finishedAt.String
+	}
+	if notes.Valid {
+		po.Notes = &notes.String
+	}
+	if serviceName.Valid {
+		po.ServiceName = &serviceName.String
+	}
+	if po.Status == "completed" {
+		return model.ProductionOrder{}, ErrInvalidOrder
+	}
+	if po.Status == "rejected" {
+		return po, nil
+	}
+
+	// A rejected order must not carry applied stock movements; otherwise the
+	// stock ledger and the order status would contradict each other.
+	var movementCount int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM stock_movements
+		 WHERE ref_type = 'production_order' AND ref_id = ?`, id).Scan(&movementCount); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	if movementCount > 0 {
+		return model.ProductionOrder{}, ErrInvalidOrder
+	}
+
+	newNotes := ""
+	if notes.Valid {
+		newNotes = notes.String
+	}
+	if reason != nil && strings.TrimSpace(*reason) != "" {
+		if newNotes != "" {
+			newNotes += "\n"
+		}
+		newNotes += "Ret: " + strings.TrimSpace(*reason)
+	}
+	var notesArg any
+	if newNotes != "" {
+		notesArg = newNotes
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE production_orders SET status = 'rejected', notes = ? WHERE id = ?`,
+		notesArg, id); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return model.ProductionOrder{}, err
+	}
+	po.Status = "rejected"
+	if newNotes != "" {
+		po.Notes = &newNotes
+	}
 	return po, nil
 }
 

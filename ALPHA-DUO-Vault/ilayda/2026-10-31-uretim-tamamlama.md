@@ -20,6 +20,17 @@
 - Web üretim tablosuna **Tamamla** butonu eklendi; tamamlanınca durum
   “Tamamlandı” olur ve maliyet özeti yenilenir.
 
+## Ek: ret ve beklenen miktar
+- Web üretim formunda **Beklenen mamul** alanı eklendi; `expected_qty` artık
+  gönderiliyor (önceden hiç gönderilmiyordu, bu yüzden 0 görünüyordu).
+- `POST /production-orders/{id}/reject` ve **Reddet** butonu eklendi.
+  - Ret yalnızca tamamlanmamış ve stok hareketi uygulanmamış emirlerde çalışır.
+  - Durum `rejected`; gerekçe `notes` alanına yazılır.
+  - Stok/lot/SKT değişmez.
+- Açık emir sayısı artık `completed` ve `rejected` dışındakileri sayıyor.
+- Test: `TestRejectProductionOrderKeepsStockAndExpectedQty`; canlıda
+  `expected=42`, `status=rejected`, ret sonrası giriş stoğu 10 kaldı.
+
 ## Doğrulama
 - `TestCompleteProductionOrderAppliesStockOnce`:
   - draft: girdi 10, çıktı 0,
