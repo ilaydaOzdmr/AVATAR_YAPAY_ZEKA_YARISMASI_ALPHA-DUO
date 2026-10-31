@@ -6,7 +6,7 @@ AVATAR; gıda işletmelerinin stok, dış üretim, parçalama, satış ve geri �
 
 [Kurulum](#kurulum) · [Ekranlar](#ekranlar) · [Demo senaryosu](#demo-senaryosu) · [Yapay zekâ ve veri](#yapay-zekâ-ve-veri) · [Dokümantasyon](#dokümantasyon)
 
-![AVATAR web yönetim paneli: stok değeri, üretim emirleri, ortalama EKP ve dikkat gerektiren kayıtlar](web-arayuz-gorsel/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202026-11-01%20012337.png)
+![AVATAR web yönetim paneli: stok değeri, üretim emirleri, ortalama EKP ve dikkat gerektiren kayıtlar](docs/screenshots/web-genel-bakis.png)
 
 ## Proje neyi çözüyor?
 
@@ -243,8 +243,7 @@ mobile/               Kotlin Android uygulaması
 ml/                   Veri hazırlama, eğitim, değerlendirme ve FastAPI
 infra/                Docker Compose ve SonarQube yapılandırması
 docs/                 API, veri modeli, kurulum ve doğrulama belgeleri
-web-arayuz-gorsel/    Web ekran görüntüleri
-mobil-arayuz-gorsel/  Android ekran görüntüleri
+docs/screenshots/     README'deki açıklamalı web ve mobil görselleri
 ALPHA-DUO-Vault/      Yarışma PDF'si ve proje notları
 ```
 
