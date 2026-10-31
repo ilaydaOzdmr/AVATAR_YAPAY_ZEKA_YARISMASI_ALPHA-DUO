@@ -150,65 +150,47 @@ docker compose -f infra/docker-compose.yml up -d --build
 - Gerçek verinin gelmesi tek başına `validated_real` statüsü vermez; lisans,
   kapsam, gözlem kimliği ve bağımsız grup/zaman testi ayrıca doğrulanmalıdır.
 
-## 8. Web ekranı ve güncel model bağlantısı — 31 Ekim 2026
+## 8. Mevcut web arayüzüne model bağlantısı
 
-İki web girişinin `4660010` commit'indeki özgün arayüzü korunur. İlk entegrasyonda
-eklenen ortak ekran ve CSS, kullanıcı düzeltmesi üzerine kaldırıldı; menü,
-`App.tsx` ve tema commit öncesindeki durumuna döndürüldü. Ham panel ve Food
-Intelligence kendi mevcut formlarını koruyarak V2 sözleşmesini kullanır.
-Model yeniden eğitilmedi; mevcut v1.1.0 artefaktlarının metrikleri gösterilir.
+Kullanıcının sağladığı ekran görüntülerindeki arayüz, ilk ML düzeltmelerimizden
+önceki main sürümünde (`706ac23`) bulunur. İki tahmin sayfasının JSX'i bu sürümle
+birebir aynıdır: metinler, form alanları, stiller, grafik, Sapma sütunları ve
+iki doğruluk tablosu değiştirilmedi. App/tema mevcut main (`4660010`) ile aynıdır.
 
-- Mevcut sonuç alanları ve iki metrik paneli kullanılır; yeni kart, form veya
-  kontrol eklenmez. Model sürümü, durum ve uyarılar servisten alınır.
-- Üretim paneli `production_quantity` ile kg cinsinden mamul hatasını gösterir;
-  parçalama paneli mevcut hayvan seçimine göre kuzu/sığır metriklerini gösterir.
-  Sentetik veri ve saha doğrulaması eksikliği mevcut açıklamalarda belirtilir.
-- Food Intelligence üretim formundaki et, baharat, bağırsak, sabit hizmet bedeli
-  ve işçilik alanları korunur. Ürün tipi sucuktur. Arayüzde bulunmayan girdi
-  fiyatları/diğer malzemeler servis varsayımlarıdır; uyarılarda açıklanır.
-- Eski ham panelin miktar ve hayvan alanları korunur; V2 yanıtı mevcut sonuç
-  tablosuna uyarlanır. Bu basit formda da eksik malzeme/hayvan bilgileri servis
-  varsayımıdır. Ölçülmüş karkas kullanılır; canlı ağırlıktan dönüşüm yapılmaz.
-- Tahmin yanıtının model ve veri sürümleri metadata ile uyuşmazsa sonuç
-  gösterilmez. Pydantic alan hataları mevcut hata alanında okunabilir döner.
-- Menü, tema, panel yerleşimi, inline stiller ve mevcut giriş kontrolleri
-  commit öncesindeki sürümle aynı tutulur.
-- Kayıt karşılaştırmaları tamamlanmış emirlerde çıkış ürününü doğrular; 1 kg ve
-  500 g paketler açık ürün ağırlığıyla kg'ye çevrilir. Bilinmeyen ürün/birimlerde
-  hata gösterilir. Geçmiş kayıtların bugünkü modelle yeniden tahmini,
-  üretim öncesinde kaydedilmiş bir tahmin veya saha testi olarak gösterilmez.
-- Docker Compose'daki `ml/artifacts` bind mount'u image içinde üretilen yeni
-  artefaktları örttüğü için kaldırıldı. Varsayılan servis image build sırasında
-  üretilen modelleri yükler; healthcheck üç modelin yüklü olmasını doğrular.
-  Yerel eğitim dosyaları yine Git dışındadır.
+Değişiklikler yalnız veri katmanındadır:
 
-Çalışan Docker servislerine kaynak değişikliğini uygulama komutu:
+- Her iki sayfa mevcut alanlarından Go proxy üzerinden V2 modeli çağırır.
+  Kaydedilmiş model/veri sürümleri kontrol edilir; skor veya tahmin uydurulmaz.
+- Geçmiş üretim girdileri lot ve malzeme kartlarıyla ayrılır. Et, baharat ve
+  bağırsak tek et miktarı yapılmaz. Açık paket ağırlıkları kg'ye dönüştürülür.
+  Katalogdaki sarımsak ve tuz diğer girdilere, kimyon ve pul biber baharatlara
+  eşlenir; bilinmeyen kartlar için otomatik miktar tahmin edilmez.
+- Parçalama karşılaştırması yalnız kaydedilmiş aynı parça hedeflerini toplar;
+  kaydedilmiş kemik ve fire varsa eşleşen hedefe dahil eder. Canlı ve karkas
+  ağırlıkları arasında sabit dönüşüm uygulanmaz.
+- Mevcut üretim metrik tablosu önceden olduğu gibi verim oranının hatasını
+  gösterir; parçalama tablosu seçili hayvan modelinin satılabilir toplam hatasını
+  gösterir. Birimler veya başlıklar kullanıcı arayüzünde değiştirilmedi.
+- Formda bulunmayan alanlar servis varsayımlarıdır. Mevcut uyarı ve model
+  durumu alanları API yanıtındaki bilgileri olduğu gibi gösterir.
+
+Yerel Docker ortamında eski web image'ı ile ML 1.0.0'ın çalıştığı doğrulandı.
+Kaynağı güncellemek tek başına container'daki uygulamayı değiştirmez.
+Güncel image'lar için:
 
 ```powershell
-docker compose -f infra/docker-compose.yml up -d --build ml backend web web-m3
+docker compose -f infra/docker-compose.yml build ml backend web web-m3
+docker compose -f infra/docker-compose.yml up -d --no-deps ml backend web web-m3
 ```
 
-Bu görevde Docker Compose söz dizimi doğrulandı; image build/deployment ve
-MySQL entegrasyon testleri çalıştırılmadı. Doğrulama:
+MySQL servisi ve veri volume'ları bu komutlarla yeniden oluşturulmaz.
+Yerel DB yedekleri ve QA araçları `ml/reports/local/` altında Git dışındadır.
+Veri adaptörleri ve mevcut sayfaların gerçek model çağrıları test edilir;
+metin/JSX/stil eşitliği ekran görüntülerinin referans sürümüyle doğrulanır.
 
-- 46 Python testi başarılı; 11 Node veri/sözleşme/birim testi başarılı.
-- TypeScript ve iki girişin Vite üretim derlemesi başarılı.
-- `go test ./...` başarılı. `AVATAR_ML_TEST_URL` ile ek canlı model smoke testi,
-  gerçek Python modellerini Go proxy üzerinden çağırarak çalıştırıldı.
-- Düzeltme sonrasında iki sayfanın JSX yapısı, CSS sınıfları, inline stilleri ve
-  giriş kontrolleri `4660010` ile karşılaştırıldı; App/tema içerikleri birebir
-  eşleşti. Headless Chrome'da özgün ekranlar, güncel metrikler, sucuk ve
-  kuzu/sığır tahminleri, 500 g paket karşılaştırması ve V2 çağrıları doğrulandı.
-  İşletme kayıtları açıkça yapay QA fixture'larıydı; tahminler gerçek yerel
-  artefaktlardan alındı. Arayüz yeniden tasarlanmadı.
-
-Tarayıcı QA araçları, fixture sunucusu ve ekran görüntüleri yalnız
-`ml/reports/local/` altında tutulur; veritabanı/kullanıcı kayıtları değiştirilmez.
-Normal testler canlı servis istemez. Canlı proxy kontrolü için test URL'si
-yalnız açıkça belirtildiğinde kullanılır:
-
-```powershell
-$env:AVATAR_ML_TEST_URL='http://localhost:8000'
-cd backend
-go test ./internal/httpapi -run TestMLLiveWebContract -v
-```
+Yerel çalışma doğrulaması: `localhost:5174` gerçek Go/Python servisleriyle
+üretim ve kuzu tahminini döndürdü; üç model 1.1.0 olarak yüklendi. Mevcut
+veritabanındaki dokuz üretim ve dokuz parçalama kaydı aynı tablolarda gösterildi.
+Bu yerel seed/demo kayıtları bağımsız saha testi değildir. Ekran görüntüsündeki
+geçmiş kayıtları veya plan değerlerini yeniden üretmek için veritabanına kayıt
+eklenmedi; tablolarda mevcut API değerleri kullanılır.
