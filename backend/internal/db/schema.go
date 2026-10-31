@@ -22,6 +22,22 @@ func EnsureSchema(ctx context.Context, database *sql.DB) error {
 		`ALTER TABLE production_orders ADD COLUMN expected_qty DECIMAL(12,3) NOT NULL DEFAULT 0.000 AFTER service_qty`); err != nil {
 		return err
 	}
+	if err := ensureColumn(ctx, database, "materials", "shelf_life_days",
+		`ALTER TABLE materials ADD COLUMN shelf_life_days INT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureColumn(ctx, database, "materials", "created_at",
+		`ALTER TABLE materials ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`); err != nil {
+		return err
+	}
+	if err := ensureColumn(ctx, database, "products", "shelf_life_days",
+		`ALTER TABLE products ADD COLUMN shelf_life_days INT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureColumn(ctx, database, "products", "created_at",
+		`ALTER TABLE products ADD COLUMN created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`); err != nil {
+		return err
+	}
 	if err := ensureTable(ctx, database, "market_redistributions", `CREATE TABLE IF NOT EXISTS market_redistributions (
 		id BIGINT AUTO_INCREMENT PRIMARY KEY,
 		market_id BIGINT NOT NULL,

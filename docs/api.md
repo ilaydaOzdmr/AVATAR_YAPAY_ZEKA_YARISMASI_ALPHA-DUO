@@ -187,3 +187,24 @@ lot hareketi, satış/market/tutar, recall/bloklu lotlar.
 ### Satış idempotency
 `POST /sales` aynı `code` ile tekrar çağrılırsa mevcut satışı döndürür; stok
 ikinci kez düşmez. Mobil outbox retry’leri bu sayede güvenlidir.
+
+## Ürün ve lot oluşturma (raf ömrü / SKT)
+
+`POST /products`:
+```json
+{"code":"PRD-200","name":"Test Sucuk","unit":"kg","list_price":25,
+ "category":"finished","is_finished":true,"shelf_life_days":15}
+```
+Cevapta `created_at` ve `shelf_life_days` döner.
+
+`POST /materials` aynı şekilde `shelf_life_days` kabul eder.
+
+`POST /lots`:
+```json
+{"code":"LOT-2026-100","item_type":"product","item_id":11,"qty":3,
+ "unit":"kg","unit_cost":12,"received_at":"2026-10-01 00:00:00","status":"active"}
+```
+- `received_at` ürün lotunda **üretim tarihi**dir.
+- `expiry_date` boşsa backend `received_at + shelf_life_days` ile hesaplar.
+- `qty > 0` ise aynı transaction’da `inbound` stok hareketi yazılır.
+- Ürün/hammadde bulunamazsa `400` (`ErrInvalidLot`).

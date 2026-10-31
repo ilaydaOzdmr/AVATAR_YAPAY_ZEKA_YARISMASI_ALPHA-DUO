@@ -29,7 +29,8 @@ func writeRepoError(w http.ResponseWriter, err error) {
 		errors.Is(err, repo.ErrLotBlocked):
 		writeError(w, http.StatusConflict, err)
 	case errors.Is(err, repo.ErrInvalidOrder),
-		errors.Is(err, repo.ErrInvalidStockMovement):
+		errors.Is(err, repo.ErrInvalidStockMovement),
+		errors.Is(err, repo.ErrInvalidLot):
 		writeError(w, http.StatusBadRequest, err)
 	default:
 		writeError(w, http.StatusInternalServerError, err)

@@ -48,6 +48,34 @@ func TestEnsureSchemaUpgradesOldButcheryTables(t *testing.T) {
 	stmts := []string{
 		`CREATE TABLE lots (id BIGINT AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB`,
 		`CREATE TABLE markets (id BIGINT AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB`,
+		`CREATE TABLE materials (
+			id BIGINT AUTO_INCREMENT PRIMARY KEY,
+			code VARCHAR(64) NOT NULL UNIQUE,
+			name VARCHAR(255) NOT NULL,
+			unit VARCHAR(32) NOT NULL,
+			is_raw BOOL NOT NULL DEFAULT TRUE,
+			default_purchase_price DECIMAL(12,2) NOT NULL DEFAULT 0.00
+		) ENGINE=InnoDB`,
+		`CREATE TABLE products (
+			id BIGINT AUTO_INCREMENT PRIMARY KEY,
+			code VARCHAR(64) NOT NULL UNIQUE,
+			name VARCHAR(255) NOT NULL,
+			unit VARCHAR(32) NOT NULL,
+			list_price DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+			category VARCHAR(64) NOT NULL DEFAULT 'general',
+			is_finished BOOL NOT NULL DEFAULT TRUE
+		) ENGINE=InnoDB`,
+		`CREATE TABLE production_orders (
+			id BIGINT AUTO_INCREMENT PRIMARY KEY,
+			code VARCHAR(64) NOT NULL UNIQUE,
+			status VARCHAR(32) NOT NULL DEFAULT 'draft',
+			started_at DATETIME NULL,
+			finished_at DATETIME NULL,
+			notes TEXT NULL,
+			service_name VARCHAR(255) NULL,
+			service_unit_cost DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+			service_qty DECIMAL(12,3) NOT NULL DEFAULT 0.000
+		) ENGINE=InnoDB`,
 		`CREATE TABLE butchery_batches (
 			id BIGINT AUTO_INCREMENT PRIMARY KEY,
 			code VARCHAR(64) NOT NULL UNIQUE,
@@ -86,6 +114,11 @@ func TestEnsureSchemaUpgradesOldButcheryTables(t *testing.T) {
 	for _, col := range []struct{ table, column string }{
 		{"butchery_batches", "input_lot_id"},
 		{"butchery_items", "allocated_cost"},
+		{"materials", "shelf_life_days"},
+		{"materials", "created_at"},
+		{"products", "shelf_life_days"},
+		{"products", "created_at"},
+		{"production_orders", "expected_qty"},
 	} {
 		var exists bool
 		if err := database.QueryRow(

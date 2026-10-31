@@ -15,6 +15,7 @@ import (
 type Repo interface {
 	CreateMaterial(ctx context.Context, m model.Material) (model.Material, error)
 	ListMaterials(ctx context.Context) ([]model.Material, error)
+	GetMaterial(ctx context.Context, id int64) (model.Material, error)
 	CreateProduct(ctx context.Context, p model.Product) (model.Product, error)
 	ListProducts(ctx context.Context) ([]model.Product, error)
 	CreateLot(ctx context.Context, l model.Lot) (model.Lot, error)
@@ -62,18 +63,27 @@ type mysqlRepo struct{ db *sql.DB }
 
 func (r *mysqlRepo) CreateMaterial(ctx context.Context, m model.Material) (model.Material, error) {
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO materials (code, name, unit, is_raw, default_purchase_price) VALUES (?, ?, ?, ?, ?)`,
-		m.Code, m.Name, m.Unit, m.IsRaw, m.DefaultPurchasePrice)
+		`INSERT INTO materials (code, name, unit, is_raw, default_purchase_price, shelf_life_days)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		m.Code, m.Name, m.Unit, m.IsRaw, m.DefaultPurchasePrice, m.ShelfLifeDays)
 	if err != nil {
 		return model.Material{}, err
 	}
 	m.ID, err = res.LastInsertId()
-	return m, err
+	if err != nil {
+		return model.Material{}, err
+	}
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT created_at FROM materials WHERE id = ?`, m.ID).Scan(&m.CreatedAt); err != nil {
+		return model.Material{}, err
+	}
+	return m, nil
 }
 
 func (r *mysqlRepo) ListMaterials(ctx context.Context) ([]model.Material, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, code, name, unit, is_raw, default_purchase_price FROM materials ORDER BY id`)
+		`SELECT id, code, name, unit, is_raw, default_purchase_price, shelf_life_days, created_at
+		 FROM materials ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +92,8 @@ func (r *mysqlRepo) ListMaterials(ctx context.Context) ([]model.Material, error)
 	var out []model.Material
 	for rows.Next() {
 		var m model.Material
-		if err := rows.Scan(&m.ID, &m.Code, &m.Name, &m.Unit, &m.IsRaw, &m.DefaultPurchasePrice); err != nil {
+		if err := rows.Scan(&m.ID, &m.Code, &m.Name, &m.Unit, &m.IsRaw,
+			&m.DefaultPurchasePrice, &m.ShelfLifeDays, &m.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, m)
@@ -90,20 +101,41 @@ func (r *mysqlRepo) ListMaterials(ctx context.Context) ([]model.Material, error)
 	return out, rows.Err()
 }
 
+func (r *mysqlRepo) GetMaterial(ctx context.Context, id int64) (model.Material, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, name, unit, is_raw, default_purchase_price, shelf_life_days, created_at
+		 FROM materials WHERE id = ?`, id)
+	var m model.Material
+	if err := row.Scan(&m.ID, &m.Code, &m.Name, &m.Unit, &m.IsRaw,
+		&m.DefaultPurchasePrice, &m.ShelfLifeDays, &m.CreatedAt); err != nil {
+		return model.Material{}, err
+	}
+	return m, nil
+}
+
 func (r *mysqlRepo) CreateProduct(ctx context.Context, p model.Product) (model.Product, error) {
 	res, err := r.db.ExecContext(ctx,
-		`INSERT INTO products (code, name, unit, list_price, category, is_finished) VALUES (?, ?, ?, ?, ?, ?)`,
-		p.Code, p.Name, p.Unit, p.ListPrice, p.Category, p.IsFinished)
+		`INSERT INTO products (code, name, unit, list_price, category, is_finished, shelf_life_days)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		p.Code, p.Name, p.Unit, p.ListPrice, p.Category, p.IsFinished, p.ShelfLifeDays)
 	if err != nil {
 		return model.Product{}, err
 	}
 	p.ID, err = res.LastInsertId()
-	return p, err
+	if err != nil {
+		return model.Product{}, err
+	}
+	if err := r.db.QueryRowContext(ctx,
+		`SELECT created_at FROM products WHERE id = ?`, p.ID).Scan(&p.CreatedAt); err != nil {
+		return model.Product{}, err
+	}
+	return p, nil
 }
 
 func (r *mysqlRepo) ListProducts(ctx context.Context) ([]model.Product, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, code, name, unit, list_price, category, is_finished FROM products ORDER BY id`)
+		`SELECT id, code, name, unit, list_price, category, is_finished, shelf_life_days, created_at
+		 FROM products ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +144,8 @@ func (r *mysqlRepo) ListProducts(ctx context.Context) ([]model.Product, error) {
 	var out []model.Product
 	for rows.Next() {
 		var p model.Product
-		if err := rows.Scan(&p.ID, &p.Code, &p.Name, &p.Unit, &p.ListPrice, &p.Category, &p.IsFinished); err != nil {
+		if err := rows.Scan(&p.ID, &p.Code, &p.Name, &p.Unit, &p.ListPrice,
+			&p.Category, &p.IsFinished, &p.ShelfLifeDays, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -121,16 +154,105 @@ func (r *mysqlRepo) ListProducts(ctx context.Context) ([]model.Product, error) {
 }
 
 func (r *mysqlRepo) CreateLot(ctx context.Context, l model.Lot) (model.Lot, error) {
-	res, err := r.db.ExecContext(ctx,
+	if l.Code == "" || l.ItemType == "" || l.Qty < 0 {
+		return model.Lot{}, ErrInvalidLot
+	}
+	if l.Status == "" {
+		l.Status = "active"
+	}
+	if l.ReceivedAt == nil || *l.ReceivedAt == "" {
+		now := time.Now().Format("2006-01-02 15:04:05")
+		l.ReceivedAt = &now
+	}
+
+	var shelfLifeDays int
+	switch l.ItemType {
+	case "product":
+		product, err := r.GetProduct(ctx, l.ItemID)
+		if err != nil {
+			return model.Lot{}, err
+		}
+		shelfLifeDays = product.ShelfLifeDays
+		if l.Unit == "" {
+			l.Unit = product.Unit
+		}
+		if l.UnitCost == 0 {
+			l.UnitCost = product.ListPrice
+		}
+	case "material":
+		material, err := r.GetMaterial(ctx, l.ItemID)
+		if err != nil {
+			return model.Lot{}, err
+		}
+		shelfLifeDays = material.ShelfLifeDays
+		if l.Unit == "" {
+			l.Unit = material.Unit
+		}
+		if l.UnitCost == 0 {
+			l.UnitCost = material.DefaultPurchasePrice
+		}
+		if l.PurchasePrice == 0 {
+			l.PurchasePrice = material.DefaultPurchasePrice
+		}
+	default:
+		return model.Lot{}, ErrInvalidLot
+	}
+	if shelfLifeDays > 0 && (l.ExpiryDate == nil || *l.ExpiryDate == "") {
+		expiry := addDays(*l.ReceivedAt, shelfLifeDays)
+		l.ExpiryDate = &expiry
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Lot{}, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(ctx,
 		`INSERT INTO lots (code, item_type, item_id, qty, unit, supplier_id, purchase_price, unit_cost, received_at, expiry_date, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		l.Code, l.ItemType, l.ItemID, l.Qty, l.Unit, nullInt64(l.SupplierID),
+		 VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`,
+		l.Code, l.ItemType, l.ItemID, l.Unit, nullInt64(l.SupplierID),
 		l.PurchasePrice, l.UnitCost, nullString(l.ReceivedAt), nullString(l.ExpiryDate), l.Status)
 	if err != nil {
 		return model.Lot{}, err
 	}
 	l.ID, err = res.LastInsertId()
-	return l, err
+	if err != nil {
+		return model.Lot{}, err
+	}
+
+	if l.Qty > 0 {
+		refType := "lot"
+		if _, err := applyMovementTx(ctx, tx, model.StockMovement{
+			LotID:        l.ID,
+			MovementType: "inbound",
+			Qty:          l.Qty,
+			UnitCost:     l.UnitCost,
+			RefType:      &refType,
+			RefID:        &l.ID,
+			OccurredAt:   *l.ReceivedAt,
+		}); err != nil {
+			return model.Lot{}, err
+		}
+	}
+	if err := tx.QueryRowContext(ctx,
+		`SELECT created_at FROM lots WHERE id = ?`, l.ID).Scan(&l.CreatedAt); err != nil {
+		return model.Lot{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return model.Lot{}, err
+	}
+	return l, nil
+}
+
+func addDays(dateTime string, days int) string {
+	layouts := []string{"2006-01-02 15:04:05", "2006-01-02T15:04:05", "2006-01-02"}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, dateTime); err == nil {
+			return parsed.AddDate(0, 0, days).Format("2006-01-02")
+		}
+	}
+	return time.Now().AddDate(0, 0, days).Format("2006-01-02")
 }
 
 func (r *mysqlRepo) ListLots(ctx context.Context, itemType string) ([]model.Lot, error) {
@@ -389,7 +511,22 @@ func (r *mysqlRepo) CreateProductionOrder(ctx context.Context, po model.Producti
 	}
 
 	for _, output := range outputs {
-		if _, err := tx.ExecContext(ctx,
+		var shelfLifeDays int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT p.shelf_life_days
+			 FROM lots l JOIN products p ON p.id = l.item_id
+			 WHERE l.id = ?`, output.ProductLotID).Scan(&shelfLifeDays); err != nil {
+			return model.ProductionOrder{}, err
+		}
+		if shelfLifeDays > 0 {
+			expiryDate := addDays(occurredAt, shelfLifeDays)
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE lots SET unit_cost = ?, received_at = COALESCE(received_at, ?),
+				 expiry_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+				outputUnitCost, occurredAt, expiryDate, output.ProductLotID); err != nil {
+				return model.ProductionOrder{}, err
+			}
+		} else if _, err := tx.ExecContext(ctx,
 			`UPDATE lots SET unit_cost = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
 			outputUnitCost, output.ProductLotID); err != nil {
 			return model.ProductionOrder{}, err
@@ -541,10 +678,12 @@ func (r *mysqlRepo) GetLot(ctx context.Context, id int64) (model.Lot, error) {
 
 func (r *mysqlRepo) GetProduct(ctx context.Context, id int64) (model.Product, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, code, name, unit, list_price, category, is_finished FROM products WHERE id = ?`, id)
+		`SELECT id, code, name, unit, list_price, category, is_finished, shelf_life_days, created_at
+		 FROM products WHERE id = ?`, id)
 
 	var p model.Product
-	if err := row.Scan(&p.ID, &p.Code, &p.Name, &p.Unit, &p.ListPrice, &p.Category, &p.IsFinished); err != nil {
+	if err := row.Scan(&p.ID, &p.Code, &p.Name, &p.Unit, &p.ListPrice,
+		&p.Category, &p.IsFinished, &p.ShelfLifeDays, &p.CreatedAt); err != nil {
 		return model.Product{}, err
 	}
 	return p, nil
@@ -676,6 +815,22 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 		}
 
 		lotID := int64(0)
+		var productCode string
+		var shelfLifeDays int
+		if err := tx.QueryRowContext(ctx,
+			`SELECT code, shelf_life_days FROM products WHERE id = ?`, item.ProductID).
+			Scan(&productCode, &shelfLifeDays); err != nil {
+			return model.ButcheryBatch{}, err
+		}
+		receivedAt := batch.BatchDate + " 00:00:00"
+		expiryDate := ""
+		if shelfLifeDays > 0 {
+			expiryDate = addDays(receivedAt, shelfLifeDays)
+		}
+		var expiryArg any
+		if expiryDate != "" {
+			expiryArg = expiryDate
+		}
 		if item.ProductLotID != nil {
 			lotID = *item.ProductLotID
 			var lotType string
@@ -687,24 +842,27 @@ func (r *mysqlRepo) CreateButcheryBatch(ctx context.Context, batch model.Butcher
 				return model.ButcheryBatch{}, ErrInvalidOrder
 			}
 		} else {
-			var productCode string
-			if err := tx.QueryRowContext(ctx,
-				`SELECT code FROM products WHERE id = ?`, item.ProductID).Scan(&productCode); err != nil {
-				return model.ButcheryBatch{}, err
-			}
 			lotCode, err := uniqueLotCodeTx(ctx, tx, batch.Code+"-"+productCode)
 			if err != nil {
 				return model.ButcheryBatch{}, err
 			}
 			res, err := tx.ExecContext(ctx,
-				`INSERT INTO lots (code, item_type, item_id, qty, unit, unit_cost, status)
-				 VALUES (?, 'product', ?, 0, 'kg', 0, 'active')`,
-				lotCode, item.ProductID)
+				`INSERT INTO lots (code, item_type, item_id, qty, unit, unit_cost, received_at, expiry_date, status)
+				 VALUES (?, 'product', ?, 0, 'kg', 0, ?, ?, 'active')`,
+				lotCode, item.ProductID, receivedAt, expiryArg)
 			if err != nil {
 				return model.ButcheryBatch{}, err
 			}
 			lotID, err = res.LastInsertId()
 			if err != nil {
+				return model.ButcheryBatch{}, err
+			}
+		}
+		if shelfLifeDays > 0 {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE lots SET received_at = COALESCE(received_at, ?),
+				 expiry_date = COALESCE(expiry_date, ?), updated_at = CURRENT_TIMESTAMP
+				 WHERE id = ?`, receivedAt, expiryDate, lotID); err != nil {
 				return model.ButcheryBatch{}, err
 			}
 		}

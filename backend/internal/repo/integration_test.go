@@ -645,3 +645,62 @@ func TestCreateSaleIsIdempotent(t *testing.T) {
 		t.Fatalf("movements = %d, want 1", len(movements))
 	}
 }
+
+func TestCreateLotComputesExpiryAndStockMovement(t *testing.T) {
+	r, _ := testRepo(t)
+	ctx := context.Background()
+
+	material, err := r.CreateMaterial(ctx, model.Material{
+		Code: unique("MAT"), Name: "Test et", Unit: "kg", IsRaw: true,
+		DefaultPurchasePrice: 5, ShelfLifeDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("CreateMaterial: %v", err)
+	}
+	if material.CreatedAt == "" {
+		t.Fatal("material created_at is empty")
+	}
+
+	received := "2026-10-01 00:00:00"
+	materialLot, err := r.CreateLot(ctx, model.Lot{
+		Code: unique("LOT"), ItemType: "material", ItemID: material.ID,
+		Qty: 10, UnitCost: 5, ReceivedAt: &received,
+	})
+	if err != nil {
+		t.Fatalf("CreateLot material: %v", err)
+	}
+	if materialLot.ExpiryDate == nil || *materialLot.ExpiryDate != "2026-10-31" {
+		t.Fatalf("material expiry = %v, want 2026-10-31", materialLot.ExpiryDate)
+	}
+	if materialLot.Qty != 10 {
+		t.Fatalf("material lot qty = %v, want 10", materialLot.Qty)
+	}
+	movements, err := r.ListStockMovements(ctx, materialLot.ID)
+	if err != nil {
+		t.Fatalf("ListStockMovements: %v", err)
+	}
+	if len(movements) != 1 || movements[0].MovementType != "inbound" || movements[0].Qty != 10 {
+		t.Fatalf("movements = %+v, want one inbound +10", movements)
+	}
+
+	product, err := r.CreateProduct(ctx, model.Product{
+		Code: unique("PRD"), Name: "Test ürün", Unit: "kg",
+		ListPrice: 20, Category: "finished", IsFinished: true, ShelfLifeDays: 10,
+	})
+	if err != nil {
+		t.Fatalf("CreateProduct: %v", err)
+	}
+	productLot, err := r.CreateLot(ctx, model.Lot{
+		Code: unique("SUC"), ItemType: "product", ItemID: product.ID,
+		Qty: 4, UnitCost: 12, ReceivedAt: &received,
+	})
+	if err != nil {
+		t.Fatalf("CreateLot product: %v", err)
+	}
+	if productLot.ExpiryDate == nil || *productLot.ExpiryDate != "2026-10-11" {
+		t.Fatalf("product expiry = %v, want 2026-10-11", productLot.ExpiryDate)
+	}
+	if productLot.Qty != 4 {
+		t.Fatalf("product lot qty = %v, want 4", productLot.Qty)
+	}
+}

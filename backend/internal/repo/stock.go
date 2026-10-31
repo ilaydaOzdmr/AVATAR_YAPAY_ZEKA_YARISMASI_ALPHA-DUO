@@ -22,6 +22,9 @@ var ErrInvalidStockMovement = errors.New("stock movement quantity cannot be zero
 // ErrInvalidOrder is returned when a production or butchery document is incomplete.
 var ErrInvalidOrder = errors.New("invalid order: inputs and outputs are required")
 
+// ErrInvalidLot is returned when a lot has an invalid item type or quantity.
+var ErrInvalidLot = errors.New("invalid lot")
+
 func roundMoney(v float64) float64 {
 	return math.Round(v*100) / 100
 }

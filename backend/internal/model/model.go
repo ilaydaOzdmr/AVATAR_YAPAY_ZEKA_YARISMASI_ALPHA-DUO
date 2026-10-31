@@ -8,17 +8,21 @@ type Material struct {
 	Unit                 string  `json:"unit"`
 	IsRaw                bool    `json:"is_raw"`
 	DefaultPurchasePrice float64 `json:"default_purchase_price"`
+	ShelfLifeDays        int     `json:"shelf_life_days"`
+	CreatedAt            string  `json:"created_at"`
 }
 
 // Product is a finished good or butchery part.
 type Product struct {
-	ID         int64   `json:"id"`
-	Code       string  `json:"code"`
-	Name       string  `json:"name"`
-	Unit       string  `json:"unit"`
-	ListPrice  float64 `json:"list_price"`
-	Category   string  `json:"category"`
-	IsFinished bool    `json:"is_finished"`
+	ID            int64   `json:"id"`
+	Code          string  `json:"code"`
+	Name          string  `json:"name"`
+	Unit          string  `json:"unit"`
+	ListPrice     float64 `json:"list_price"`
+	Category      string  `json:"category"`
+	IsFinished    bool    `json:"is_finished"`
+	ShelfLifeDays int     `json:"shelf_life_days"`
+	CreatedAt     string  `json:"created_at"`
 }
 
 // Lot is a batch of a material or product.

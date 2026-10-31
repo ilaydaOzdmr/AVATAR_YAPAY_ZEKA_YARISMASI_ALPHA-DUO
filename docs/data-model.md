@@ -53,3 +53,16 @@ BAR-2026-001 (5 kg)     ─┘                                             ├�
 
 ## İşaretli miktar kuralı
 `stock_movements.qty`: giriş `+`, çıkış `-`. Etkilenen market miktarı `ABS(qty)`.
+
+## Ürün raf ömrü, eklenme tarihi ve SKT
+- `products` ve `materials` tablolarında:
+  - `shelf_life_days` — ürün/hammadde bazlı kullanım süresi (gün).
+  - `created_at` — kartın eklenme tarihi (DB otomatik).
+- Lot oluştururken:
+  - `lots.received_at` = üretim/alış tarihi (ürün lotu için üretim tarihi).
+  - `lots.expiry_date` = `received_at + shelf_life_days`.
+  - Örnek: üretim 2026-10-01, raf ömrü 15 gün → SKT 2026-10-16.
+- `POST /lots` ile lot oluşturulurken `qty > 0` ise aynı transaction içinde
+  `stock_movements` (`inbound`) yazılır; lot bakiyesi ve stok defteri tutarlı kalır.
+- Üretim emri çıktı lotlarında ve butchery’de backend’in oluşturduğu ürün
+  lotlarında SKT, üretim/parti tarihi + ürün raf ömrü olarak hesaplanır.

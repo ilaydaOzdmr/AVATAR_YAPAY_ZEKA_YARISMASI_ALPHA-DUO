@@ -33,6 +33,9 @@ func (f *fakeRepo) CreateMaterial(_ context.Context, m model.Material) (model.Ma
 func (f *fakeRepo) ListMaterials(_ context.Context) ([]model.Material, error) {
 	return f.materials, nil
 }
+func (f *fakeRepo) GetMaterial(_ context.Context, _ int64) (model.Material, error) {
+	return model.Material{}, nil
+}
 func (f *fakeRepo) CreateProduct(_ context.Context, p model.Product) (model.Product, error) {
 	return p, nil
 }
