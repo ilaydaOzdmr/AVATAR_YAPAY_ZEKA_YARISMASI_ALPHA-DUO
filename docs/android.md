@@ -56,8 +56,9 @@ adb install app/build/outputs/apk/debug/app-debug.apk
   güvenlik duvarında açık olmalıdır.
 - Ana ekrandaki **Sunucu → Değiştir** ile adres uygulamadan girilebilir ve
   kalıcı olarak saklanır. **Dene** bağlantıyı yeniden dener.
-- USB her yeniden bağlandığında `adb reverse` kaybolur; `scripts/adb-reverse.ps1`
-  veya `scripts/adb-reverse-watch.ps1` ile geri kurulabilir.
+- USB her yeniden bağlandığında `adb reverse` kaybolur; tüm cihazlar için
+  `scripts/connect-all.ps1` veya `scripts/adb-reverse-watch.ps1` kullanın.
+  Emülatör de ADB cihazı olduğu için aynı script ikisinde de çalışır.
 - **Raporlar** sekmesi MySQL’den `GET /reports/summary` ile alış, üretim,
   parçalama, lot hareketleri, satış ve geri çağırma bölümlerini gösterir.
 - Senkronizasyon modeli: `docs/mobile-sync.md`.

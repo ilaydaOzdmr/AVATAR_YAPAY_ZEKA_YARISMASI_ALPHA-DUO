@@ -13,7 +13,23 @@ stokta çift düşüm ve geri çağırma yarışı üretir.
 
 ## 2. Ağ bağlantısı
 
-Mobil önce `/health` ile erişilebilir backend’i bulur:
+### Tek yöntem: tüm ADB cihazlarına `adb reverse`
+
+Emülatör de bir ADB cihazı olduğu için **aynı yöntem ikisinde de çalışır**:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/connect-all.ps1
+```
+
+Script, bağlı **tüm** cihazlara `tcp:8080 -> localhost:8080` yönlendirmesini
+kurar. Uygulama varsayılan `http://localhost:8080` adresini kullanır. USB
+koptuğunda tekrar çalıştırın veya `scripts/adb-reverse-watch.ps1`’i açık bırakın.
+
+Alternatif: telefon + PC aynı Wi-Fi’da ise uygulamadaki **Sunucu → Değiştir**
+alanına `http://<PC-IP>:8080` yazın; bu adres emülatörden de erişilebilir
+(güvenlik duvarı 8080’e izin vermeli).
+
+Mobil `/health` ile erişilebilir backend’i bulur:
 
 1. Yapılandırılmış adres (varsa)
 2. `http://10.0.2.2:8080` — Android emülatöründe host

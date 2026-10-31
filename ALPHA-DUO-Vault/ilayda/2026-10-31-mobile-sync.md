@@ -63,5 +63,8 @@
   **Dene** ile yeniden bağlanılıyor.
 - `scripts/adb-reverse.ps1` ve `scripts/adb-reverse-watch.ps1` eklendi; USB
   yeniden bağlandığında reverse’i geri kurar.
+- `scripts/connect-all.ps1`: emülatör + fiziksel cihaz dahil **tüm ADB
+  cihazlarına** tek komutla reverse kurar; `-Install` ile APK’yı da kurar.
+  Böylece iki ortam için tek yöntem kullanılır.
 - Hata mesajları artık kırmızı, başarı mesajları yeşil gösteriliyor.
 
