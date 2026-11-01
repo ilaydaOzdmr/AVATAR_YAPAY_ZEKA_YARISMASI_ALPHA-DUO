@@ -67,19 +67,21 @@ fun ProductList(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item { Text("Ürünler", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-            items(products, key = { it.id }) { product ->
-                Card(shape = RoundedCornerShape(14.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column {
-                            Text("${product.code} · ${product.name}", fontWeight = FontWeight.Bold)
-                            Text(product.unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!blockedOnly) {
+                item { Text("Ürünler", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+                items(products, key = { it.id }) { product ->
+                    Card(shape = RoundedCornerShape(14.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                Text("${product.code} · ${product.name}", fontWeight = FontWeight.Bold)
+                                Text(product.unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text("${product.listPrice} ₺", color = Green, fontWeight = FontWeight.Bold)
                         }
-                        Text("${product.listPrice} ₺", color = Green, fontWeight = FontWeight.Bold)
                     }
                 }
             }
