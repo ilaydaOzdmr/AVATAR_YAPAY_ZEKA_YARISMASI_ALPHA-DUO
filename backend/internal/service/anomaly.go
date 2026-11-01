@@ -56,7 +56,9 @@ func (s *AnomalyService) Detect(ctx context.Context) ([]Anomaly, error) {
 
 func (s *AnomalyService) butcheryAnomalies(ctx context.Context) ([]Anomaly, error) {
 	anomalies := []Anomaly{}
-	// 1) Unexpected fire (butchery)
+	// 1) Unexpected fire (butchery). More than 20% of the input is flagged;
+	// explicit waste rows are part of the input, so they do not reduce the
+	// calculated fire here.
 	batches, err := s.repo.ListButcheryBatches(ctx)
 	if err != nil {
 		return nil, err
@@ -72,7 +74,7 @@ func (s *AnomalyService) butcheryAnomalies(ctx context.Context) ([]Anomaly, erro
 				parts += item.Weight
 			}
 		}
-		if batch.InputWeight > 0 && (batch.InputWeight-parts)/batch.InputWeight*100 > 25 {
+		if batch.InputWeight > 0 && (batch.InputWeight-parts)/batch.InputWeight*100 > 20 {
 			anomalies = append(anomalies, Anomaly{
 				Type: "fire", Severity: "warning",
 				Message: "Yüksek fire oranı", Ref: batch.Code,

@@ -93,8 +93,9 @@ kontrol alanlarını döner. Bu alanlar istemciden alınmaz; backend hesaplar ve
 | `cost_difference` | `recorded_cost - expected_cost` |
 | `cost_check_status` | `ok` / `mismatch` — 2 ondalık |
 
-- Fire tek başına veri hatası değildir. `weight_check_status` yalnızca satılabilir
-  parçalar giriş ağırlığını aştığında (negatif fire) `mismatch` olur.
+- Fire tek başına veri hatası değildir. `weight_check_status` negatif fire
+  olduğunda veya fire giriş ağırlığının %20'sini aştığında (50 kg için 10 kg)
+  `mismatch` olur.
 - Maliyet ve ağırlık kontrolleri birbirinden bağımsızdır.
 - `KUZ-2026-DEMO`: 25 kg, 11,50 €/kg, 351,00 € → fire 3 kg, beklenen 287,50 €,
   kayıtlı 351,00 €, fark 63,50 €, `cost_check_status = mismatch`.

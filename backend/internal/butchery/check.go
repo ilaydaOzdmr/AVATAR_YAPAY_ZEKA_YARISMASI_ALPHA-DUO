@@ -15,6 +15,11 @@ const (
 	CheckMismatch = "mismatch"
 )
 
+// MaxFireRatio is the largest share of the input weight that may be reported as
+// fire while the weight data is still considered consistent. At 50 kg this
+// allows at most 10 kg of fire.
+const MaxFireRatio = 0.20
+
 // Checks is the result of comparing a butchery batch with its recorded items.
 type Checks struct {
 	// PartWeight is the sum of the recorded saleable parts. Waste rows are
@@ -61,11 +66,12 @@ func Compute(batch model.ButcheryBatch, items []model.ButcheryItem) Checks {
 	recordedCost := Round2(batch.TotalCost)
 	costDifference := Round2(recordedCost - expectedCost)
 
-	// Fire is expected in butchery. The weight data is only inconsistent when
-	// the saleable parts exceed the input, i.e. the calculated fire is negative
-	// at three-decimal precision.
+	// Fire is expected in butchery, but an excessive fire ratio is not a normal
+	// yield loss — it indicates a data entry or measurement problem. The weight
+	// check fails above MaxFireRatio of the input (20%, i.e. 10 kg at 50 kg) and
+	// when saleable parts exceed the input (negative fire).
 	weightStatus := CheckOK
-	if fireWeight < 0 {
+	if fireWeight < 0 || fireWeight > Round3(batch.InputWeight*MaxFireRatio) {
 		weightStatus = CheckMismatch
 	}
 	costStatus := CheckOK

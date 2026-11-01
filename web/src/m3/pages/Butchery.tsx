@@ -288,6 +288,9 @@ export default function Butchery() {
                   {formatWeight(result.batch.input_weight)} kg girişten {formatWeight(result.part_weight)} kg parça elde edilmiş,
                   aradaki {formatWeight(result.fire_weight)} kg fark fire olarak hesaplanmıştır.
                 </p>
+                <p className="analysis-note" style={{ marginTop: 4 }}>
+                  Kabul edilen azami fire: {formatWeight(result.batch.input_weight * 0.2)} kg (giriş ağırlığının %20'si).
+                </p>
               </div>
 
               <div className={`analysis-card ${result.cost_check_status === "ok" ? "ok" : "warn"}`}>

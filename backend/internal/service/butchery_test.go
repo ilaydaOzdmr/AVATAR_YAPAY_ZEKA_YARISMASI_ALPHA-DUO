@@ -256,6 +256,32 @@ func TestBuildResultUsesTwoAndThreeDecimalTolerances(t *testing.T) {
 	}
 }
 
+func TestBuildResultRejectsExcessiveFire(t *testing.T) {
+	repo := &storedButcheryRepository{}
+
+	// 50 kg input, 27 kg parts: 23 kg fire (46%) is not a consistent record.
+	excessive := NewButcheryService(repo).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 50, UnitCost: 10, TotalCost: 500,
+	}, []model.ButcheryItem{{ProductID: 1, Weight: 27}})
+	if excessive.WeightCheckStatus != CheckMismatch {
+		t.Fatalf("excessive fire status = %q, want %q", excessive.WeightCheckStatus, CheckMismatch)
+	}
+	if !approxFloat(excessive.FireWeight, 23) {
+		t.Fatalf("excessive fire weight = %v, want 23", excessive.FireWeight)
+	}
+	if excessive.CostCheckStatus != CheckOK {
+		t.Fatalf("excessive fire cost status = %q, want %q", excessive.CostCheckStatus, CheckOK)
+	}
+
+	// 50 kg input, 40 kg parts: exactly 10 kg (20%) fire is the allowed limit.
+	boundary := NewButcheryService(repo).buildResult(context.Background(), model.ButcheryBatch{
+		InputWeight: 50, UnitCost: 10, TotalCost: 500,
+	}, []model.ButcheryItem{{ProductID: 1, Weight: 40}})
+	if boundary.WeightCheckStatus != CheckOK {
+		t.Fatalf("boundary fire status = %q, want %q (10 kg at 50 kg)", boundary.WeightCheckStatus, CheckOK)
+	}
+}
+
 func approxFloat(a, b float64) bool {
 	d := a - b
 	if d < 0 {

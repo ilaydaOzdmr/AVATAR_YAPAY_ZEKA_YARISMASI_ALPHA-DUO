@@ -86,8 +86,9 @@ Hesaplar:
 - `fire_weight` = `input_weight - part_weight`.
 - `expected_cost` = `input_weight × unit_cost`.
 - `cost_difference` = `total_cost - expected_cost`.
-- Fire tek başına hata değildir; yalnızca negatif fire ağırlık kontrolünü
-  `mismatch` yapar. Maliyet ve ağırlık kontrolleri bağımsızdır.
+- Fire tek başına hata değildir; negatif fire veya giriş ağırlığının %20'sini
+  aşan fire ağırlık kontrolünü `mismatch` yapar (50 kg için azami 10 kg).
+  Maliyet ve ağırlık kontrolleri bağımsızdır.
 
 ## Geri çağırma alıcı teyitleri
 

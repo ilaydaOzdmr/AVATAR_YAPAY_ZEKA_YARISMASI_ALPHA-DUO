@@ -102,7 +102,11 @@ func backfillButcheryChecks(ctx context.Context, database *sql.DB) error {
 		        WHEN ROUND(b.input_weight - COALESCE((
 		            SELECT SUM(i.weight) FROM butchery_items i
 		            WHERE i.batch_id = b.id AND i.is_waste = FALSE
-		        ), 0), 3) < 0 THEN 'mismatch'
+		        ), 0), 3) < 0
+		        OR ROUND(b.input_weight - COALESCE((
+		            SELECT SUM(i.weight) FROM butchery_items i
+		            WHERE i.batch_id = b.id AND i.is_waste = FALSE
+		        ), 0), 3) > ROUND(b.input_weight * 0.20, 3) THEN 'mismatch'
 		        ELSE 'ok'
 		    END`)
 	if err != nil {

@@ -57,3 +57,11 @@
 - Repo entegrasyon testleri: create + get + list kalıcılığı ve normal kayıt.
 - `db.EnsureSchema` entegrasyon testi: dört kolon + demo backfill.
 - `go test ./...`, `go vet ./...`, web `npm run build` temiz.
+
+## Ek: azami fire sınırı (2026-11-01)
+- Ağırlık kontrolü artık negatif fire yanında **girişin %20'sini aşan fireyi**
+  de `mismatch` sayıyor. 50 kg girişte azami 10 kg fire kabul edilir.
+- 50 kg giriş / 27 kg parça / 23 kg fire kaydı artık "Uyarı" gösteriyor;
+  maliyet kontrolü bağımsız kalıyor.
+- `EnsureSchema` backfill'i ve `0003_butchery_consistency` migration'ı aynı
+  %20 kuralını kullanıyor.
