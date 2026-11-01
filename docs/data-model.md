@@ -102,4 +102,17 @@ Teyitler aynı kaynak lotun tüm geri çağırma kayıtlarında ortaktır. Teyit
 satış blokajını kaldırmaz; lot `blocked` durumunda kalır. Aynı lot için yeniden
 geri çağırma başlatılırsa yeni kayıt açılmaz, mevcut kayıt döner.
 
+## Uyarı okundu durumu
+
+`anomaly_reads` tablosu (migration `0005_anomaly_reads`):
+
+- `alert_key` — `<type>:<ref>` biçiminde kararlı uyarı anahtarı.
+- `read_at` — okundu işaretlenme zamanı.
+
+Uyarılar her istekte yeniden hesaplanır; okundu bilgisi anahtar bazında
+saklandığı için sayfa yenilense de korunur. Stok kuralı negatif bakiye yerine
+"Stok az olduğu için satış engellendi" mesajını üretir. Lot bakiyesinden fazla
+satış `insufficient stock` hatasıyla reddedilir.
+
+
 

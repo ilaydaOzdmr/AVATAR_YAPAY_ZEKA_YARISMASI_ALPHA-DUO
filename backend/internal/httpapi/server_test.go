@@ -139,6 +139,12 @@ func (f *fakeRepo) IsLotBlocked(_ context.Context, _ int64) (bool, error) {
 func (f *fakeRepo) ListBlockedLotCodes(_ context.Context) ([]string, error) {
 	return nil, nil
 }
+func (f *fakeRepo) ListReadAnomalyKeys(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+func (f *fakeRepo) MarkAnomalyRead(_ context.Context, _ string) error {
+	return nil
+}
 func (f *fakeRepo) CreateSale(_ context.Context, sale model.Sale, _ []model.SaleLine) (model.Sale, error) {
 	return sale, f.createSaleErr
 }

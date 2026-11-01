@@ -211,6 +211,8 @@ Web ve mobil tahminleri Go API üzerinden alır. Model dosyaları API açılış
 
 **Lot izlenebilirliği, geri çağırma ve satış blokajı tahminlere değil, kesin kayıt ilişkilerine dayanır.**
 
+Web'deki **Uyarılar** sayfası fire, verim, maliyet ve stok kurallarından üretilen uyarıları listeler. Uyarılar okundu olarak işaretlenebilir; okunanlar soluk görünür ve bildirim rozetinde sayılmaz. Stok kuralı negatif bakiye yerine "Stok az olduğu için satış engellendi" mesajını üretir; lot bakiyesinden fazla satış sunucu tarafından reddedilir.
+
 ## Mimari ve teknoloji
 
 ```mermaid

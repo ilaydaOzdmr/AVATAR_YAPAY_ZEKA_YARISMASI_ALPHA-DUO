@@ -119,6 +119,22 @@ POST /recalls/{id}/acknowledge
 - `GET /recalls/{id}` ve `POST /recalls` yanıtlarında `confirmed_markets`
   alanı döner.
 
+### Uyarılar
+```json
+GET /anomalies
+POST /anomalies/read
+{"keys":["stock:SUC-2026-045","yield:URT-2026-045"]}
+```
+
+- Her uyarı `key`, `type`, `severity`, `message`, `ref` ve `read` alanlarını
+  döner. `key` = `<type>:<ref>` biçimindedir.
+- Okundu bilgisi `anomaly_reads` tablosunda kalıcıdır; okunan uyarı listede
+  soluk görünür ve bildirim rozetinde sayılmaz.
+- Stok kuralı artık negatif bakiye yerine **"Stok az olduğu için satış
+  engellendi"** mesajını üretir.
+- Stoktan fazla satış `409` ve `insufficient stock` hatasıyla reddedilir;
+  lot miktarı değişmez.
+
 ## Notlar
 - `stock_movements.qty` işaretli: giriş `+`, çıkış `-`.
 - Hareket tipleri: `inbound`, `shipment`, `transfer`, `return`, `rework`.

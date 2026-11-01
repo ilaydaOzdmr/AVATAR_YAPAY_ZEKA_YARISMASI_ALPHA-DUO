@@ -71,6 +71,14 @@ func (r qualityRepo) ListStockMovements(ctx context.Context, id int64) ([]model.
 	return []model.StockMovement{{LotID: id, Qty: -1}}, r.problem("ListStockMovements")
 }
 
+func (r qualityRepo) ListReadAnomalyKeys(ctx context.Context) ([]string, error) {
+	return nil, r.problem("ListReadAnomalyKeys")
+}
+
+func (r qualityRepo) MarkAnomalyRead(ctx context.Context, key string) error {
+	return r.problem("MarkAnomalyRead")
+}
+
 func (r qualityRepo) ListMarkets(ctx context.Context) ([]model.Market, error) {
 	return []model.Market{{ID: 1, Code: "MKT"}}, r.problem("ListMarkets")
 }

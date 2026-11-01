@@ -134,6 +134,7 @@ private class AvatarState(val repository: SyncRepository, initialServerUrl: Stri
         message = when (repository.submitSale(saleId)) {
             is PushResult.Success -> "Satış senkronize edildi."
             is PushResult.Blocked -> "Bloklu lot: satış reddedildi."
+            is PushResult.InsufficientStock -> "Stok az olduğu için satış engellendi."
             is PushResult.Failed -> "Yerel kaydedildi (çevrimdışı)."
         }
         refresh()
@@ -157,6 +158,7 @@ private class AvatarState(val repository: SyncRepository, initialServerUrl: Stri
         message = when (val result = repository.push()) {
             is PushResult.Success -> "Bekleyen satışlar senkronize edildi."
             is PushResult.Blocked -> "Bloklu lot: satış reddedildi."
+            is PushResult.InsufficientStock -> "Stok az olduğu için satış engellendi."
             is PushResult.Failed -> "Bağlantı hatası: ${result.message}"
         }
         refresh()

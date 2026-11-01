@@ -11,6 +11,7 @@ import Predictions from "./pages/Predictions";
 import MobilePreview from "./pages/MobilePreview";
 import Reports from "./pages/Reports";
 import InvoiceOcr from "./pages/InvoiceOcr";
+import Alerts from "./pages/Alerts";
 
 interface NavItem {
   key: string;
@@ -35,6 +36,7 @@ const groups: { label: string; items: NavItem[] }[] = [
     items: [
       { key: "trace", label: "Lot İzlenebilirliği", icon: "⌘" },
       { key: "recall", label: "Geri Çağırma", icon: "⚠" },
+      { key: "alerts", label: "Uyarılar", icon: "▣" },
       { key: "ai", label: "Yapay Zekâ", icon: "✳" },
       { key: "mobile", label: "Mobil Uygulama", icon: "▯" },
       { key: "reports", label: "Raporlar", icon: "▥" },
@@ -51,13 +53,14 @@ const titles: Record<string, string> = {
   sales: "Satış & Sevkiyat",
   trace: "Lot İzlenebilirliği",
   recall: "Geri Çağırma Merkezi",
+  alerts: "Uyarılar",
   ai: "Yapay Zekâ Merkezi",
   mobile: "Mobil Uygulama",
   reports: "Raporlar",
   "invoice-ocr": "Fatura OCR",
 };
 
-function renderView(key: string, onRecallChanged: () => void) {
+function renderView(key: string, onRecallChanged: () => void, onOpenAlerts: () => void, onAlertsChanged: () => void) {
   switch (key) {
     case "inventory":
       return <Inventory />;
@@ -70,7 +73,9 @@ function renderView(key: string, onRecallChanged: () => void) {
     case "trace":
       return <Traceability />;
     case "recall":
-      return <Recall onChanged={onRecallChanged} />;
+      return <Recall onChanged={onRecallChanged} onOpenAlerts={onOpenAlerts} />;
+    case "alerts":
+      return <Alerts onChanged={onAlertsChanged} />;
     case "ai":
       return <Predictions />;
     case "mobile":
@@ -81,7 +86,7 @@ function renderView(key: string, onRecallChanged: () => void) {
       return <InvoiceOcr />;
     case "dashboard":
     default:
-      return <Dashboard />;
+      return <Dashboard onOpenAlerts={onOpenAlerts} />;
   }
 }
 
@@ -91,14 +96,23 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
   const [blockedLotCount, setBlockedLotCount] = useState(0);
+  const [unreadAlertCount, setUnreadAlertCount] = useState(0);
   const toastTimer = useRef<number | undefined>(undefined);
 
-  // The sidebar badge must reflect the backend's canonical blocked-lot list;
-  // mobile uses the same /sync/pull field, so both surfaces agree.
+  // The sidebar/bell badges must reflect the backend's canonical blocked-lot
+  // list and the persisted unread warning state.
   const refreshAlerts = useCallback(() => {
     get<{ blocked_lot_codes?: string[] }>("/sync/pull")
       .then((data) => setBlockedLotCount(data.blocked_lot_codes?.length ?? 0))
       .catch(() => {});
+    get<{ read: boolean }[]>("/anomalies")
+      .then((list) => setUnreadAlertCount(list.filter((item) => !item.read).length))
+      .catch(() => {});
+  }, []);
+
+  const openAlerts = useCallback(() => {
+    setView("alerts");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
   useEffect(() => {
@@ -106,7 +120,10 @@ export default function App() {
   }, [refreshAlerts, view]);
 
   const activeLabel = titles[view] ?? "Genel Bakış";
-  const viewEl = useMemo(() => renderView(view, refreshAlerts), [view, refreshAlerts]);
+  const viewEl = useMemo(
+    () => renderView(view, refreshAlerts, openAlerts, refreshAlerts),
+    [view, refreshAlerts, openAlerts],
+  );
 
   function showToast(message: string) {
     setToast(message);
@@ -153,7 +170,8 @@ export default function App() {
                   <span className="ico">{item.icon}</span>
                   {item.label}
                   {item.key === "recall" && blockedLotCount > 0 ? <span className="badge">{blockedLotCount}</span> : null}
-                  {item.key !== "recall" && item.badge ? <span className="badge">{item.badge}</span> : null}
+                  {item.key === "alerts" && unreadAlertCount > 0 ? <span className="badge">{unreadAlertCount}</span> : null}
+                  {item.key !== "recall" && item.key !== "alerts" && item.badge ? <span className="badge">{item.badge}</span> : null}
                 </button>
               ))}
             </nav>
@@ -200,12 +218,11 @@ export default function App() {
             <button
               className="icon-btn"
               type="button"
-              title="Bildirimler"
-              onClick={() => showToast(blockedLotCount > 0
-                ? `${blockedLotCount} bloke lot nedeniyle satış engellendi.`
-                : "Aktif lot uyarısı yok.")}
+              title={unreadAlertCount > 0 ? `Bildirimler (${unreadAlertCount})` : "Bildirimler"}
+              onClick={openAlerts}
             >
               ♧
+              {unreadAlertCount > 0 && <span className="badge">{unreadAlertCount}</span>}
             </button>
             <button className="icon-btn" type="button" title="Yardım" onClick={() => showToast("Yardım merkezi.")}>
               ?

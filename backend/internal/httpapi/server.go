@@ -86,6 +86,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s.mux.HandleFunc("POST /sync/push", s.handleSyncPush)
 	s.mux.HandleFunc("GET /sync/pull", s.handleSyncPull)
 	s.mux.HandleFunc("GET /anomalies", s.handleAnomalies)
+	s.mux.HandleFunc("POST /anomalies/read", s.handleMarkAnomaliesRead)
 	s.mux.HandleFunc("GET /reports/summary", s.handleReportSummary)
 	s.mux.HandleFunc("POST /ocr/invoice", s.handleOCRInvoice)
 	s.mux.HandleFunc("GET /ml/health", s.handleMLHealth)
@@ -570,6 +571,32 @@ func (s *Server) handleSyncPull(w http.ResponseWriter, r *http.Request) {
 		"lots":              lots,
 		"markets":           markets,
 	})
+}
+
+func (s *Server) handleMarkAnomaliesRead(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Key  string   `json:"key"`
+		Keys []string `json:"keys"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	keys := body.Keys
+	if body.Key != "" {
+		keys = append(keys, body.Key)
+	}
+	if len(keys) == 0 {
+		writeError(w, http.StatusBadRequest, errors.New("key or keys is required"))
+		return
+	}
+	for _, key := range keys {
+		if err := s.repo.MarkAnomalyRead(r.Context(), key); err != nil {
+			writeRepoError(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"read": len(keys)})
 }
 
 func (s *Server) handleAnomalies(w http.ResponseWriter, r *http.Request) {

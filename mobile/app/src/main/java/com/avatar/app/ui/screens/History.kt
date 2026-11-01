@@ -64,7 +64,7 @@ fun History(
                         }
                         val display = saleDisplayStatus(sale)
                         val statusColor = when (display) {
-                            SaleDisplayStatus.Rejected -> Red
+                            SaleDisplayStatus.Rejected, SaleDisplayStatus.StockLow -> Red
                             SaleDisplayStatus.Synced -> Green
                             SaleDisplayStatus.Pending -> Amber
                         }

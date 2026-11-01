@@ -75,6 +75,12 @@ func EnsureSchema(ctx context.Context, database *sql.DB) error {
 	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
 		return err
 	}
+	if err := ensureTable(ctx, database, "anomaly_reads", `CREATE TABLE IF NOT EXISTS anomaly_reads (
+		alert_key VARCHAR(191) PRIMARY KEY,
+		read_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`); err != nil {
+		return err
+	}
 	return ensureConstraint(ctx, database, "butchery_batches", "fk_bb_input_lot",
 		`ALTER TABLE butchery_batches
 		 ADD CONSTRAINT fk_bb_input_lot FOREIGN KEY (input_lot_id) REFERENCES lots(id)`)

@@ -2,10 +2,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { get, post } from "../../api";
 
 interface Anomaly {
+  key: string;
   type: string;
   severity: string;
   message: string;
   ref: string;
+  read: boolean;
 }
 
 interface RecallEvent {
@@ -38,7 +40,7 @@ interface RecallResult {
   message: string;
 }
 
-export default function Recall({ onChanged }: { onChanged?: () => void }) {
+export default function Recall({ onChanged, onOpenAlerts }: { onChanged?: () => void; onOpenAlerts?: () => void }) {
   const [sourceLotCode, setSourceLotCode] = useState("");
   const [reason, setReason] = useState("Kalite sorunu");
   const [result, setResult] = useState<RecallResult | null>(null);
@@ -95,7 +97,7 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
   // A lot under an active recall is tracked by the recall workflow; showing its
   // generic stock anomaly again would duplicate the same warning here.
   const recallCodes = new Set(result ? [result.source_lot_code, ...result.affected_lots.map((lot) => lot.lot_code)] : []);
-  const visibleAnomalies = anomalies.filter((anomaly) => !blockedCodes.has(anomaly.ref) && !recallCodes.has(anomaly.ref));
+  const visibleAnomalies = anomalies.filter((anomaly) => !anomaly.read && !blockedCodes.has(anomaly.ref) && !recallCodes.has(anomaly.ref));
 
   // Tüm etkilenen lotların marketlerini tek listeye indir.
   const allMarkets = result ? result.affected_lots.flatMap((lot) => lot.markets) : [];
@@ -130,7 +132,7 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
       </div>
 
       {visibleAnomalies.length > 0 && (
-        <div className="recall-banner">
+        <div className="recall-banner" style={{ cursor: onOpenAlerts ? "pointer" : "default" }} onClick={onOpenAlerts}>
           <span style={{ fontSize: 20 }}>⚠</span>
           <div>
             <strong>{visibleAnomalies.length} kalite/stok uyarısı</strong>
@@ -139,6 +141,7 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
                 ? criticalAnomalies.map((a) => `${a.ref}: ${a.message}`).join(" · ")
                 : visibleAnomalies.map((a) => `${a.ref}: ${a.message}`).join(" · ")}
             </p>
+            {onOpenAlerts && <p style={{ marginTop: 4 }}>Tüm uyarıları görmek için tıklayın →</p>}
           </div>
         </div>
       )}

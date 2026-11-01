@@ -9,10 +9,12 @@ interface Lot {
 }
 
 interface Anomaly {
+  key: string;
   type: string;
   severity: string;
   message: string;
   ref: string;
+  read: boolean;
 }
 
 interface ProductionOrder {
@@ -34,7 +36,7 @@ interface Market {
   name: string;
 }
 
-export default function Dashboard() {
+export default function Dashboard({ onOpenAlerts }: { onOpenAlerts?: () => void }) {
   const [stockValue, setStockValue] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
   const [avgEkp, setAvgEkp] = useState(0);
@@ -76,7 +78,8 @@ export default function Dashboard() {
     load();
   }, [load]);
 
-  const critical = anomalies.filter((a) => a.severity === "critical").length;
+  const unread = anomalies.filter((anomaly) => !anomaly.read);
+  const critical = unread.filter((a) => a.severity === "critical").length;
   const marketName = (id: number) => markets.find((m) => m.id === id)?.name ?? `Market #${id}`;
 
   return (
@@ -109,7 +112,7 @@ export default function Dashboard() {
         <div className="metric">
           <div className="metric-top">Kritik uyarı <span className="metric-icon" style={{ background: "var(--amber-bg)", color: "var(--amber)" }}>⚠</span></div>
           <strong>{critical}</strong>
-          <div className="metric-foot">{anomalies.length} toplam anomali</div>
+          <div className="metric-foot">{unread.length} okunmamış uyarı</div>
         </div>
       </div>
 
@@ -120,11 +123,11 @@ export default function Dashboard() {
               <h2>Dikkat gerektirenler</h2>
               <p>Anomali kurallarından üretildi</p>
             </div>
-            <span className="status warn">{anomalies.length} bildirim</span>
+            <span className="status warn">{unread.length} bildirim</span>
           </div>
           <div className="alert-list">
-            {anomalies.map((anomaly) => (
-              <div className="alert" key={`${anomaly.type}:${anomaly.ref}:${anomaly.message}`}>
+            {unread.map((anomaly) => (
+              <div className="alert" key={anomaly.key} onClick={onOpenAlerts} style={{ cursor: onOpenAlerts ? "pointer" : "default" }}>
                 <div className={`alert-symbol ${anomaly.severity === "critical" ? "red" : "amber"}`}>
                   {anomaly.severity === "critical" ? "⚠" : "↗"}
                 </div>
@@ -132,9 +135,12 @@ export default function Dashboard() {
                   <b>{anomaly.message} · {anomaly.ref}</b>
                   <p>Anomali türü: {anomaly.type} · Öncelik: {anomaly.severity}</p>
                 </div>
+                <button className="btn btn-secondary" type="button" style={{ marginLeft: "auto" }} onClick={(event) => { event.stopPropagation(); onOpenAlerts?.(); }}>
+                  Tüm uyarılar
+                </button>
               </div>
             ))}
-            {anomalies.length === 0 && <p className="muted">Açık anomali bulunmuyor.</p>}
+            {unread.length === 0 && <p className="muted">Okunmamış uyarı bulunmuyor.</p>}
           </div>
         </div>
 

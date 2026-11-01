@@ -8,10 +8,12 @@ import (
 
 // Anomaly is a rule-based alert over production, butchery and stock data.
 type Anomaly struct {
+	Key      string `json:"key"`
 	Type     string `json:"type"`     // fire | cost | yield | stock
 	Severity string `json:"severity"` // warning | critical
 	Message  string `json:"message"`
 	Ref      string `json:"ref"`
+	Read     bool   `json:"read"`
 }
 
 // AnomalyService detects unexpected fire, cost increase, low yield and
@@ -36,6 +38,18 @@ func (s *AnomalyService) Detect(ctx context.Context) ([]Anomaly, error) {
 			return nil, err
 		}
 		anomalies = append(anomalies, found...)
+	}
+	readKeys, err := s.repo.ListReadAnomalyKeys(ctx)
+	if err != nil {
+		return nil, err
+	}
+	read := make(map[string]bool, len(readKeys))
+	for _, key := range readKeys {
+		read[key] = true
+	}
+	for i := range anomalies {
+		anomalies[i].Key = anomalies[i].Type + ":" + anomalies[i].Ref
+		anomalies[i].Read = read[anomalies[i].Key]
 	}
 	return anomalies, nil
 }
@@ -119,8 +133,8 @@ func (s *AnomalyService) stockAnomalies(ctx context.Context) ([]Anomaly, error) 
 		}
 		if balance < 0 {
 			anomalies = append(anomalies, Anomaly{
-				Type: "stock", Severity: "critical",
-				Message: "Tutarsız stok (negatif bakiye)", Ref: lot.Code,
+				Type: "stock", Severity: "warning",
+				Message: "Stok az olduğu için satış engellendi", Ref: lot.Code,
 			})
 		}
 	}

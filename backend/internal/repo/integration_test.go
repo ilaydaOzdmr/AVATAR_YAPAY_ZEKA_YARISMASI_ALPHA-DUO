@@ -969,3 +969,42 @@ func TestCreateButcheryBatchConsistentRecordHasNoWarnings(t *testing.T) {
 		t.Fatalf("cost_difference = %v, want 0", batch.CostDifference)
 	}
 }
+
+func TestCreateSaleRejectsInsufficientStock(t *testing.T) {
+	r, db := testRepo(t)
+	ctx := context.Background()
+
+	productID := insertProduct(t, db, unique("PRD"), 25)
+	lotID := insertLot(t, db, unique("LOT"), "product", productID, 2, 18)
+	marketID := insertMarket(t, db, unique("MKT"))
+	saleCode := unique("SALE")
+
+	_, err := r.CreateSale(ctx, model.Sale{
+		Code:     saleCode,
+		MarketID: marketID,
+		Status:   "completed",
+	}, []model.SaleLine{{
+		LotID:      lotID,
+		Qty:        5,
+		UnitPrice:  25,
+		TotalPrice: 125,
+	}})
+	if !errors.Is(err, ErrInsufficientStock) {
+		t.Fatalf("sale error = %v, want ErrInsufficientStock", err)
+	}
+
+	lot, err := r.GetLot(ctx, lotID)
+	if err != nil {
+		t.Fatalf("GetLot: %v", err)
+	}
+	if lot.Qty != 2 {
+		t.Fatalf("lot qty after rejected sale = %v, want 2", lot.Qty)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sales WHERE code = ?`, saleCode).Scan(&count); err != nil {
+		t.Fatalf("count sales: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("sale rows = %d, want 0 (transaction rollback)", count)
+	}
+}

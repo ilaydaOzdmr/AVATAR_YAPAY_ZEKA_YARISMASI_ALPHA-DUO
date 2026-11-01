@@ -27,11 +27,18 @@ class SaleStatusTest {
     }
 
     @Test
+    fun lowStockRejectionHasItsOwnLabel() {
+        assertEquals(SaleDisplayStatus.StockLow, saleDisplayStatus(sale("stock_low", true)))
+        assertEquals("Stok az olduğu için satış engellendi", SaleDisplayStatus.StockLow.label)
+    }
+
+    @Test
     fun homeIgnoresRejectedAttemptWhenPickingLastSale() {
         val rejected = sale("rejected", true, id = 2, code = "AND-REJ", soldAt = "2026-11-01 11:00:00")
+        val lowStock = sale("stock_low", true, id = 3, code = "AND-LOW", soldAt = "2026-11-01 12:00:00")
         val accepted = sale("completed", true, id = 1, code = "AND-OK", soldAt = "2026-11-01 10:00:00")
 
-        assertEquals(accepted.code, latestAcceptedSale(listOf(rejected, accepted))?.code)
-        assertNull(latestAcceptedSale(listOf(rejected)))
+        assertEquals(accepted.code, latestAcceptedSale(listOf(rejected, lowStock, accepted))?.code)
+        assertNull(latestAcceptedSale(listOf(rejected, lowStock)))
     }
 }

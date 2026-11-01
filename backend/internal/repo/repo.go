@@ -55,6 +55,8 @@ type Repo interface {
 	ListRecallAcknowledgements(ctx context.Context, sourceLotID int64) ([]string, error)
 	IsLotBlocked(ctx context.Context, lotID int64) (bool, error)
 	ListBlockedLotCodes(ctx context.Context) ([]string, error)
+	ListReadAnomalyKeys(ctx context.Context) ([]string, error)
+	MarkAnomalyRead(ctx context.Context, key string) error
 	CreateSale(ctx context.Context, sale model.Sale, lines []model.SaleLine) (model.Sale, error)
 	ListSales(ctx context.Context) ([]model.Sale, error)
 	ListSaleLines(ctx context.Context, saleID int64) ([]model.SaleLine, error)
@@ -1174,6 +1176,30 @@ func (r *mysqlRepo) ListRecallAcknowledgements(ctx context.Context, sourceLotID 
 	return out, rows.Err()
 }
 
+func (r *mysqlRepo) ListReadAnomalyKeys(ctx context.Context) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT alert_key FROM anomaly_reads ORDER BY alert_key`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		out = append(out, key)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) MarkAnomalyRead(ctx context.Context, key string) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT IGNORE INTO anomaly_reads (alert_key) VALUES (?)`, key)
+	return err
+}
+
 func (r *mysqlRepo) IsLotBlocked(ctx context.Context, lotID int64) (bool, error) {
 	var exists bool
 	err := r.db.QueryRowContext(ctx,
@@ -1586,6 +1612,17 @@ func createSaleLineTx(ctx context.Context, tx *sql.Tx, sale model.Sale, line mod
 	}
 	if blocked {
 		return ErrLotBlocked
+	}
+	if line.Qty <= 0 {
+		return ErrInvalidOrder
+	}
+	var lotQty float64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT qty FROM lots WHERE id = ? FOR UPDATE`, line.LotID).Scan(&lotQty); err != nil {
+		return err
+	}
+	if lotQty+0.0005 < line.Qty {
+		return ErrInsufficientStock
 	}
 
 	// Satış fiyatı line.unit_price'ta kalır; stok hareketi lot maliyetini kullanır.

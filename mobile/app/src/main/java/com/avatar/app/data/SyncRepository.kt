@@ -36,6 +36,7 @@ import org.json.JSONObject
 sealed class PushResult {
     object Success : PushResult()
     data class Blocked(val message: String) : PushResult()
+    data class InsufficientStock(val message: String) : PushResult()
     data class Failed(val message: String) : PushResult()
 }
 
@@ -557,19 +558,29 @@ class SyncRepository(
             // Already handled; do not restore stock twice on a repeated submit.
             return@withContext PushResult.Blocked("blocked lot: sale rejected")
         }
+        if (sale.status == "stock_low") {
+            return@withContext PushResult.InsufficientStock("insufficient stock: sale rejected")
+        }
         val lines = db.saleDao().getLines(saleId)
         try {
             val base = serverBaseUrl()
             post("$base/sales", salePayload(sale, lines).toString()).use { response ->
                 when {
                     response.code == 409 -> {
-                        // Server rejected the sale (blocked lot). Undo the local
-                        // stock deduction from saveSale and do not retry forever.
+                        // Server rejected the sale (blocked lot or insufficient
+                        // stock). Undo the local stock deduction and do not retry
+                        // forever.
+                        val errorBody = response.body?.string().orEmpty()
+                        val lowStock = errorBody.contains("insufficient stock", ignoreCase = true)
                         lines.forEach { line -> db.lotDao().adjustQty(line.lotId, line.qty) }
-                        db.saleDao().setStatus(saleId, "rejected")
+                        db.saleDao().setStatus(saleId, if (lowStock) "stock_low" else "rejected")
                         db.saleDao().setSynced(saleId, true)
                         db.outboxDao().deleteByEntity("sale", saleId)
-                        PushResult.Blocked("blocked lot: sale rejected")
+                        if (lowStock) {
+                            PushResult.InsufficientStock("insufficient stock: sale rejected")
+                        } else {
+                            PushResult.Blocked("blocked lot: sale rejected")
+                        }
                     }
                     response.isSuccessful -> {
                         db.saleDao().setStatus(saleId, "completed")
@@ -594,6 +605,7 @@ class SyncRepository(
         }
 
         var blocked = false
+        var insufficient = false
         var failed = false
         // Push one sale at a time. The sale code is the idempotency key, so a
         // retry after a timeout cannot deduct stock twice.
@@ -601,10 +613,12 @@ class SyncRepository(
             when (submitSale(entry.entityId)) {
                 is PushResult.Success -> Unit
                 is PushResult.Blocked -> blocked = true
+                is PushResult.InsufficientStock -> insufficient = true
                 is PushResult.Failed -> failed = true
             }
         }
         when {
+            insufficient -> PushResult.InsufficientStock("insufficient stock: at least one sale rejected")
             blocked -> PushResult.Blocked("blocked lot: at least one sale rejected")
             failed -> PushResult.Failed("offline")
             else -> PushResult.Success
