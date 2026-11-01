@@ -110,9 +110,9 @@ geri çağırma başlatılırsa yeni kayıt açılmaz, mevcut kayıt döner.
 - `read_at` — okundu işaretlenme zamanı.
 
 Uyarılar her istekte yeniden hesaplanır; okundu bilgisi anahtar bazında
-saklandığı için sayfa yenilense de korunur. Stok kuralı negatif bakiye yerine
-"Stok az olduğu için satış engellendi" mesajını üretir. Lot bakiyesinden fazla
-satış `insufficient stock` hatasıyla reddedilir.
+saklandığı için sayfa yenilense de korunur. Stok kuralı, lot bakiyesi 1 birim
+veya altına düştüğünde "Stok az olduğu için satış engellendi" mesajını üretir.
+Lot bakiyesinden fazla satış `insufficient stock` hatasıyla reddedilir.
 
 
 

@@ -130,10 +130,11 @@ POST /anomalies/read
   döner. `key` = `<type>:<ref>` biçimindedir.
 - Okundu bilgisi `anomaly_reads` tablosunda kalıcıdır; okunan uyarı listede
   soluk görünür ve bildirim rozetinde sayılmaz.
-- Stok kuralı artık negatif bakiye yerine **"Stok az olduğu için satış
-  engellendi"** mesajını üretir.
-- Stoktan fazla satış `409` ve `insufficient stock` hatasıyla reddedilir;
-  lot miktarı değişmez.
+- Stok kuralı, lot bakiyesi **1 birim veya altına** düştüğünde **"Stok az
+  olduğu için satış engellendi"** mesajını üretir; tarihsel hareket toplamı
+  negatif olsa bile satılabilir bakiyesi olan lot yanlış uyarı üretmez.
+- Lot bakiyesinden fazla satış `409` ve `insufficient stock` hatasıyla
+  reddedilir; lot miktarı değişmez.
 
 ## Notlar
 - `stock_movements.qty` işaretli: giriş `+`, çıkış `-`.

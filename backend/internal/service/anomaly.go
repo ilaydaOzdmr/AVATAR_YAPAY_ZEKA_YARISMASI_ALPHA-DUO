@@ -117,21 +117,16 @@ func (s *AnomalyService) productionAnomalies(ctx context.Context) ([]Anomaly, er
 
 func (s *AnomalyService) stockAnomalies(ctx context.Context) ([]Anomaly, error) {
 	anomalies := []Anomaly{}
-	// 4) Inconsistent lot movements (negative balance)
+	// Low stock: the lot's current quantity is at or below one unit. Using the
+	// lot balance (not the historical movement sum) avoids false "negative
+	// stock" alerts for lots that still have sellable stock.
+	const lowStockThreshold = 1.0
 	lots, err := s.repo.ListLots(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 	for _, lot := range lots {
-		movements, err := s.repo.ListStockMovements(ctx, lot.ID)
-		if err != nil {
-			continue
-		}
-		var balance float64
-		for _, m := range movements {
-			balance += m.Qty
-		}
-		if balance < 0 {
+		if lot.Qty <= lowStockThreshold {
 			anomalies = append(anomalies, Anomaly{
 				Type: "stock", Severity: "warning",
 				Message: "Stok az olduğu için satış engellendi", Ref: lot.Code,

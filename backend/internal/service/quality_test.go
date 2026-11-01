@@ -28,7 +28,11 @@ func (r qualityRepo) ListMaterials(ctx context.Context) ([]model.Material, error
 }
 
 func (r qualityRepo) ListLots(ctx context.Context, itemType string) ([]model.Lot, error) {
-	return []model.Lot{{ID: 1, Code: "RAW", ItemType: "material", ItemID: 1, SupplierID: intRef(1), Qty: 100, UnitCost: 1}, {ID: 3, Code: "FIN", ItemType: "product", Qty: 50}}, r.problem("ListLots")
+	return []model.Lot{
+		{ID: 1, Code: "RAW", ItemType: "material", ItemID: 1, SupplierID: intRef(1), Qty: 100, UnitCost: 1},
+		{ID: 3, Code: "FIN", ItemType: "product", Qty: 50},
+		{ID: 4, Code: "LOW", ItemType: "product", Qty: 0.5},
+	}, r.problem("ListLots")
 }
 
 func (r qualityRepo) GetSupplier(ctx context.Context, id int64) (model.Supplier, error) {
@@ -157,7 +161,7 @@ func TestQualityAnomalyRulesRetainCostsYieldAndStockChecks(t *testing.T) {
 	for _, anomaly := range anomalies {
 		counts[anomaly.Type]++
 	}
-	if counts["fire"] != 1 || counts["yield"] != 2 || counts["cost"] != 1 || counts["stock"] != 2 {
+	if counts["fire"] != 1 || counts["yield"] != 2 || counts["cost"] != 1 || counts["stock"] != 1 {
 		t.Fatalf("unexpected alerts: %+v", anomalies)
 	}
 	for _, method := range []string{"ListButcheryBatches", "ListButcheryItems", "ListProductionOrders", "ListLots"} {
@@ -166,14 +170,14 @@ func TestQualityAnomalyRulesRetainCostsYieldAndStockChecks(t *testing.T) {
 			t.Errorf("%s: %v", method, err)
 		}
 	}
-	anomalies, err = NewAnomalyService(qualityRepo{fail: "ListStockMovements"}).Detect(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	lowStockFound := false
 	for _, anomaly := range anomalies {
-		if anomaly.Type == "stock" {
-			t.Fatal("failed balance reads must not become false stock alerts")
+		if anomaly.Type == "stock" && anomaly.Ref == "LOW" {
+			lowStockFound = anomaly.Message == "Stok az olduğu için satış engellendi"
 		}
+	}
+	if !lowStockFound {
+		t.Fatalf("low-stock alert missing or wrong message: %+v", anomalies)
 	}
 	if len(costAnomalies(nil, 0, 0)) != 0 {
 		t.Fatal("empty production must not generate a cost alert")

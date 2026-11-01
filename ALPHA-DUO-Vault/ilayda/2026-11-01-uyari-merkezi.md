@@ -2,7 +2,8 @@
 
 ## Yapılanlar
 - Stok anomalisinin mesajı negatif bakiye yerine **"Stok az olduğu için satış
-  engellendi"** olarak değiştirildi (severity `warning`).
+  engellendi"** olarak değiştirildi; kural lot bakiyesi 1 birim veya altına
+  düştüğünde çalışır (tarihsel hareket toplamı kullanılmaz).
 - Lot bakiyesinden fazla satış backend'de `ErrInsufficientStock` ile
   reddediliyor; böylece yeni negatif stok oluşmuyor.
 - `anomaly_reads` tablosu (migration `0005_anomaly_reads`) ve
