@@ -69,7 +69,7 @@ fun ProductList(
         ) {
             if (!blockedOnly) {
                 item { Text("Ürünler", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-                items(products, key = { it.id }) { product ->
+                items(products, key = { "product-${it.id}" }) { product ->
                     Card(shape = RoundedCornerShape(14.dp)) {
                         Row(
                             Modifier.fillMaxWidth().padding(14.dp),
@@ -87,7 +87,7 @@ fun ProductList(
             }
 
             item { Text("Lotlar", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
-            items(if (blockedOnly) lots.filter { it.blocked } else lots, key = { it.id }) { lot ->
+            items(if (blockedOnly) lots.filter { it.blocked } else lots, key = { "lot-${it.id}" }) { lot ->
                 val statusColor = if (lot.blocked) Red else Green
                 val statusText = if (lot.blocked) "Bloke" else "Aktif"
                 Card(
