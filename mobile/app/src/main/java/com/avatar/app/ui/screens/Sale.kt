@@ -106,7 +106,12 @@ fun Sale(
                 DropdownMenu(expanded = lotMenu, onDismissRequest = { lotMenu = false }) {
                     sellableLots.forEach { lot ->
                         DropdownMenuItem(
-                            text = { Text("${lot.code} (${lot.qty} ${lot.unit})") },
+                            text = {
+                                Text(
+                                    "${lot.code} (${lot.qty} ${lot.unit})",
+                                    color = if (lot.blocked) Red else MaterialTheme.colorScheme.onSurface,
+                                )
+                            },
                             enabled = !lot.blocked,
                             onClick = { selectedLot = lot; lotMenu = false },
                         )
@@ -143,7 +148,16 @@ fun Sale(
                 val lot = selectedLot
                 val market = selectedMarket
                 val qty = quantity.toDoubleOrNull()
-                val canSell = product != null && lot != null && market != null && !lot.blocked && qty != null && qty > 0
+                val insufficient = lot != null && qty != null && qty > lot.qty + 0.0005
+                val canSell = product != null && lot != null && market != null && !lot.blocked && !insufficient && qty != null && qty > 0
+
+                if (insufficient && lot != null) {
+                    Text(
+                        "Stok yetersiz: mevcut ${lot.qty} ${lot.unit}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Red,
+                    )
+                }
 
                 Button(
                     onClick = {
@@ -170,6 +184,7 @@ private fun lotLabel(lot: LocalLot?): String {
 internal fun buildSaleDraft(product: LocalProduct?, lot: LocalLot?, market: LocalMarket?, qty: Double?): Pair<LocalSale, LocalSaleLine>? {
     if (product == null || lot == null || market == null || qty == null) return null
     if (lot.blocked || !qty.isFinite() || qty <= 0) return null
+    if (qty > lot.qty + 0.0005) return null
     if (lot.itemType != "product" || lot.itemId != product.id) return null
     val sale = LocalSale(code = "AND-${System.currentTimeMillis()}", marketId = market.id,
         soldAt = LocalDateTime.now().format(SOLD_AT_FORMAT), status = "completed", synced = false)
@@ -185,6 +200,7 @@ private fun SaleMessage(message: String?) {
             message.contains("yerel", ignoreCase = true) ||
             message.contains("bağlantı", ignoreCase = true) ||
             message.contains("reddedildi", ignoreCase = true) ||
+            message.contains("yetersiz", ignoreCase = true) ||
             message.contains("failed", ignoreCase = true)
         Text(message, style = MaterialTheme.typography.labelMedium, color = if (isError) Red else Green)
     }

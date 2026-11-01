@@ -18,8 +18,15 @@
 - Recall sayfasındaki banner okunmuş ve aktif recall kapsamındaki lotları
   göstermez.
 - Mobilde 409 yanıtı `insufficient stock` içeriyorsa satış `stock_low` olarak
-  işaretlenir ve History'de **"Stok az olduğu için satış engellendi"** görünür;
+  işaretlenir ve History'de **"Stok yetersiz: satış engellendi"** görünür;
   bloklu lottan ayrıdır. Yerel stok iadesi iki durumda da yapılır.
+- Mobil tahmin ekranındaki model sürümü/`synthetic_only` uyarıları kaldırıldı;
+  yalnızca tahmin çıktısına ilişkin kısa açıklama gösteriliyor.
+- Mobil stok listesinde bloklu lotlar kırmızı kart olarak gösteriliyor.
+  Üstteki "Bloklu lot" sayacına tıklanınca liste yalnızca bloklu lotlara
+  filtreleniyor.
+- Mobil satış formu, lot bakiyesinden fazla miktar girildiğinde butonu
+  kapatıp **"Stok yetersiz: mevcut X"** uyarısı gösteriyor.
 
 ## Doğrulama
 - Go birim + entegrasyon testleri: stoktan fazla satış reddi, lot miktarının

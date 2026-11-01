@@ -63,7 +63,7 @@ class InsufficientStockSaleTest {
             val stored = db.saleDao().getById(saleId)
             assertEquals("stock_low", stored?.status)
             assertEquals(SaleDisplayStatus.StockLow, stored?.let { saleDisplayStatus(it) })
-            assertEquals("Stok az olduğu için satış engellendi", SaleDisplayStatus.StockLow.label)
+            assertEquals("Stok yetersiz: satış engellendi", SaleDisplayStatus.StockLow.label)
             // The rejected sale must not leave the local lot short.
             assertEquals(0.5, db.lotDao().getAll().first { it.id == 2L }.qty, 0.0)
         } finally {

@@ -69,7 +69,7 @@ fun Prediction(
 }
 
 @Composable
-private fun PredictionResult(result: PredictionView?) {
+private fun PredictionResult(result: PredictionView?, note: String? = null) {
     if (result == null) return
     if (result.offline || result.message != null) {
         Text(result.message.orEmpty(), color = Red, style = MaterialTheme.typography.bodySmall)
@@ -80,15 +80,8 @@ private fun PredictionResult(result: PredictionView?) {
             Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
         }
     }
-    if (result.rows.isNotEmpty()) {
-        Text(
-            "Model ${result.modelVersion} · ${result.modelStatus}",
-            style = MaterialTheme.typography.labelSmall,
-            color = Amber,
-        )
-        result.warnings.forEach { warning ->
-            Text("⚠ $warning", style = MaterialTheme.typography.labelSmall, color = Amber)
-        }
+    if (result.rows.isNotEmpty() && note != null) {
+        Text(note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -128,7 +121,7 @@ private fun YieldPredictionCard(result: PredictionView?, onPredictYield: (Double
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Green),
             ) { Text("Verim / EKP tahmini") }
-            PredictionResult(result)
+            PredictionResult(result, "Tahmin, girilen hammadde ve maliyet girdilerine göre hesaplandı.")
         }
     }
 
@@ -158,7 +151,7 @@ private fun ButcheryPredictionCard(result: PredictionView?, onPredictButchery: (
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Green),
             ) { Text("Parça ağırlıkları tahmini") }
-            PredictionResult(result)
+            PredictionResult(result, "Parça ağırlıkları seçilen hayvan ve karkas ağırlığına göre dengelendi.")
         }
     }
 
@@ -176,11 +169,6 @@ private fun PredictionHistoryCard(history: List<LocalPrediction>) {
                     Column(Modifier.fillMaxWidth()) {
                         Text("${item.createdAt} · ${item.kind}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(item.resultSummary, style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            "Model ${item.modelVersion} · ${item.modelStatus}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (item.modelStatus == "synthetic_only") Amber else Green,
-                        )
                     }
                 }
             }

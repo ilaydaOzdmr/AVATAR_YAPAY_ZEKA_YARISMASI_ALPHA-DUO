@@ -4,7 +4,7 @@ import com.avatar.app.data.entities.LocalSale
 
 internal enum class SaleDisplayStatus(val label: String) {
     Rejected("Bloklandı"),
-    StockLow("Stok az olduğu için satış engellendi"),
+    StockLow("Stok yetersiz: satış engellendi"),
     Synced("Senkron"),
     Pending("Bekliyor"),
 }

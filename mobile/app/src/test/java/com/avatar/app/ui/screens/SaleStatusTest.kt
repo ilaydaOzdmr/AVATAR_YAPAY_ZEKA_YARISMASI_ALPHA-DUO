@@ -29,7 +29,7 @@ class SaleStatusTest {
     @Test
     fun lowStockRejectionHasItsOwnLabel() {
         assertEquals(SaleDisplayStatus.StockLow, saleDisplayStatus(sale("stock_low", true)))
-        assertEquals("Stok az olduğu için satış engellendi", SaleDisplayStatus.StockLow.label)
+        assertEquals("Stok yetersiz: satış engellendi", SaleDisplayStatus.StockLow.label)
     }
 
     @Test
