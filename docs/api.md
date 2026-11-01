@@ -99,11 +99,25 @@ kontrol alanlarını döner. Bu alanlar istemciden alınmaz; backend hesaplar ve
 - `KUZ-2026-DEMO`: 25 kg, 11,50 €/kg, 351,00 € → fire 3 kg, beklenen 287,50 €,
   kayıtlı 351,00 €, fark 63,50 €, `cost_check_status = mismatch`.
 
-### Geri çağırma başlat
+### Geri çağırma
 ```json
 POST /recalls
 {"source_lot_code":"ET-2026-001","reason":"Kalite sorunu"}
 ```
+
+### Geri çağırma alıcı teyidi
+```json
+POST /recalls/{id}/acknowledge
+{"market_code":"MKT-A"}
+```
+
+- Teyit, kaynak lot bazında kalıcı saklanır; aynı lotun tüm geri çağırma
+  kayıtlarında ortak görünür.
+- Aynı lot için tekrar geri çağırma başlatılırsa yeni kayıt açılmaz; mevcut
+  kayıt ve teyitleri döner.
+- Teyit satış blokajını kaldırmaz; lot güvenlik kapsamında `blocked` kalır.
+- `GET /recalls/{id}` ve `POST /recalls` yanıtlarında `confirmed_markets`
+  alanı döner.
 
 ## Notlar
 - `stock_movements.qty` işaretli: giriş `+`, çıkış `-`.

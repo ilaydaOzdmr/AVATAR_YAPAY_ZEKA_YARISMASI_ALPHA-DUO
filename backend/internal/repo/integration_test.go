@@ -556,6 +556,30 @@ func TestCreateRecallBlocksLotsAndHandlesCodeCollision(t *testing.T) {
 		t.Fatalf("collision code = %q, want %q", event2.Code, code+"-2")
 	}
 
+	latest, err := r.GetLatestRecallBySourceLot(ctx, sourceLotID)
+	if err != nil {
+		t.Fatalf("GetLatestRecallBySourceLot: %v", err)
+	}
+	if latest.ID != event2.ID {
+		t.Fatalf("latest recall id = %d, want %d", latest.ID, event2.ID)
+	}
+
+	// Recipient confirmations are stored per source lot and survive repeat
+	// recall events for the same lot.
+	if err := r.AcknowledgeRecallMarket(ctx, sourceLotID, "MKT-ACK"); err != nil {
+		t.Fatalf("AcknowledgeRecallMarket: %v", err)
+	}
+	if err := r.AcknowledgeRecallMarket(ctx, sourceLotID, "MKT-ACK"); err != nil {
+		t.Fatalf("AcknowledgeRecallMarket repeat: %v", err)
+	}
+	acks, err := r.ListRecallAcknowledgements(ctx, sourceLotID)
+	if err != nil {
+		t.Fatalf("ListRecallAcknowledgements: %v", err)
+	}
+	if len(acks) != 1 || acks[0] != "MKT-ACK" {
+		t.Fatalf("acknowledgements = %v, want [MKT-ACK]", acks)
+	}
+
 	if _, err := r.CreateSale(ctx, model.Sale{
 		Code:     unique("SALE"),
 		MarketID: marketID,

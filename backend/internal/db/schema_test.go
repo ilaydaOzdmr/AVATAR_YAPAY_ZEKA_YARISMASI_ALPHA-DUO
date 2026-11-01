@@ -183,4 +183,14 @@ func TestEnsureSchemaUpgradesOldButcheryTables(t *testing.T) {
 	if !redistributionTable {
 		t.Fatal("market_redistributions missing after EnsureSchema")
 	}
+
+	var acknowledgementTable bool
+	if err := database.QueryRow(
+		`SELECT EXISTS(SELECT 1 FROM information_schema.tables
+		 WHERE table_schema = DATABASE() AND table_name = 'recall_acknowledgements')`).Scan(&acknowledgementTable); err != nil {
+		t.Fatalf("check acknowledgement table: %v", err)
+	}
+	if !acknowledgementTable {
+		t.Fatal("recall_acknowledgements missing after EnsureSchema")
+	}
 }

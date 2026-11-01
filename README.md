@@ -51,7 +51,7 @@ Parçalama ekranında **giriş partisi, parça ürünleri, fiili ağırlıklar v
 
 **Soldaki örnekte** `ET-2026-001` lotundan `SUC-2026-045` mamulüne ve marketlere giden kayıt zinciri görülür. **Sağdaki ayrı örnekte** `SUC-2026-047` için geri çağırma sonucu; etkilenen miktar, alıcılar, iletişim bilgileri ve aktif satış blokajı gösterilir. Sorunlu lotla ilişkili ürünler belirlenir ve bu lotların satışı engellenir.
 
-İleri/geri izleme kesin kayıtlara dayanır. Alıcı teyit düğmesi ekran üzerindeki takip durumunu değiştirir; otomatik e-posta veya SMS göndermez.
+İleri/geri izleme kesin kayıtlara dayanır. Alıcı teyit düğmesi teyidi sunucuya kalıcı olarak kaydeder; otomatik e-posta veya SMS göndermez ve satış blokajını kaldırmaz. Blokaj, geri çağırma güvenlik kapsamında aktif kalır.
 
 ### Web · Raporlar ve fatura kalemlerinin onaylanması
 

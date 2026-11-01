@@ -118,10 +118,19 @@ func (f *fakeRepo) CreateRecallEvent(_ context.Context, e model.RecallEvent) (mo
 func (f *fakeRepo) GetRecallEvent(_ context.Context, _ int64) (model.RecallEvent, error) {
 	return model.RecallEvent{}, nil
 }
+func (f *fakeRepo) GetLatestRecallBySourceLot(_ context.Context, _ int64) (model.RecallEvent, error) {
+	return model.RecallEvent{}, sql.ErrNoRows
+}
 func (f *fakeRepo) CreateRecallBlock(_ context.Context, b model.RecallBlock) (model.RecallBlock, error) {
 	return b, nil
 }
 func (f *fakeRepo) ListRecallBlocks(_ context.Context, _ int64) ([]model.RecallBlock, error) {
+	return nil, nil
+}
+func (f *fakeRepo) AcknowledgeRecallMarket(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+func (f *fakeRepo) ListRecallAcknowledgements(_ context.Context, _ int64) ([]string, error) {
 	return nil, nil
 }
 func (f *fakeRepo) IsLotBlocked(_ context.Context, _ int64) (bool, error) {

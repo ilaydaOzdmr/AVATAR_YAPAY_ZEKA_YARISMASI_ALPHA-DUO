@@ -68,6 +68,7 @@ BAR-2026-001 (5 kg)     ─┘                                             ├�
   lotlarında SKT, üretim/parti tarihi + ürün raf ömrü olarak hesaplanır.
 
 ## Parçalama fire ve maliyet kontrolleri
+
 `butchery_batches` tablosuna migration `0003_butchery_consistency` ile eklenen
 alanlar:
 
@@ -87,4 +88,18 @@ Hesaplar:
 - `cost_difference` = `total_cost - expected_cost`.
 - Fire tek başına hata değildir; yalnızca negatif fire ağırlık kontrolünü
   `mismatch` yapar. Maliyet ve ağırlık kontrolleri bağımsızdır.
+
+## Geri çağırma alıcı teyitleri
+
+`recall_acknowledgements` tablosu (migration `0004_recall_acknowledgements`):
+
+- `source_lot_id` — geri çağırmanın kaynak lotu.
+- `market_code` — teyit edilen market kodu.
+- `confirmed_at` — teyit zamanı.
+- `(source_lot_id, market_code)` benzersizdir; aynı teyit tekrarı idempotenttir.
+
+Teyitler aynı kaynak lotun tüm geri çağırma kayıtlarında ortaktır. Teyit
+satış blokajını kaldırmaz; lot `blocked` durumunda kalır. Aynı lot için yeniden
+geri çağırma başlatılırsa yeni kayıt açılmaz, mevcut kayıt döner.
+
 

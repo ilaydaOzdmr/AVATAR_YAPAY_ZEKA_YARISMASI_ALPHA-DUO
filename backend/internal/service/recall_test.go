@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 
@@ -22,6 +24,7 @@ type recallFakeRepo struct {
 	productsByID    map[int64]model.Product
 	createdEvent    model.RecallEvent
 	createdBlocks   []model.RecallBlock
+	acks            map[int64][]string
 }
 
 func (f *recallFakeRepo) GetLotByCode(_ context.Context, code string) (model.Lot, error) {
@@ -30,6 +33,19 @@ func (f *recallFakeRepo) GetLotByCode(_ context.Context, code string) (model.Lot
 
 func (f *recallFakeRepo) GetLot(_ context.Context, id int64) (model.Lot, error) {
 	return f.lotsByID[id], nil
+}
+
+func (f *recallFakeRepo) GetRecallEvent(_ context.Context, id int64) (model.RecallEvent, error) {
+	event := f.createdEvent
+	event.ID = id
+	return event, nil
+}
+
+func (f *recallFakeRepo) GetLatestRecallBySourceLot(_ context.Context, _ int64) (model.RecallEvent, error) {
+	if f.createdEvent.ID == 0 {
+		return model.RecallEvent{}, sql.ErrNoRows
+	}
+	return f.createdEvent, nil
 }
 
 func (f *recallFakeRepo) ListLotLinksByParent(_ context.Context, parentID int64) ([]model.LotLink, error) {
@@ -57,6 +73,23 @@ func (f *recallFakeRepo) CreateRecall(_ context.Context, event model.RecallEvent
 	f.createdEvent = event
 	f.createdBlocks = blocks
 	return event, nil
+}
+
+func (f *recallFakeRepo) ListRecallAcknowledgements(_ context.Context, sourceLotID int64) ([]string, error) {
+	return f.acks[sourceLotID], nil
+}
+
+func (f *recallFakeRepo) AcknowledgeRecallMarket(_ context.Context, sourceLotID int64, marketCode string) error {
+	if f.acks == nil {
+		f.acks = map[int64][]string{}
+	}
+	for _, existing := range f.acks[sourceLotID] {
+		if existing == marketCode {
+			return nil
+		}
+	}
+	f.acks[sourceLotID] = append(f.acks[sourceLotID], marketCode)
+	return nil
 }
 
 func TestRecallCreateBlocksSourceAndAffectedLots(t *testing.T) {
@@ -121,5 +154,40 @@ func TestRecallCreateBlocksSourceAndAffectedLots(t *testing.T) {
 	}
 	if !strings.Contains(result.Message, "ikinci kademe alıcı sayısı: 1") {
 		t.Fatalf("message = %q, want second-level count", result.Message)
+	}
+
+	acked, err := NewRecallService(fake).Acknowledge(context.Background(), result.Event.ID, "MKT-A")
+	if err != nil {
+		t.Fatalf("Acknowledge: %v", err)
+	}
+	if len(acked.ConfirmedMarkets) != 1 || acked.ConfirmedMarkets[0] != "MKT-A" {
+		t.Fatalf("confirmed markets = %v, want [MKT-A]", acked.ConfirmedMarkets)
+	}
+	// Confirming again is idempotent.
+	ackedAgain, err := NewRecallService(fake).Acknowledge(context.Background(), result.Event.ID, "MKT-A")
+	if err != nil {
+		t.Fatalf("Acknowledge again: %v", err)
+	}
+	if len(ackedAgain.ConfirmedMarkets) != 1 {
+		t.Fatalf("confirmed markets after repeat = %v, want one", ackedAgain.ConfirmedMarkets)
+	}
+	if _, err := NewRecallService(fake).Acknowledge(context.Background(), result.Event.ID, "MKT-UNKNOWN"); !errors.Is(err, ErrUnknownRecallMarket) {
+		t.Fatalf("unknown market error = %v, want ErrUnknownRecallMarket", err)
+	}
+
+	// Repeating the recall for the same lot returns the existing event and its
+	// confirmations instead of creating a duplicate.
+	repeat, err := NewRecallService(fake).Create(context.Background(), "MAT-1", "test again")
+	if err != nil {
+		t.Fatalf("Create repeat: %v", err)
+	}
+	if repeat.Event.ID != result.Event.ID {
+		t.Fatalf("repeat event id = %d, want %d", repeat.Event.ID, result.Event.ID)
+	}
+	if len(repeat.ConfirmedMarkets) != 1 || repeat.ConfirmedMarkets[0] != "MKT-A" {
+		t.Fatalf("repeat confirmed markets = %v, want [MKT-A]", repeat.ConfirmedMarkets)
+	}
+	if !strings.Contains(repeat.Message, "zaten var") {
+		t.Fatalf("repeat message = %q, want existing-recall notice", repeat.Message)
 	}
 }

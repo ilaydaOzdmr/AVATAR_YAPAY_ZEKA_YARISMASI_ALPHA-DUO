@@ -48,8 +48,11 @@ type Repo interface {
 	CreateRecall(ctx context.Context, event model.RecallEvent, blocks []model.RecallBlock) (model.RecallEvent, error)
 	CreateRecallEvent(ctx context.Context, event model.RecallEvent) (model.RecallEvent, error)
 	GetRecallEvent(ctx context.Context, id int64) (model.RecallEvent, error)
+	GetLatestRecallBySourceLot(ctx context.Context, sourceLotID int64) (model.RecallEvent, error)
 	CreateRecallBlock(ctx context.Context, block model.RecallBlock) (model.RecallBlock, error)
 	ListRecallBlocks(ctx context.Context, recallEventID int64) ([]model.RecallBlock, error)
+	AcknowledgeRecallMarket(ctx context.Context, sourceLotID int64, marketCode string) error
+	ListRecallAcknowledgements(ctx context.Context, sourceLotID int64) ([]string, error)
 	IsLotBlocked(ctx context.Context, lotID int64) (bool, error)
 	ListBlockedLotCodes(ctx context.Context) ([]string, error)
 	CreateSale(ctx context.Context, sale model.Sale, lines []model.SaleLine) (model.Sale, error)
@@ -1077,6 +1080,17 @@ func (r *mysqlRepo) GetRecallEvent(ctx context.Context, id int64) (model.RecallE
 	return event, nil
 }
 
+func (r *mysqlRepo) GetLatestRecallBySourceLot(ctx context.Context, sourceLotID int64) (model.RecallEvent, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, code, reason, source_lot_id, created_at FROM recall_events
+		 WHERE source_lot_id = ? ORDER BY id DESC LIMIT 1`, sourceLotID)
+	var event model.RecallEvent
+	if err := row.Scan(&event.ID, &event.Code, &event.Reason, &event.SourceLotID, &event.CreatedAt); err != nil {
+		return model.RecallEvent{}, err
+	}
+	return event, nil
+}
+
 func (r *mysqlRepo) ListRecallEvents(ctx context.Context) ([]model.RecallEvent, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, code, reason, source_lot_id, created_at FROM recall_events ORDER BY id`)
@@ -1129,6 +1143,33 @@ func (r *mysqlRepo) ListRecallBlocks(ctx context.Context, recallEventID int64) (
 			return nil, err
 		}
 		out = append(out, block)
+	}
+	return out, rows.Err()
+}
+
+func (r *mysqlRepo) AcknowledgeRecallMarket(ctx context.Context, sourceLotID int64, marketCode string) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT IGNORE INTO recall_acknowledgements (source_lot_id, market_code) VALUES (?, ?)`,
+		sourceLotID, marketCode)
+	return err
+}
+
+func (r *mysqlRepo) ListRecallAcknowledgements(ctx context.Context, sourceLotID int64) ([]string, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT market_code FROM recall_acknowledgements WHERE source_lot_id = ? ORDER BY market_code`,
+		sourceLotID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var code string
+		if err := rows.Scan(&code); err != nil {
+			return nil, err
+		}
+		out = append(out, code)
 	}
 	return out, rows.Err()
 }

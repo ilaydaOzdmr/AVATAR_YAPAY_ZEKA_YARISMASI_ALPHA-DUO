@@ -77,6 +77,7 @@ func NewServerWithML(r repo.Repo, mlClient *ml.Client) http.Handler {
 	s.mux.HandleFunc("GET /butchery-batches/{id}", s.handleGetButcheryBatch)
 	s.mux.HandleFunc("POST /recalls", s.handleCreateRecall)
 	s.mux.HandleFunc("GET /recalls/{id}", s.handleGetRecall)
+	s.mux.HandleFunc("POST /recalls/{id}/acknowledge", s.handleAcknowledgeRecall)
 	s.mux.HandleFunc("GET /markets", s.handleListMarkets)
 	s.mux.HandleFunc("POST /redistributions", s.handleCreateRedistribution)
 	s.mux.HandleFunc("GET /redistributions", s.handleListRedistributions)
@@ -460,6 +461,34 @@ func (s *Server) handleGetRecall(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleAcknowledgeRecall(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	var body struct {
+		MarketCode string `json:"market_code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	result, err := s.recall.Acknowledge(r.Context(), id, body.MarketCode)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrUnknownRecallMarket):
+			writeError(w, http.StatusBadRequest, err)
+		case errors.Is(err, sql.ErrNoRows):
+			writeError(w, http.StatusNotFound, err)
+		default:
+			writeRepoError(w, err)
+		}
 		return
 	}
 	writeJSON(w, http.StatusOK, result)

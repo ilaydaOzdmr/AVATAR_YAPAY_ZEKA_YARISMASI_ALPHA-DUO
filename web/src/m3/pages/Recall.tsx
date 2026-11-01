@@ -9,6 +9,7 @@ interface Anomaly {
 }
 
 interface RecallEvent {
+  id: number;
   code: string;
 }
 
@@ -33,6 +34,7 @@ interface RecallResult {
   event: RecallEvent;
   source_lot_code: string;
   affected_lots: AffectedLot[];
+  confirmed_markets: string[];
   message: string;
 }
 
@@ -41,18 +43,24 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
   const [reason, setReason] = useState("Kalite sorunu");
   const [result, setResult] = useState<RecallResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [blockedCodes, setBlockedCodes] = useState<Set<string>>(() => new Set());
+
+  const loadBlocked = () => {
+    get<{ blocked_lot_codes?: string[] }>("/sync/pull")
+      .then((data) => setBlockedCodes(new Set(data.blocked_lot_codes ?? [])))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     get<Anomaly[]>("/anomalies").then(setAnomalies).catch(() => {});
+    loadBlocked();
   }, []);
 
   async function createRecall(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setResult(null);
-    setConfirmed(new Set());
     const code = sourceLotCode.trim();
     if (!code) {
       setError("Kaynak lot numarası girin.");
@@ -61,14 +69,37 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
     try {
       const created = await post<RecallResult>("/recalls", { source_lot_code: code, reason });
       setResult(created);
+      loadBlocked();
       onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   }
 
+  async function acknowledge(marketCode: string) {
+    if (!result) return;
+    setError(null);
+    try {
+      const updated = await post<RecallResult>(`/recalls/${result.event.id}/acknowledge`, {
+        market_code: marketCode,
+      });
+      setResult(updated);
+      loadBlocked();
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const confirmed = new Set(result?.confirmed_markets ?? []);
+  // A lot under an active recall is tracked by the recall workflow; showing its
+  // generic stock anomaly again would duplicate the same warning here.
+  const recallCodes = new Set(result ? [result.source_lot_code, ...result.affected_lots.map((lot) => lot.lot_code)] : []);
+  const visibleAnomalies = anomalies.filter((anomaly) => !blockedCodes.has(anomaly.ref) && !recallCodes.has(anomaly.ref));
+
   // Tüm etkilenen lotların marketlerini tek listeye indir.
   const allMarkets = result ? result.affected_lots.flatMap((lot) => lot.markets) : [];
+  const marketCodes = new Set(allMarkets.map((market) => market.market_code));
   const totalQty = allMarkets.reduce((sum, m) => sum + m.qty, 0);
 
   function downloadCsv() {
@@ -86,7 +117,7 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
     URL.revokeObjectURL(url);
   }
 
-  const criticalAnomalies = anomalies.filter((a) => a.severity === "critical");
+  const criticalAnomalies = visibleAnomalies.filter((a) => a.severity === "critical");
 
   return (
     <section>
@@ -98,15 +129,15 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
         </div>
       </div>
 
-      {anomalies.length > 0 && (
+      {visibleAnomalies.length > 0 && (
         <div className="recall-banner">
           <span style={{ fontSize: 20 }}>⚠</span>
           <div>
-            <strong>{anomalies.length} kalite/stok uyarısı</strong>
+            <strong>{visibleAnomalies.length} kalite/stok uyarısı</strong>
             <p>
               {criticalAnomalies.length > 0
                 ? criticalAnomalies.map((a) => `${a.ref}: ${a.message}`).join(" · ")
-                : anomalies.map((a) => `${a.ref}: ${a.message}`).join(" · ")}
+                : visibleAnomalies.map((a) => `${a.ref}: ${a.message}`).join(" · ")}
             </p>
           </div>
         </div>
@@ -149,8 +180,10 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
             </div>
             <div className="metric">
               <div className="metric-top">Alıcı teyidi <span className="metric-icon">✓</span></div>
-              <strong>{confirmed.size} / {allMarkets.length}</strong>
-              <div className="metric-foot">Teyit bekleniyor</div>
+              <strong>{confirmed.size} / {marketCodes.size}</strong>
+              <div className="metric-foot">
+                {marketCodes.size > 0 && confirmed.size === marketCodes.size ? "Tüm alıcılar teyit etti" : "Teyit bekleniyor"}
+              </div>
             </div>
             <div className="metric">
               <div className="metric-top">Satış blokajı <span className="metric-icon" style={{ background: "var(--red-bg)", color: "var(--red)" }}>⛨</span></div>
@@ -183,7 +216,7 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
                           <td>{market.contact}</td>
                           <td>{done ? <span className="status ok">Teyit edildi</span> : <span className="status warn">Teyit bekliyor</span>}</td>
                           <td>
-                            <button className="btn btn-secondary" type="button" disabled={done} onClick={() => setConfirmed((prev) => new Set(prev).add(market.market_code))}>
+                            <button className="btn btn-secondary" type="button" disabled={done} onClick={() => void acknowledge(market.market_code)}>
                               {done ? "✓ Teyit edildi" : "Teyit alındı"}
                             </button>
                           </td>
@@ -205,6 +238,11 @@ export default function Recall({ onChanged }: { onChanged?: () => void }) {
           </div>
 
           <p className="muted" style={{ marginTop: 12 }}>{result.message}</p>
+          {marketCodes.size > 0 && confirmed.size === marketCodes.size && (
+            <p className="muted" style={{ marginTop: 4 }}>
+              Tüm alıcılar teyit edildi. Satış blokajı güvenlik nedeniyle aktif kalıyor.
+            </p>
+          )}
         </>
       )}
     </section>
